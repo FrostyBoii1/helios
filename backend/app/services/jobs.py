@@ -30,24 +30,41 @@ def get_job(db: Session, job_id: int) -> Job | None:
     return db.scalar(stmt)
 
 
+# Jobs in these statuses are no longer candidates for scheduling.
+_UNSCHEDULABLE_STATUSES = (JobStatus.COMPLETED.value, JobStatus.CANCELLED.value)
+
+
 def list_jobs(
     db: Session,
     *,
     q: str | None = None,
     customer_id: int | None = None,
     status: JobStatus | None = None,
+    install_date_from: date | None = None,
+    install_date_to: date | None = None,
+    unscheduled: bool = False,
     limit: int = 25,
     offset: int = 0,
 ) -> tuple[list[Job], int]:
     """Return (page of active jobs, total matching count).
 
     `q` is a case-insensitive ILIKE across case_number and title.
+    `install_date_from`/`install_date_to` bound the install date (inclusive) for
+    the scheduling calendar. `unscheduled` selects jobs with no install date that
+    still need scheduling (status not completed/cancelled).
     """
     filters = [Job.deleted_at.is_(None)]
     if customer_id is not None:
         filters.append(Job.customer_id == customer_id)
     if status is not None:
         filters.append(Job.status == status.value)
+    if unscheduled:
+        filters.append(Job.install_date.is_(None))
+        filters.append(Job.status.not_in(_UNSCHEDULABLE_STATUSES))
+    if install_date_from is not None:
+        filters.append(Job.install_date >= install_date_from)
+    if install_date_to is not None:
+        filters.append(Job.install_date <= install_date_to)
     if q:
         like = f"%{q.strip()}%"
         filters.append(or_(Job.case_number.ilike(like), Job.title.ilike(like)))

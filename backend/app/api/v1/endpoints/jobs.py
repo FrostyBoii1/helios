@@ -15,6 +15,8 @@ permission requirements.
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
 from sqlalchemy.orm import Session
 
@@ -64,13 +66,30 @@ def list_jobs(
     q: str | None = Query(default=None, description="Search case number / title"),
     customer_id: int | None = Query(default=None),
     status: JobStatus | None = Query(default=None),
+    install_date_from: date | None = Query(
+        default=None, description="Install date on/after (scheduling calendar)"
+    ),
+    install_date_to: date | None = Query(
+        default=None, description="Install date on/before (scheduling calendar)"
+    ),
+    unscheduled: bool = Query(
+        default=False, description="Active jobs with no install date"
+    ),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> JobList:
     items, total = jobs_service.list_jobs(
-        db, q=q, customer_id=customer_id, status=status, limit=limit, offset=offset
+        db,
+        q=q,
+        customer_id=customer_id,
+        status=status,
+        install_date_from=install_date_from,
+        install_date_to=install_date_to,
+        unscheduled=unscheduled,
+        limit=limit,
+        offset=offset,
     )
     return JobList(
         items=[JobRead.model_validate(j) for j in items],

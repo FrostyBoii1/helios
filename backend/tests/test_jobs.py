@@ -122,6 +122,50 @@ def test_filter_by_status(client_for, users, customer):
 
 
 # --------------------------------------------------------------------------- #
+# Scheduling filters (install-date range + unscheduled)
+# --------------------------------------------------------------------------- #
+def test_install_date_range_filter(client_for, users, customer):
+    admin = client_for(users["admin"])
+    july = _create(admin, customer.id).json()
+    august = _create(admin, customer.id).json()
+    admin.patch(f"/api/v1/jobs/{july['id']}", json={"install_date": "2026-07-10"})
+    admin.patch(f"/api/v1/jobs/{august['id']}", json={"install_date": "2026-08-10"})
+
+    in_july = admin.get(
+        "/api/v1/jobs",
+        params={"install_date_from": "2026-07-01", "install_date_to": "2026-07-31"},
+    ).json()
+    ids = [j["id"] for j in in_july["items"]]
+    assert july["id"] in ids
+    assert august["id"] not in ids
+
+
+def test_unscheduled_filter_excludes_scheduled(client_for, users, customer):
+    admin = client_for(users["admin"])
+    scheduled = _create(admin, customer.id).json()
+    admin.patch(f"/api/v1/jobs/{scheduled['id']}", json={"install_date": "2026-07-10"})
+    pending = _create(admin, customer.id).json()  # no install date
+
+    res = admin.get("/api/v1/jobs", params={"unscheduled": "true"}).json()
+    ids = [j["id"] for j in res["items"]]
+    assert pending["id"] in ids
+    assert scheduled["id"] not in ids
+    assert all(j["install_date"] is None for j in res["items"])
+
+
+def test_unscheduled_excludes_completed_and_cancelled(client_for, users, customer):
+    admin = client_for(users["admin"])
+    done = _create(admin, customer.id).json()
+    admin.post(f"/api/v1/jobs/{done['id']}/status", json={"status": "completed"})
+    cancelled = _create(admin, customer.id).json()
+    admin.post(f"/api/v1/jobs/{cancelled['id']}/status", json={"status": "cancelled"})
+
+    ids = [j["id"] for j in admin.get("/api/v1/jobs", params={"unscheduled": "true"}).json()["items"]]
+    assert done["id"] not in ids
+    assert cancelled["id"] not in ids
+
+
+# --------------------------------------------------------------------------- #
 # Get
 # --------------------------------------------------------------------------- #
 def test_get_detail_and_404(client_for, users, customer):

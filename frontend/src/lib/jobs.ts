@@ -7,6 +7,9 @@ export interface ListJobsParams {
   q?: string
   customer_id?: number
   status?: JobStatus
+  install_date_from?: string
+  install_date_to?: string
+  unscheduled?: boolean
   limit?: number
   offset?: number
 }
@@ -16,6 +19,9 @@ export function listJobs(params: ListJobsParams = {}): Promise<JobListResponse> 
   if (params.q) search.set('q', params.q)
   if (params.customer_id != null) search.set('customer_id', String(params.customer_id))
   if (params.status) search.set('status', params.status)
+  if (params.install_date_from) search.set('install_date_from', params.install_date_from)
+  if (params.install_date_to) search.set('install_date_to', params.install_date_to)
+  if (params.unscheduled) search.set('unscheduled', 'true')
   if (params.limit != null) search.set('limit', String(params.limit))
   if (params.offset != null) search.set('offset', String(params.offset))
   const qs = search.toString()
