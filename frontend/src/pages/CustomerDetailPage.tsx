@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { canDeleteCustomers, canWriteCustomers } from '@/auth/permissions'
 import { CustomerJobsPanel } from '@/components/CustomerJobsPanel'
+import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
 import type { CustomerInput } from '@/types'
@@ -164,9 +165,12 @@ export function CustomerDetailPage() {
         )}
       </div>
 
-      {/* Jobs for this customer, then the activity timeline. */}
+      {/* Jobs, tasks, then the activity timeline. */}
       <div className="mt-6">
         <CustomerJobsPanel customerId={customer.id} customerName={customer.full_name} />
+      </div>
+      <div className="mt-6">
+        <TasksPanel customerId={customer.id} />
       </div>
       <div className="mt-6">
         <Timeline customerId={customer.id} />

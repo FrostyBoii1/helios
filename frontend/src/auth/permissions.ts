@@ -36,3 +36,30 @@ export function canChangeJobStatus(role: RoleName | undefined): boolean {
 export function canDeleteJobs(role: RoleName | undefined): boolean {
   return role === 'admin'
 }
+
+// ---- Tasks (per-task, evaluated against the current user) ----
+interface TaskOwnership {
+  created_by_id: number | null
+  assigned_to_id: number | null
+  status: string
+}
+
+export function canCreateTasks(role: RoleName | undefined): boolean {
+  return role != null // any authenticated role
+}
+
+export function canEditTask(role: RoleName | undefined, userId: number | undefined, task: TaskOwnership): boolean {
+  return role === 'admin' || (userId != null && task.created_by_id === userId)
+}
+
+export function canCompleteTask(
+  role: RoleName | undefined,
+  userId: number | undefined,
+  task: TaskOwnership,
+): boolean {
+  return role === 'admin' || (userId != null && task.assigned_to_id === userId)
+}
+
+export function canDeleteTasks(role: RoleName | undefined): boolean {
+  return role === 'admin'
+}

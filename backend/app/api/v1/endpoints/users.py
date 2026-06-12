@@ -16,11 +16,38 @@ from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.enums import ActivityType, RoleName
 from app.models.user import User
-from app.schemas.user import PasswordReset, UserCreate, UserRead, UserUpdate
+from app.schemas.user import (
+    PasswordReset,
+    UserCreate,
+    UserRead,
+    UserSelectable,
+    UserUpdate,
+)
 from app.services.activity import log_activity
 from app.services.users import create_user, get_user, get_user_by_email, get_role
 
 router = APIRouter()
+
+
+@router.get("/selectable", response_model=list[UserSelectable])
+def list_selectable_users(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> list[UserSelectable]:
+    """Active users for assignee dropdowns — any authenticated user may read.
+
+    Lightweight shape only (id / full_name / role); no email or account data.
+    """
+    stmt = (
+        select(User)
+        .options(joinedload(User.role))
+        .where(User.is_active.is_(True), User.deleted_at.is_(None))
+        .order_by(User.full_name)
+    )
+    return [
+        UserSelectable(id=u.id, full_name=u.full_name, role=u.role.name)
+        for u in db.scalars(stmt).all()
+    ]
 
 
 @router.get("", response_model=list[UserRead])

@@ -45,3 +45,15 @@ class UserRead(UserBase):
     is_active: bool
     role: RoleRead
     created_at: datetime
+
+
+class UserSelectable(BaseModel):
+    """Lightweight active-user shape for assignee pickers.
+
+    Exposes only id / full_name / role name — never email, password, or
+    account-management state.
+    """
+
+    id: int
+    full_name: str
+    role: str

@@ -7,7 +7,7 @@ system can show outstanding/overdue work and a historical completion log.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
@@ -69,6 +69,23 @@ class Task(IntPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     assigned_to: Mapped["User | None"] = relationship(foreign_keys=[assigned_to_id])
     created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_id])
     completed_by: Mapped["User | None"] = relationship(foreign_keys=[completed_by_id])
+
+    @property
+    def is_overdue(self) -> bool:
+        """True when the task is past its due date and still active.
+
+        Computed dynamically — never stored. An active task is one whose status
+        is open or in_progress.
+        """
+        if self.due_date is None:
+            return False
+        if self.status not in (TaskStatus.OPEN, TaskStatus.IN_PROGRESS):
+            return False
+        due = self.due_date
+        # Stored as timezone-aware; guard against naive values just in case.
+        if due.tzinfo is None:
+            due = due.replace(tzinfo=timezone.utc)
+        return due < datetime.now(timezone.utc)
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return f"<Task {self.id} {self.title!r} status={self.status}>"

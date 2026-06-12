@@ -160,3 +160,56 @@ export interface ActivityListResponse {
   limit: number
   offset: number
 }
+
+export type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
+export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent'
+
+export interface JobRef {
+  id: number
+  case_number: string
+}
+
+export interface Task {
+  id: number
+  title: string
+  description: string | null
+  status: TaskStatus
+  priority: TaskPriority
+  due_date: string | null
+  is_overdue: boolean
+  customer_id: number | null
+  job_id: number | null
+  assigned_to_id: number | null
+  created_by_id: number | null
+  assigned_to: ActorRef | null
+  created_by: ActorRef | null
+  completed_by: ActorRef | null
+  customer: CustomerRef | null
+  job: JobRef | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TaskInput {
+  title?: string
+  description?: string | null
+  priority?: TaskPriority
+  due_date?: string | null
+  customer_id?: number | null
+  job_id?: number | null
+  assigned_to_id?: number | null
+}
+
+export interface TaskListResponse {
+  items: Task[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface SelectableUser {
+  id: number
+  full_name: string
+  role: RoleName
+}

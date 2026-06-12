@@ -6,6 +6,7 @@ import { CustomersListPage } from '@/pages/CustomersListPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { JobDetailPage } from '@/pages/JobDetailPage'
 import { JobsListPage } from '@/pages/JobsListPage'
+import { TasksListPage } from '@/pages/TasksListPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/customers/:id" element={<CustomerDetailPage />} />
             <Route path="/jobs" element={<JobsListPage />} />
             <Route path="/jobs/:id" element={<JobDetailPage />} />
+            <Route path="/tasks" element={<TasksListPage />} />
           </Route>
         </Route>
 

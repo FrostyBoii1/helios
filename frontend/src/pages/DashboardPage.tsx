@@ -4,7 +4,10 @@
 // authenticated session and backend connectivity.
 
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
+import { TasksTable } from '@/components/TasksTable'
+import { useTasks } from '@/hooks/useTasks'
 import { apiFetch } from '@/lib/api'
 
 interface HealthResponse {
@@ -21,16 +24,40 @@ export function DashboardPage() {
     queryFn: () => apiFetch<HealthResponse>('/health', { auth: false }),
   })
 
+  // Real task data: my active tasks + a count of those overdue.
+  const myParams = { assigned_to_id: user?.id, limit: 10 }
+  const { data: myTasks } = useTasks(myParams)
+  const overdueCount = (myTasks?.items ?? []).filter((t) => t.is_overdue).length
+
   return (
     <div>
       <h1 className="text-2xl font-semibold text-fg">Welcome, {user?.full_name}</h1>
       <p className="mt-1 text-muted">
-        Your dashboard will show work relevant to the{' '}
-        <span className="font-medium text-fg">{user?.role.name}</span> role. Feature
-        widgets are coming as the core workflow is built out.
+        Work relevant to the{' '}
+        <span className="font-medium text-fg">{user?.role.name}</span> role.
       </p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="mt-6">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-fg">
+            My open tasks {myTasks ? `(${myTasks.total})` : ''}
+            {overdueCount > 0 && (
+              <span className="ml-2 rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-300 ring-1 ring-inset ring-red-400/20">
+                {overdueCount} overdue
+              </span>
+            )}
+          </h2>
+          <Link to="/tasks" className="text-sm text-brand-400 underline hover:text-brand-500">
+            All tasks
+          </Link>
+        </div>
+        <TasksTable params={myParams} showContext emptyMessage="You have no open tasks." />
+      </section>
+
+      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-muted">
+        Coming soon
+      </h2>
+      <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <PlaceholderCard title="Outstanding approvals" hint="Approvals workflow" />
         <PlaceholderCard title="Upcoming installs" hint="Scheduling workflow" />
         <PlaceholderCard title="Jobs to schedule" hint="Scheduling workflow" />
