@@ -4,6 +4,8 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { CustomerDetailPage } from '@/pages/CustomerDetailPage'
 import { CustomersListPage } from '@/pages/CustomersListPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { JobDetailPage } from '@/pages/JobDetailPage'
+import { JobsListPage } from '@/pages/JobsListPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
@@ -19,6 +21,8 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/customers" element={<CustomersListPage />} />
             <Route path="/customers/:id" element={<CustomerDetailPage />} />
+            <Route path="/jobs" element={<JobsListPage />} />
+            <Route path="/jobs/:id" element={<JobDetailPage />} />
           </Route>
         </Route>
 

@@ -67,15 +67,17 @@ class Job(IntPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     salesperson: Mapped["User | None"] = relationship(foreign_keys=[salesperson_id])
     assigned_user: Mapped["User | None"] = relationship(foreign_keys=[assigned_user_id])
 
-    # Children
+    # Children. Non-destructive cascade: jobs are soft-deleted (deleted_at),
+    # never hard-deleted, so children must NOT be cascade-deleted. Activities are
+    # also append-only and must survive. (Consistent with Customer.jobs.)
     tasks: Mapped[list["Task"]] = relationship(
-        back_populates="job", cascade="all, delete-orphan"
+        back_populates="job", cascade="save-update, merge"
     )
     activities: Mapped[list["Activity"]] = relationship(
-        back_populates="job", cascade="all, delete-orphan"
+        back_populates="job", cascade="save-update, merge"
     )
     documents: Mapped[list["Document"]] = relationship(
-        back_populates="job", cascade="all, delete-orphan"
+        back_populates="job", cascade="save-update, merge"
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper

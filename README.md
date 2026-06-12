@@ -135,6 +135,7 @@ cat backups/<file>.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$PO
 - ✅ Append-only activity logging service + case-number generator
 - ✅ React/TS frontend skeleton: login, protected routes, role-aware dashboard shell
 - ✅ **Customers**: searchable/paginated list, create modal, detail shell, edit, soft delete; role-gated API + activity logging; DB-backed tests
+- ✅ **Jobs**: belong to customers, auto case numbers (`SCS-YYYY-00001`), list/filter/search, create from customer, detail shell, descriptive + install-date edits, dedicated status endpoint, soft delete; role-gated API + activity logging; DB-backed tests
 
 See [CHANGES.md](CHANGES.md) for decisions/deviations and
 [DEVELOPER_HANDOFF.md](DEVELOPER_HANDOFF.md) for what's next.

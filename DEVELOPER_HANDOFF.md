@@ -25,18 +25,23 @@ Implementation Task". Implemented:
   approved role matrix + activity logging; `Customer.jobs` cascade made
   non-destructive; React list (search/pagination), create modal, detail shell
   (with Jobs/Timeline placeholders), edit, delete.
-- Tests: backend smoke (no DB) + database-backed Customers integration tests
-  (rollback-isolated).
+- **Jobs** (priority #4) — full stack: schemas, service (case numbers with
+  retry, search/filter), endpoints (list/create/get/PATCH/status/soft-delete)
+  with the approved per-field role matrix + activity logging; `Job` child
+  cascades made non-destructive; React global `/jobs` page, `/jobs/:id` detail
+  shell (status/edit/reschedule/delete), and a Jobs panel on Customer detail.
+- Tests: backend smoke (no DB) + database-backed Customers (10) and Jobs (17)
+  integration tests (rollback-isolated).
 
 ## 2. What is NOT built yet
 
 These are stubbed/absent and represent the next phases:
 
-- CRUD + UI for **jobs** (the central workflow) — next up.
-- **Job detail** page, statuses/tags/flags UI, **calendar/scheduling** view
-  (FullCalendar).
-- **Activity timeline** endpoint + UI (logging is written; the Customer detail
-  page shows a Timeline placeholder).
+- **Activity timeline** endpoint + UI (logging is written for customers and jobs;
+  the Customer and Job detail pages show Timeline placeholders) — recommended next.
+- **Tasks** workflow (model exists; no service/endpoints/UI).
+- **Scheduling** calendar view (FullCalendar).
+- Job **tags/flags** UI beyond status.
 - **Tasks** UI + shared-admin clearing + overdue surfacing.
 - **NAS file** browsing/linking + uploads + previews + permission gating.
 - **Reporting/analytics**, **reminders/notifications**.
@@ -87,21 +92,21 @@ end-to-end.
 
 ## 5. Recommended next task
 
-Per the spec's development priority order (schema → auth → customers → jobs → …),
-the foundation, auth, and **Customers** are done. The next task is **Jobs**:
+Per the spec's development priority order (schema → auth → customers → jobs →
+activity → tasks → …), the foundation, auth, **Customers**, and **Jobs** are
+done. The next task is the **Activity timeline** (priority #5 surface):
 
-1. `JobCreate` / `JobUpdate` / `JobRead` schemas (job belongs to a customer).
-2. `services/jobs.py` — create (with case-number generation + retry on the
-   unique constraint), list/filter by status/customer, status transitions,
-   install-date change → activity entry; soft-delete-aware.
-3. `endpoints/jobs.py` with role-appropriate permissions + activity logging
-   (created / updated / status changed / install rescheduled).
-4. Frontend: job list/filter, create-from-customer flow, job detail page, status
-   badges. Wire the Customer detail "Jobs" placeholder to real data.
+1. `schemas/activity.py` — `ActivityRead` (type, description, actor, meta,
+   created_at).
+2. `services/activity.py` — add a read/list helper (by `customer_id` and/or
+   `job_id`, newest-first, paginated). Logging already exists.
+3. `endpoints/activities.py` — `GET /activities?customer_id=&job_id=` (read-only;
+   all authenticated roles).
+4. Frontend: a Timeline component wired into the Customer detail and Job detail
+   placeholder panels.
 
-Jobs unlocks scheduling, tasks, documents, and reporting. The
-`app.services.case_number` helper already exists for case-number generation
-(see CHANGES.md for its concurrency caveat).
+This surfaces the audit trail already being written by Customers and Jobs — low
+risk, high value, no new write paths. After that: **Tasks** (priority #6).
 
 ## 6. Gotchas / conventions
 

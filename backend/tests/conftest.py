@@ -30,6 +30,7 @@ from app.api.deps import get_current_user  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import engine, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.customer import Customer  # noqa: E402
 from app.models.enums import RoleName  # noqa: E402
 from app.models.role import Role  # noqa: E402
 from app.models.user import User  # noqa: E402
@@ -60,11 +61,13 @@ def _get_or_create_role(session: Session, role: RoleName) -> Role:
 
 @pytest.fixture
 def users(db_session: Session) -> dict[str, User]:
-    """One active user per role relevant to customer permissions."""
+    """One active user per role used across customer/job permission tests."""
     spec = {
         "admin": RoleName.ADMIN,
         "sales": RoleName.SALES_ADMIN,
         "support": RoleName.SUPPORT,
+        "scheduling": RoleName.SCHEDULING,
+        "approvals": RoleName.APPROVALS,
     }
     out: dict[str, User] = {}
     for key, role_name in spec.items():
@@ -101,3 +104,12 @@ def client_for(db_session: Session) -> Iterator[Callable[[User], TestClient]]:
 
     yield _make
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def customer(db_session: Session) -> Customer:
+    """An active customer to attach jobs to."""
+    c = Customer(full_name="Fixture Customer", suburb="Testville")
+    db_session.add(c)
+    db_session.flush()
+    return c

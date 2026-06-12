@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { canDeleteCustomers, canWriteCustomers } from '@/auth/permissions'
+import { CustomerJobsPanel } from '@/components/CustomerJobsPanel'
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
 import type { CustomerInput } from '@/types'
 
@@ -169,9 +170,11 @@ export function CustomerDetailPage() {
         )}
       </div>
 
-      {/* Placeholders — wired in later phases (out of scope for the Customers phase). */}
+      {/* Jobs for this customer (Jobs phase). Timeline remains a later phase. */}
+      <div className="mt-6">
+        <CustomerJobsPanel customerId={customer.id} customerName={customer.full_name} />
+      </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <PlaceholderPanel title="Jobs" hint="Jobs for this customer appear here (Jobs phase)." />
         <PlaceholderPanel title="Timeline" hint="Activity history appears here (Activity Timeline phase)." />
       </div>
     </div>

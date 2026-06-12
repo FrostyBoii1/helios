@@ -9,6 +9,49 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-12 — Jobs phase
+
+Priority #4 built end-to-end on the existing `Job` model. Notable changes:
+
+### 1. `Job` child cascades changed to non-destructive
+- **What:** `Job.tasks` / `Job.activities` / `Job.documents` cascades changed
+  from `all, delete-orphan` to `save-update, merge`.
+- **Why:** Jobs are soft-deleted, never hard-deleted; activities are append-only.
+  Consistent with the Customer decision. Scoped to Job relationships only.
+- **Files:** `backend/app/models/job.py`.
+- **Temporary or permanent:** Permanent. ORM-only, **no migration**.
+
+### 2. New `JOB_DELETED` activity type
+- **What:** Added `ActivityType.JOB_DELETED`. Jobs log
+  `JOB_CREATED` / `JOB_UPDATED` (incl. initial install-date set) /
+  `JOB_STATUS_CHANGED` / `INSTALL_RESCHEDULED` / `JOB_DELETED`, each linked to
+  both `customer_id` and `job_id`.
+- **Files:** `backend/app/models/enums.py`, `backend/app/api/v1/endpoints/jobs.py`.
+- **Temporary or permanent:** Permanent. `activity_type` is varchar — no migration.
+
+### 3. Jobs feature
+- **What:** Schemas (`schemas/job.py`), service (`services/jobs.py`) with
+  case-number generation + `IntegrityError` retry, endpoints (`endpoints/jobs.py`):
+  list/filter/search, create (from customer), get, PATCH (descriptive + install,
+  conditional per-field permissions), dedicated `POST /jobs/{id}/status`, soft
+  delete. Frontend: types/api/hooks, status badges, global `/jobs` page + nav,
+  `/jobs/:id` detail shell with status/edit/reschedule/delete controls, and a
+  Jobs panel on the Customer detail page.
+- **Permission matrix:** view = all; create/edit-descriptive = admin+sales_admin;
+  install date = admin+scheduling; status = admin+sales_admin+scheduling+approvals;
+  delete = admin; support read-only. A PATCH touching both descriptive fields and
+  install_date enforces both requirements.
+- **Files:** `backend/app/schemas/job.py`, `backend/app/services/jobs.py`,
+  `backend/app/api/v1/endpoints/jobs.py`, `backend/app/api/v1/router.py`,
+  `backend/tests/{conftest.py,test_jobs.py}`, and frontend `lib/jobs.ts`,
+  `hooks/useJobs.ts`, `auth/permissions.ts`, `components/{JobStatusBadge,JobCreateModal,JobsTable,CustomerJobsPanel}.tsx`,
+  `pages/{JobsListPage,JobDetailPage}.tsx`, `pages/CustomerDetailPage.tsx`,
+  `components/AppLayout.tsx`, `App.tsx`, `types/index.ts`.
+- **Database:** No migration — `jobs` table + `JobStatus` already exist in the
+  baseline migration; the two changes above are ORM/enum-only.
+
+---
+
 ## 2026-06-12 — Customers phase
 
 First full feature built end-to-end on the foundation. Notable decisions/changes:

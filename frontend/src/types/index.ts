@@ -63,3 +63,60 @@ export interface CustomerListResponse {
   limit: number
   offset: number
 }
+
+export type JobStatus =
+  | 'new'
+  | 'awaiting_approval'
+  | 'ready_to_schedule'
+  | 'booked_for_install'
+  | 'installed'
+  | 'post_install_call_required'
+  | 'review_request_required'
+  | 'maintenance_required'
+  | 'support'
+  | 'completed'
+  | 'cancelled'
+
+export interface CustomerRef {
+  id: number
+  full_name: string
+}
+
+export interface Job {
+  id: number
+  case_number: string
+  customer_id: number
+  customer: CustomerRef
+  status: JobStatus
+  title: string | null
+  system_details: string | null
+  install_details: string | null
+  approval_details: string | null
+  notes: string | null
+  sale_date: string | null
+  install_date: string | null
+  salesperson_id: number | null
+  assigned_user_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+// Fields accepted on create/update (customer_id required only on create).
+export interface JobInput {
+  title?: string | null
+  system_details?: string | null
+  install_details?: string | null
+  approval_details?: string | null
+  notes?: string | null
+  sale_date?: string | null
+  install_date?: string | null
+  salesperson_id?: number | null
+  assigned_user_id?: number | null
+}
+
+export interface JobListResponse {
+  items: Job[]
+  total: number
+  limit: number
+  offset: number
+}
