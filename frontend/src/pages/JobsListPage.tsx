@@ -36,14 +36,14 @@ export function JobsListPage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-semibold text-slate-800">Jobs</h1>
+      <h1 className="mb-4 text-2xl font-semibold text-fg">Jobs</h1>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row">
         <input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search case number or title…"
-          className="flex-1 rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+          className="input flex-1"
         />
         <select
           value={status}
@@ -51,7 +51,7 @@ export function JobsListPage() {
             setStatus(e.target.value as JobStatus | '')
             setOffset(0)
           }}
-          className="rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+          className="input sm:w-56"
         >
           <option value="">All statuses</option>
           {JOB_STATUS_ORDER.map((s) => (
@@ -70,7 +70,7 @@ export function JobsListPage() {
         emptyMessage={q || status ? 'No jobs match your filters.' : 'No jobs yet.'}
       />
 
-      <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
+      <div className="mt-3 flex items-center justify-between text-sm text-muted">
         <span>
           {pageInfo}
           {isFetching && !isLoading ? ' · updating…' : ''}
@@ -79,14 +79,14 @@ export function JobsListPage() {
           <button
             disabled={offset === 0}
             onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-            className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-50"
+            className="rounded-md border border-line-strong px-3 py-1 text-fg hover:bg-elevated disabled:opacity-50"
           >
             Previous
           </button>
           <button
             disabled={offset + PAGE_SIZE >= total}
             onClick={() => setOffset((o) => o + PAGE_SIZE)}
-            className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-50"
+            className="rounded-md border border-line-strong px-3 py-1 text-fg hover:bg-elevated disabled:opacity-50"
           >
             Next
           </button>

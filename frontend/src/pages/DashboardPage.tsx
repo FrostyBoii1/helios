@@ -23,12 +23,10 @@ export function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-800">
-        Welcome, {user?.full_name}
-      </h1>
-      <p className="mt-1 text-slate-500">
+      <h1 className="text-2xl font-semibold text-fg">Welcome, {user?.full_name}</h1>
+      <p className="mt-1 text-muted">
         Your dashboard will show work relevant to the{' '}
-        <span className="font-medium">{user?.role.name}</span> role. Feature
+        <span className="font-medium text-fg">{user?.role.name}</span> role. Feature
         widgets are coming as the core workflow is built out.
       </p>
 
@@ -41,7 +39,7 @@ export function DashboardPage() {
         <PlaceholderCard title="Welcome calls" hint="Sales/Admin workflow" />
       </div>
 
-      <p className="mt-8 text-xs text-slate-400">
+      <p className="mt-8 text-xs text-faint">
         API: {health ? `${health.status} · v${health.version} · ${health.environment}` : 'connecting…'}
       </p>
     </div>
@@ -50,9 +48,9 @@ export function DashboardPage() {
 
 function PlaceholderCard({ title, hint }: { title: string; hint: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4">
-      <h2 className="font-medium text-slate-700">{title}</h2>
-      <p className="mt-1 text-sm text-slate-400">{hint}</p>
+    <div className="rounded-lg border border-dashed border-line-strong bg-surface p-4">
+      <h2 className="font-medium text-fg">{title}</h2>
+      <p className="mt-1 text-sm text-faint">{hint}</p>
     </div>
   )
 }

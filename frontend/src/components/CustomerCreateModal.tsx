@@ -51,18 +51,17 @@ export function CustomerCreateModal({ onClose, onCreated }: CustomerCreateModalP
 
   return (
     <div
-      className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/40 px-4"
+      className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 px-4"
       role="dialog"
       aria-modal="true"
     >
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg"
-      >
-        <h2 className="mb-4 text-lg font-semibold text-slate-800">New customer</h2>
+      <form onSubmit={handleSubmit} className="card w-full max-w-lg p-6 shadow-2xl shadow-black/40">
+        <h2 className="mb-4 text-lg font-semibold text-fg">New customer</h2>
 
         {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+          <div className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {error}
+          </div>
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -71,7 +70,7 @@ export function CustomerCreateModal({ onClose, onCreated }: CustomerCreateModalP
               required
               value={form.full_name}
               onChange={(e) => update('full_name', e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              className="input"
             />
           </Field>
           <Field label="Email">
@@ -79,45 +78,37 @@ export function CustomerCreateModal({ onClose, onCreated }: CustomerCreateModalP
               type="email"
               value={form.email ?? ''}
               onChange={(e) => update('email', e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              className="input"
             />
           </Field>
           <Field label="Phone">
             <input
               value={form.phone ?? ''}
               onChange={(e) => update('phone', e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              className="input"
             />
           </Field>
           <Field label="Suburb">
             <input
               value={form.suburb ?? ''}
               onChange={(e) => update('suburb', e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              className="input"
             />
           </Field>
           <Field label="Postcode">
             <input
               value={form.postcode ?? ''}
               onChange={(e) => update('postcode', e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              className="input"
             />
           </Field>
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50"
-          >
+          <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="rounded-md bg-slate-800 px-4 py-2 font-medium text-white hover:bg-slate-700 disabled:opacity-60"
-          >
+          <button type="submit" disabled={createMutation.isPending} className="btn-primary">
             {createMutation.isPending ? 'Creating…' : 'Create customer'}
           </button>
         </div>
@@ -137,7 +128,7 @@ function Field({
 }) {
   return (
     <label className={`block text-sm ${className ?? ''}`}>
-      <span className="mb-1 block font-medium text-slate-700">{label}</span>
+      <span className="mb-1 block font-medium text-fg">{label}</span>
       {children}
     </label>
   )

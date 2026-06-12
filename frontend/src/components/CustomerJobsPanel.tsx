@@ -25,12 +25,9 @@ export function CustomerJobsPanel({ customerId, customerName }: CustomerJobsPane
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="font-medium text-slate-700">Jobs {data ? `(${data.total})` : ''}</h3>
+        <h3 className="font-medium text-fg">Jobs {data ? `(${data.total})` : ''}</h3>
         {canCreate && (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="rounded-md bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
-          >
+          <button onClick={() => setShowCreate(true)} className="btn-primary px-3 py-1.5 text-sm">
             New job
           </button>
         )}

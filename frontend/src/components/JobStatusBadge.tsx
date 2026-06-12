@@ -31,24 +31,25 @@ export const JOB_STATUS_ORDER: JobStatus[] = [
   'cancelled',
 ]
 
+// Dark-tuned status chips: translucent tint background + bright text + ring.
 const STATUS_CLASSES: Record<JobStatus, string> = {
-  new: 'bg-slate-100 text-slate-700',
-  awaiting_approval: 'bg-amber-100 text-amber-800',
-  ready_to_schedule: 'bg-sky-100 text-sky-800',
-  booked_for_install: 'bg-indigo-100 text-indigo-800',
-  installed: 'bg-emerald-100 text-emerald-800',
-  post_install_call_required: 'bg-cyan-100 text-cyan-800',
-  review_request_required: 'bg-violet-100 text-violet-800',
-  maintenance_required: 'bg-orange-100 text-orange-800',
-  support: 'bg-rose-100 text-rose-800',
-  completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-slate-200 text-slate-500',
+  new: 'bg-slate-500/15 text-slate-300 ring-slate-400/20',
+  awaiting_approval: 'bg-amber-500/15 text-amber-300 ring-amber-400/20',
+  ready_to_schedule: 'bg-sky-500/15 text-sky-300 ring-sky-400/20',
+  booked_for_install: 'bg-indigo-500/15 text-indigo-300 ring-indigo-400/20',
+  installed: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20',
+  post_install_call_required: 'bg-cyan-500/15 text-cyan-300 ring-cyan-400/20',
+  review_request_required: 'bg-violet-500/15 text-violet-300 ring-violet-400/20',
+  maintenance_required: 'bg-orange-500/15 text-orange-300 ring-orange-400/20',
+  support: 'bg-rose-500/15 text-rose-300 ring-rose-400/20',
+  completed: 'bg-green-500/15 text-green-300 ring-green-400/20',
+  cancelled: 'bg-slate-600/20 text-slate-400 ring-slate-500/20',
 }
 
 export function JobStatusBadge({ status }: { status: JobStatus }) {
   return (
     <span
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[status]}`}
+      className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${STATUS_CLASSES[status]}`}
     >
       {JOB_STATUS_LABELS[status]}
     </span>

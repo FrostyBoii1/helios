@@ -26,9 +26,9 @@ export function JobsTable({
   const colSpan = showCustomer ? 5 : 4
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <table className="w-full text-left text-sm">
-        <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+    <div className="card overflow-x-auto">
+      <table className="w-full min-w-[44rem] text-left text-sm">
+        <thead className="border-b border-line bg-elevated text-muted">
           <tr>
             <th className="px-4 py-2 font-medium">Case #</th>
             <th className="px-4 py-2 font-medium">Title</th>
@@ -41,7 +41,7 @@ export function JobsTable({
           {loading ? (
             <Message colSpan={colSpan}>Loading jobs…</Message>
           ) : error ? (
-            <Message colSpan={colSpan} className="text-red-600">
+            <Message colSpan={colSpan} className="text-red-400">
               Failed to load jobs.
             </Message>
           ) : jobs.length === 0 ? (
@@ -51,17 +51,17 @@ export function JobsTable({
               <tr
                 key={job.id}
                 onClick={() => navigate(`/jobs/${job.id}`)}
-                className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                className="cursor-pointer border-b border-line/60 last:border-0 hover:bg-elevated"
               >
-                <td className="px-4 py-2 font-mono text-xs text-slate-700">{job.case_number}</td>
-                <td className="px-4 py-2 text-slate-800">{job.title ?? '—'}</td>
+                <td className="px-4 py-2 font-mono text-xs text-brand-400">{job.case_number}</td>
+                <td className="px-4 py-2 text-fg">{job.title ?? '—'}</td>
                 {showCustomer && (
-                  <td className="px-4 py-2 text-slate-600">{job.customer.full_name}</td>
+                  <td className="px-4 py-2 text-muted">{job.customer.full_name}</td>
                 )}
                 <td className="px-4 py-2">
                   <JobStatusBadge status={job.status} />
                 </td>
-                <td className="px-4 py-2 text-slate-600">{job.install_date ?? '—'}</td>
+                <td className="px-4 py-2 text-muted">{job.install_date ?? '—'}</td>
               </tr>
             ))
           )}
@@ -82,7 +82,7 @@ function Message({
 }) {
   return (
     <tr>
-      <td colSpan={colSpan} className={`px-4 py-8 text-center text-slate-500 ${className ?? ''}`}>
+      <td colSpan={colSpan} className={`px-4 py-8 text-center text-muted ${className ?? ''}`}>
         {children}
       </td>
     </tr>

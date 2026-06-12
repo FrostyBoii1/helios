@@ -54,12 +54,12 @@ export function JobDetailPage() {
   const mayChangeStatus = canChangeJobStatus(role)
   const mayDelete = canDeleteJobs(role)
 
-  if (isLoading) return <p className="text-slate-500">Loading…</p>
+  if (isLoading) return <p className="text-muted">Loading…</p>
   if (isError || !job) {
     return (
       <div>
-        <p className="text-red-600">Job not found.</p>
-        <Link to="/jobs" className="mt-2 inline-block text-slate-700 underline">
+        <p className="text-red-400">Job not found.</p>
+        <Link to="/jobs" className="mt-2 inline-block text-muted underline hover:text-fg">
           Back to jobs
         </Link>
       </div>
@@ -124,49 +124,52 @@ export function JobDetailPage() {
 
   return (
     <div>
-      <Link to="/jobs" className="text-sm text-slate-500 underline">
+      <Link to="/jobs" className="text-sm text-muted underline hover:text-fg">
         ← Jobs
       </Link>
 
       <div className="mt-2 mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="font-mono text-xl font-semibold text-slate-800">{job.case_number}</h1>
+          <h1 className="font-mono text-xl font-semibold text-fg">{job.case_number}</h1>
           <JobStatusBadge status={job.status} />
         </div>
         {mayDelete && (
           <button
             onClick={onDelete}
             disabled={deleteMutation.isPending}
-            className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+            className="btn-danger px-3 py-1.5 text-sm"
           >
             Delete
           </button>
         )}
       </div>
 
-      <p className="mb-4 text-sm text-slate-500">
+      <p className="mb-4 text-sm text-muted">
         Customer:{' '}
-        <Link to={`/customers/${job.customer.id}`} className="text-slate-700 underline">
+        <Link
+          to={`/customers/${job.customer.id}`}
+          className="text-brand-400 underline hover:text-brand-500"
+        >
           {job.customer.full_name}
         </Link>
       </p>
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </div>
       )}
 
       {/* Status + install date controls */}
       <div className="mb-4 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Status
-          </h2>
+        <div className="card p-4">
+          <h2 className="eyebrow mb-2">Status</h2>
           {mayChangeStatus ? (
             <select
               value={job.status}
               disabled={statusMutation.isPending}
               onChange={(e) => onStatusChange(e.target.value as JobStatus)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              className="input text-sm"
             >
               {JOB_STATUS_ORDER.map((s) => (
                 <option key={s} value={s}>
@@ -175,26 +178,24 @@ export function JobDetailPage() {
               ))}
             </select>
           ) : (
-            <p className="text-slate-700">{JOB_STATUS_LABELS[job.status]}</p>
+            <p className="text-fg">{JOB_STATUS_LABELS[job.status]}</p>
           )}
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Install date
-          </h2>
+        <div className="card p-4">
+          <h2 className="eyebrow mb-2">Install date</h2>
           {editingInstall ? (
             <div className="flex items-center gap-2">
               <input
                 type="date"
                 value={installDate}
                 onChange={(e) => setInstallDate(e.target.value)}
-                className="rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                className="input w-auto px-2 py-1 text-sm"
               />
               <button
                 onClick={saveInstallDate}
                 disabled={updateMutation.isPending}
-                className="rounded-md bg-slate-800 px-3 py-1 text-sm text-white hover:bg-slate-700 disabled:opacity-60"
+                className="btn-primary px-3 py-1 text-sm"
               >
                 Save
               </button>
@@ -203,18 +204,18 @@ export function JobDetailPage() {
                   setEditingInstall(false)
                   setInstallDate(job.install_date ?? '')
                 }}
-                className="text-sm text-slate-500 underline"
+                className="text-sm text-muted underline hover:text-fg"
               >
                 Cancel
               </button>
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <span className="text-slate-700">{job.install_date ?? 'Not scheduled'}</span>
+              <span className="text-fg">{job.install_date ?? 'Not scheduled'}</span>
               {mayEditInstall && (
                 <button
                   onClick={() => setEditingInstall(true)}
-                  className="text-sm text-slate-500 underline"
+                  className="text-sm text-brand-400 underline hover:text-brand-500"
                 >
                   {job.install_date ? 'Reschedule' : 'Set date'}
                 </button>
@@ -225,13 +226,13 @@ export function JobDetailPage() {
       </div>
 
       {/* Descriptive details */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
+      <div className="card p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Details</h2>
+          <h2 className="eyebrow">Details</h2>
           {mayEditDetails && !editingDetails && (
             <button
               onClick={() => setEditingDetails(true)}
-              className="rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
+              className="btn-secondary px-3 py-1 text-sm"
             >
               Edit
             </button>
@@ -241,25 +242,25 @@ export function JobDetailPage() {
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
           {DESCRIPTIVE_FIELDS.map(({ key, label, textarea }) => (
             <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
-              <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+              <dt className="eyebrow text-faint">{label}</dt>
               {editingDetails ? (
                 textarea ? (
                   <textarea
                     rows={2}
                     value={form[key] ?? ''}
                     onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    className="input mt-1 px-2 py-1 text-sm"
                   />
                 ) : (
                   <input
                     type={key === 'sale_date' ? 'date' : 'text'}
                     value={form[key] ?? ''}
                     onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    className="input mt-1 px-2 py-1 text-sm"
                   />
                 )
               ) : (
-                <dd className="mt-0.5 whitespace-pre-wrap text-slate-800">
+                <dd className="mt-0.5 whitespace-pre-wrap text-fg">
                   {(job[key] as string | null) || '—'}
                 </dd>
               )}
@@ -274,14 +275,14 @@ export function JobDetailPage() {
                 setEditingDetails(false)
                 setError(null)
               }}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              className="btn-secondary text-sm"
             >
               Cancel
             </button>
             <button
               onClick={saveDetails}
               disabled={updateMutation.isPending}
-              className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+              className="btn-primary text-sm"
             >
               {updateMutation.isPending ? 'Saving…' : 'Save changes'}
             </button>
@@ -301,9 +302,9 @@ export function JobDetailPage() {
 
 function PlaceholderPanel({ title, hint }: { title: string; hint: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4">
-      <h3 className="font-medium text-slate-700">{title}</h3>
-      <p className="mt-1 text-sm text-slate-400">{hint}</p>
+    <div className="rounded-lg border border-dashed border-line-strong bg-surface p-4">
+      <h3 className="font-medium text-fg">{title}</h3>
+      <p className="mt-1 text-sm text-faint">{hint}</p>
     </div>
   )
 }

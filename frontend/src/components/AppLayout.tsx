@@ -15,22 +15,22 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+      <header className="border-b border-line bg-surface">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-6">
-            <Link to="/" className="text-lg font-semibold text-slate-800">
-              Helios Core
-            </Link>
-            <nav className="flex items-center gap-4 text-sm">
+            <Wordmark />
+            <nav className="flex items-center gap-1 text-sm">
               {NAV_ITEMS.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   end={item.end}
                   className={({ isActive }) =>
-                    isActive
-                      ? 'font-medium text-slate-900'
-                      : 'text-slate-500 hover:text-slate-800'
+                    `rounded-md px-3 py-1.5 transition-colors ${
+                      isActive
+                        ? 'bg-elevated font-medium text-brand-400'
+                        : 'text-muted hover:text-fg'
+                    }`
                   }
                 >
                   {item.label}
@@ -38,18 +38,18 @@ export function AppLayout() {
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-3 text-sm">
             {user && (
-              <span className="text-slate-600">
+              <span className="text-muted">
                 {user.full_name}
-                <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs uppercase tracking-wide text-slate-500">
+                <span className="ml-2 rounded bg-elevated px-2 py-0.5 text-xs uppercase tracking-wide text-faint">
                   {user.role.name}
                 </span>
               </span>
             )}
             <button
               onClick={logout}
-              className="rounded-md border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-50"
+              className="rounded-md border border-line-strong px-3 py-1 text-fg transition-colors hover:bg-elevated"
             >
               Sign out
             </button>
@@ -60,5 +60,19 @@ export function AppLayout() {
         <Outlet />
       </main>
     </div>
+  )
+}
+
+// Text wordmark (no image asset this pass). "SUN" white, "CENTRAL" orange,
+// echoing the flyer; a small square mark stands in for the logo.
+function Wordmark() {
+  return (
+    <Link to="/" className="flex items-center gap-2">
+      <span className="h-5 w-5 rounded-sm bg-brand-500" aria-hidden />
+      <span className="text-lg font-semibold tracking-tight text-fg">
+        SUN<span className="text-brand-500">CENTRAL</span>
+        <span className="ml-2 text-sm font-normal text-faint">Ops</span>
+      </span>
+    </Link>
   )
 }

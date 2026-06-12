@@ -45,12 +45,12 @@ export function CustomerDetailPage() {
   const canWrite = canWriteCustomers(user?.role.name)
   const canDelete = canDeleteCustomers(user?.role.name)
 
-  if (isLoading) return <p className="text-slate-500">Loading…</p>
+  if (isLoading) return <p className="text-muted">Loading…</p>
   if (isError || !customer) {
     return (
       <div>
-        <p className="text-red-600">Customer not found.</p>
-        <Link to="/customers" className="mt-2 inline-block text-slate-700 underline">
+        <p className="text-red-400">Customer not found.</p>
+        <Link to="/customers" className="mt-2 inline-block text-muted underline hover:text-fg">
           Back to customers
         </Link>
       </div>
@@ -92,25 +92,22 @@ export function CustomerDetailPage() {
 
   return (
     <div>
-      <Link to="/customers" className="text-sm text-slate-500 underline">
+      <Link to="/customers" className="text-sm text-muted underline hover:text-fg">
         ← Customers
       </Link>
 
       <div className="mt-2 mb-4 flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-800">{customer.full_name}</h1>
+        <h1 className="text-2xl font-semibold text-fg">{customer.full_name}</h1>
         {canWrite && !editing && (
           <div className="flex gap-2">
-            <button
-              onClick={() => setEditing(true)}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
+            <button onClick={() => setEditing(true)} className="btn-secondary px-3 py-1.5 text-sm">
               Edit
             </button>
             {canDelete && (
               <button
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending}
-                className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                className="btn-danger px-3 py-1.5 text-sm"
               >
                 Delete
               </button>
@@ -120,29 +117,25 @@ export function CustomerDetailPage() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Details
-        </h2>
+      <div className="card p-5">
+        <h2 className="eyebrow mb-3">Details</h2>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
           {EDITABLE_FIELDS.map(({ key, label }) => (
             <div key={key}>
-              <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                {label}
-              </dt>
+              <dt className="eyebrow text-faint">{label}</dt>
               {editing ? (
                 <input
                   value={form[key] ?? ''}
                   onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  className="input mt-1 px-2 py-1 text-sm"
                 />
               ) : (
-                <dd className="mt-0.5 text-slate-800">
-                  {(customer[key] as string | null) || '—'}
-                </dd>
+                <dd className="mt-0.5 text-fg">{(customer[key] as string | null) || '—'}</dd>
               )}
             </div>
           ))}
@@ -155,14 +148,14 @@ export function CustomerDetailPage() {
                 setEditing(false)
                 setError(null)
               }}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              className="btn-secondary text-sm"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={updateMutation.isPending}
-              className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+              className="btn-primary text-sm"
             >
               {updateMutation.isPending ? 'Saving…' : 'Save changes'}
             </button>
@@ -183,9 +176,9 @@ export function CustomerDetailPage() {
 
 function PlaceholderPanel({ title, hint }: { title: string; hint: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4">
-      <h3 className="font-medium text-slate-700">{title}</h3>
-      <p className="mt-1 text-sm text-slate-400">{hint}</p>
+    <div className="rounded-lg border border-dashed border-line-strong bg-surface p-4">
+      <h3 className="font-medium text-fg">{title}</h3>
+      <p className="mt-1 text-sm text-faint">{hint}</p>
     </div>
   )
 }

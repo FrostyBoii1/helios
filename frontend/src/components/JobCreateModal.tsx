@@ -44,19 +44,21 @@ export function JobCreateModal({
 
   return (
     <div
-      className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/40 px-4"
+      className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 px-4"
       role="dialog"
       aria-modal="true"
     >
-      <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg">
-        <h2 className="text-lg font-semibold text-slate-800">New job</h2>
-        <p className="mb-4 text-sm text-slate-500">
-          for <span className="font-medium">{customerName}</span> — a case number is assigned
-          automatically.
+      <form onSubmit={handleSubmit} className="card w-full max-w-lg p-6 shadow-2xl shadow-black/40">
+        <h2 className="text-lg font-semibold text-fg">New job</h2>
+        <p className="mb-4 text-sm text-muted">
+          for <span className="font-medium text-fg">{customerName}</span> — a case number is
+          assigned automatically.
         </p>
 
         {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+          <div className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {error}
+          </div>
         )}
 
         <Field label="Title">
@@ -64,7 +66,7 @@ export function JobCreateModal({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. 6.6kW solar install"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="input"
           />
         </Field>
         <Field label="Sale date">
@@ -72,7 +74,7 @@ export function JobCreateModal({
             type="date"
             value={saleDate}
             onChange={(e) => setSaleDate(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="input"
           />
         </Field>
         <Field label="Notes">
@@ -80,23 +82,15 @@ export function JobCreateModal({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="input"
           />
         </Field>
 
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50"
-          >
+          <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="rounded-md bg-slate-800 px-4 py-2 font-medium text-white hover:bg-slate-700 disabled:opacity-60"
-          >
+          <button type="submit" disabled={createMutation.isPending} className="btn-primary">
             {createMutation.isPending ? 'Creating…' : 'Create job'}
           </button>
         </div>
@@ -108,7 +102,7 @@ export function JobCreateModal({
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="mb-3 block text-sm">
-      <span className="mb-1 block font-medium text-slate-700">{label}</span>
+      <span className="mb-1 block font-medium text-fg">{label}</span>
       {children}
     </label>
   )

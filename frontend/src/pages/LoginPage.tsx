@@ -41,46 +41,47 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+        className="card w-full max-w-sm p-6 shadow-xl shadow-black/30"
       >
-        <h1 className="mb-1 text-xl font-semibold text-slate-800">Helios Core</h1>
-        <p className="mb-6 text-sm text-slate-500">Sign in to your account</p>
+        <div className="mb-1 flex items-center gap-2">
+          <span className="h-5 w-5 rounded-sm bg-brand-500" aria-hidden />
+          <h1 className="text-xl font-semibold tracking-tight text-fg">
+            SUN<span className="text-brand-500">CENTRAL</span>
+          </h1>
+        </div>
+        <p className="mb-6 text-sm text-muted">Operations platform — sign in</p>
 
         {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
             {error}
           </div>
         )}
 
         <label className="mb-3 block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Email</span>
+          <span className="mb-1 block font-medium text-fg">Email</span>
           <input
             type="email"
             required
             autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:border-slate-400 focus:outline-none"
+            className="input"
           />
         </label>
 
         <label className="mb-6 block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Password</span>
+          <span className="mb-1 block font-medium text-fg">Password</span>
           <input
             type="password"
             required
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:border-slate-400 focus:outline-none"
+            className="input"
           />
         </label>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-md bg-slate-800 px-4 py-2 font-medium text-white hover:bg-slate-700 disabled:opacity-60"
-        >
+        <button type="submit" disabled={submitting} className="btn-primary w-full">
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
