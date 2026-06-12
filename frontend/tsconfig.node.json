@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "types": ["node"],
+    // Composite (referenced) projects must emit. We direct that emit to a temp
+    // dir under node_modules (gitignored) so nothing is written next to source.
+    // Using `noEmit` here triggers TS6310 ("referenced project may not disable
+    // emit") under both `tsc --noEmit` and `tsc -b`.
+    "outDir": "./node_modules/.tmp/node",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"
+  },
+  "include": ["vite.config.ts"]
+}

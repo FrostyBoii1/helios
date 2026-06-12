@@ -1,0 +1,393 @@
+We are building a centralized browser-based operations platform to replace the company's current spreadsheet-based workflow.
+
+The goal is not to create a multi-file static HTML app. A static HTML/CSS/JS project is only acceptable for the frontend interface or an early mock-up. The real system needs to be a proper full-stack application with a frontend, backend, database, authentication, role-based permissions, file storage, backups, and local/network hosting support.
+
+The purpose of the platform is to move the business away from spreadsheets as the main operating system. Spreadsheets may still be used for exports or backups, but the live business workflow should happen inside this application.
+
+The application should be accessible through a browser, ideally hosted on my NAS so staff can access it across the local network, and potentially remotely through a secure VPN or protected access method. Multiple users should be able to use the system at the same time, with live updates or reliable refresh behaviour so staff are not working from stale information.
+
+The system needs proper user accounts. Users should have roles such as Admin, Scheduling, Approvals, Support, Sales/Admin, or similar. The role should determine what each user sees, what they can edit, and what actions they can perform.
+
+Every job should be stored as a proper database record, not as a spreadsheet row. A job record should contain customer details, address, phone, email, salesperson, system details, install details, approval details, documents, photos, notes, reminders, support history, job status, assigned staff, important dates, and a full activity timeline.
+
+The platform should include a dashboard for each user. The dashboard should show work relevant to that user, such as outstanding approvals, upcoming installs, jobs needing scheduling, customers needing welcome calls, post-install calls, review requests, missing MSB photos, unresolved support cases, overdue tasks, and jobs approaching deadlines.
+
+Job scheduling should be handled through a calendar or chronological pipeline view. A new sale should be entered through a simple modal/form, saved to the database, and placed into the correct workflow stage. Jobs should be easy to schedule, reschedule, assign, filter, and update without manually moving spreadsheet rows. Changing the install date should update the job timeline and calendar placement automatically.
+
+Each job should support clear statuses, tags, and flags. Examples include missing MSB photos, awaiting approval, ready to schedule, booked for install, post-install call required, review request required, maintenance required, customer needs support, delayed customer, and high-priority issue. These statuses should be visually clear and searchable/filterable.
+
+The application should include task ownership and accountability. Every recurring responsibility should have an assigned owner. If Retailer PPK belongs to a specific person, the system should show that. If welcome calls belong to Renata, the system should show that. If approvals belong to Elijah, the system should show that. This removes guesswork and prevents work from being done invisibly or assumed to belong to someone else.
+
+Tasks should be assignable to users and linked to customers or jobs. Completed tasks should be saved to a historical log. Overdue tasks should be clearly visible. Admin users should be able to see what is pending, what is completed, who completed it, and when it was completed.
+
+Each customer/job should have a chronological timeline. Every important action should be logged, including sale creation, document uploads, approval submissions, install bookings, reschedules, support requests, notes, reminders, staff assignments, and completed tasks. The user should be able to open a customer and immediately understand the full history without searching through emails or spreadsheets.
+
+The system needs document and photo storage. Contracts, invoices, approvals, site photos, MSB photos, job documents, and other files should be uploaded and stored against the correct job/customer. File storage can be on the NAS or another configured storage directory, but the metadata should be tracked in the database. Future scope should allow drag-and-drop document uploads and possible extraction of customer details, case numbers, approval numbers, and invoice information.
+
+Search must be strong. Users should be able to search by customer name, address, phone number, email, case number, approval number, install date, salesperson, job status, assigned staff member, or document reference. Searching should be faster and clearer than scrolling through spreadsheets.
+
+The platform should include reminders and internal notifications. Examples include welcome calls, post-install calls, review requests, site checks, approval follow-ups, invoice follow-ups, support follow-ups, and overdue customer communication. Notifications should go to the relevant user based on role or assignment.
+
+There should be shared admin workspaces. If one admin completes a shared task, it should clear for other admins and move into the historical log. This prevents double handling and lets everyone see what has already been done.
+
+The system should include reporting and analytics. It should track installs completed, jobs rescheduled, cancellations, approvals completed, support cases resolved, sales processed, average installs per week, customer delays, staff workload, and potentially profitability. Reports should be exportable monthly.
+
+The application must include a proper login and user management system.
+
+Users should not just open the app and all see the same thing. Each staff member needs their own account. Admin users should be able to create new user accounts, deactivate accounts, reset passwords, and assign roles.
+
+Each user account should include basic details such as name, email/username, password, role, account status, and date created. Passwords must be stored securely using proper hashing. Passwords should never be stored in plain text.
+
+Roles should control what the user sees and what they can do. For example, an Admin should be able to access everything, manage users, view reports, assign tasks, edit jobs, and configure the system. A Scheduling user should mainly see installs, job dates, rescheduling tools, and scheduling tasks. An Approvals user should see outstanding approvals, upcoming install deadlines, missing documents, and approval-related tasks. A Support user should see flagged customers, technical cases, support notes, and follow-ups. A Sales/Admin user should see new sales, customer onboarding, welcome calls, documents, and general admin tasks.
+
+When a user logs in, they should land on their own dashboard. That dashboard should show what matters to their role and what has been assigned directly to them. They should not have to dig through the whole system to find their work. Their jobs, tasks, reminders, alerts, overdue items, and relevant customer updates should be immediately visible.
+
+Admins should be able to assign tasks, customers, jobs, support cases, approval work, and scheduling responsibilities to specific users. Once assigned, that work should appear on that user's dashboard. When completed, it should be logged historically with the user who completed it and the completion time.
+
+The goal is that when someone logs in, the system already knows who they are, what their role is, what they are responsible for, and what they need to do next.
+
+The application must support direct access to customer files stored on the NAS.
+
+The NAS is currently where customer folders, documents, photos, contracts, approvals, invoices, and other job files are stored. The goal is not to duplicate everything unnecessarily into the app, but to make the app act as the clean interface for accessing those files.
+
+Each customer/job record should be able to link directly to its corresponding NAS folder. From the job detail page, users should be able to view available documents and photos associated with that customer without manually browsing through the NAS folder structure.
+
+The backend should be able to read from a configured NAS-mounted directory or network path. File paths should be stored in the database as references connected to the correct customer/job record. The system should allow users to open, preview, download, or upload files depending on their permissions.
+
+The app should support common file types such as PDFs, images, Word documents, Excel files, approval documents, invoices, contracts, and photos. Images and PDFs should ideally be previewable in-browser. Other documents can be opened or downloaded.
+
+There should be permission controls around file access. Not every user should necessarily be able to delete or modify NAS files. Admin users should have full access. Other roles may only be able to view, upload, or attach files depending on their job function.
+
+The system should avoid breaking links if folders are renamed or moved. Ideally, the app should use a consistent customer/job folder structure and store reliable references to those folders. If a NAS folder cannot be found, the app should clearly show that the file path is missing or broken rather than failing silently.
+
+The goal is for each customer page to become the doorway into everything stored for that customer. A user should be able to open a job, see the full timeline, see the current status, and access the related NAS files from the same place without hunting through folders manually.
+
+
+Technical Requirements and Required Architecture
+
+Build this as a proper full-stack application, not a static HTML/CSS/JS project.
+
+Required stack:
+
+Frontend:
+
+* React
+* TypeScript
+* Vite
+* React Router
+* TanStack Query
+* TailwindCSS
+
+Backend:
+
+* FastAPI
+* Python
+* REST API architecture
+* Pydantic validation
+
+Database:
+
+* PostgreSQL
+
+ORM:
+
+* SQLAlchemy
+* Alembic for database migrations
+
+Authentication and Security:
+
+* Proper login system
+* Role-based permissions
+* Admin-created user accounts
+* Argon2 password hashing preferred
+* Passwords must never be stored in plain text
+* Protected backend routes
+* Protected frontend routes
+* Secure session-based authentication or JWT authentication
+* Clear permission checks for users, jobs, tasks, reports, and files
+
+File Storage:
+
+* Direct NAS integration
+* NAS mounted into the backend environment
+* File paths stored in PostgreSQL
+* Files linked to the correct customer/job record
+* Permission-controlled file viewing, uploading, downloading, and deletion
+* In-browser preview support for PDFs and images where practical
+
+Scheduling:
+
+* FullCalendar for calendar and install scheduling views
+
+Deployment:
+
+* Docker
+* Docker Compose
+* Environment-variable based configuration
+* Suitable for deployment on a NAS device or local server
+* Designed for local network access first
+* Future remote access should be handled securely through VPN or another protected method
+
+Backups:
+
+* Database backup-ready structure
+* Clear backup instructions
+* Uploaded/NAS files must not be treated as disposable application data
+* The system should avoid risky file operations that could damage the NAS folder structure
+
+Logging:
+
+* Structured backend logging
+* Error logging
+* Audit logging for important user actions such as creating jobs, changing statuses, uploading files, deleting files, completing tasks, assigning users, and changing install dates
+
+Code Quality:
+
+* TypeScript strict mode enabled
+* Modular codebase
+* Clear separation between frontend, backend, database, routes, services, models, schemas, utilities, and components
+* Avoid giant files
+* Avoid duplicated logic
+* Avoid hardcoded business data where database records should be used
+* Avoid unnecessary dependencies
+* Prioritise reliability, data integrity, maintainability, and clarity over flashy visuals
+
+First Version Scope:
+
+The first version should focus on the core workflow:
+
+1. User login and role-based access.
+2. Admin-created user accounts.
+3. Customer/job creation.
+4. Job list and searchable database.
+5. Job detail page.
+6. Statuses, tags, and flags.
+7. Calendar or chronological scheduling view.
+8. Task assignment and completion tracking.
+9. Notes and activity timeline.
+10. Direct NAS file viewing/linking.
+11. File/photo uploads linked to jobs.
+12. Basic reporting.
+
+Do not change the selected technology stack unless explicitly instructed.
+
+Core Data Model Requirements
+
+The application should be designed around a clear relational data model.
+
+Customers and Jobs should be treated as separate but connected entities. A customer may have one or more jobs over time, including installs, maintenance, warranty work, upgrades, support cases, or future additional work. Do not design the system as if one customer can only ever have one job.
+
+The core tables/entities should include:
+
+* Users
+* Roles and permissions
+* Customers
+* Jobs
+* Job statuses
+* Tags and flags
+* Tasks
+* Activities / timeline entries
+* Documents / file metadata
+* Reminders / notifications
+* Support cases
+* Install schedule records
+
+Jobs should belong to customers. Tasks, documents, notes, reminders, activities, support cases, and scheduling records should be linkable to the relevant customer and/or job.
+
+The activity timeline should be append-only. Important actions should not simply overwrite previous history. When a user changes a job status, assigns a task, uploads a file, reschedules an install, completes a task, adds a note, or changes important customer/job information, the system should create a timeline/activity entry showing what changed, who changed it, and when it happened.
+
+Data integrity is important. Use database relationships, foreign keys, constraints, and transactions where appropriate. Avoid storing important business data only as loose text if it should be structured and searchable.
+
+The system should account for multiple users working at the same time. Use safe database update patterns, transactions for important changes, and simple versioning or optimistic locking where useful to prevent accidental overwrites.
+
+Search should begin simple but reliable. For the first version, basic PostgreSQL search using ILIKE and structured filters is acceptable. Full-text search can be added later if needed.
+
+NAS files should be represented in the database as metadata records, not as blobs stored directly inside the database. Store file name, file type, relative NAS path, linked customer/job, uploaded by, uploaded time, and any relevant tags. The application should validate file paths and enforce permissions before serving, previewing, downloading, uploading, or deleting files.
+
+For live updates, start with simple refresh behaviour or periodic polling. Do not add WebSockets until the core workflow is stable.
+
+Project Governance and Architecture Baseline
+
+This document is the baseline architecture and product specification for the project.
+
+Claude should treat this prompt as the original source of truth unless I explicitly approve a change. Do not silently change the stack, database structure, authentication approach, deployment method, NAS strategy, or core workflow without explaining why.
+
+Create and maintain a `CHANGES.md` file in the project root.
+
+Any meaningful deviation from this baseline must be recorded in `CHANGES.md`, including:
+
+* What changed
+* Why it changed
+* What files were affected
+* Whether the change is temporary or permanent
+* Any risks or follow-up work created by the change
+
+The original architecture should remain understandable even as the project evolves. If a better approach is discovered during development, propose it first, then document the approved deviation in `CHANGES.md`.
+
+Also create and maintain a `PROJECT_OVERVIEW.md` file that explains the current architecture, setup process, folder structure, key workflows, database models, API structure, and deployment process.
+
+Do not rely on memory alone. The project should be self-documenting enough that a developer can open the repository later and understand the intended architecture, what changed, and why.
+
+Development Standards
+
+Feature Completion Requirements
+
+A feature is not considered complete until:
+
+* Database schema/model changes are implemented where required.
+* Backend API functionality is implemented.
+* Frontend functionality is implemented.
+* Validation is implemented.
+* Error handling is implemented.
+* Permission checks are implemented.
+* Activity logging is implemented where appropriate.
+* Documentation is updated.
+
+Database-First Development
+
+The database schema and relationships should be treated as the foundation of the application.
+
+Before building major frontend functionality, define:
+
+* Database models
+* Relationships
+* Constraints
+* Indexes
+* Migrations
+
+Do not build significant frontend workflows around temporary or undefined data structures.
+
+Auditability
+
+The system should maintain accountability for important actions.
+
+Important actions should record:
+
+* User
+* Timestamp
+* Action performed
+* Relevant entity affected
+
+Examples include:
+
+* Job creation
+* Job status changes
+* Install reschedules
+* Task assignment
+* Task completion
+* File uploads
+* File deletion
+* Customer updates
+* User management actions
+
+Soft Deletes
+
+Business-critical records should generally use soft deletes instead of permanent deletion.
+
+Deleted records should remain recoverable unless permanently removed through an explicit administrative action.
+
+Case Number System
+
+Every job should have a unique case number generated automatically.
+
+Example format:
+
+SCS-2026-00001
+
+Case numbers should be searchable and usable throughout the system for support, approvals, scheduling, reporting, and internal communication.
+
+Environment Separation
+
+Support separate Development, Testing, and Production environments.
+
+Development work should not be performed directly against production data.
+
+Future Data Migration
+
+The system should be designed with spreadsheet migration in mind.
+
+Customer data, jobs, tasks, and historical information should be importable through scripts or tools without requiring manual recreation.
+
+Project Documentation
+
+Maintain:
+
+* README.md
+* PROJECT_OVERVIEW.md
+* CHANGES.md
+
+The project should remain understandable to future developers without relying on conversation history.
+
+If a proposed implementation conflicts with this specification, explain the conflict before proceeding.
+
+The guiding principle is simple: replace messy spreadsheets with a structured live operations system.
+
+Before making a major architectural change, ask first and explain the tradeoff.
+
+The end result should be a system where staff can open the app, see their responsibilities, update jobs, schedule installs, manage approvals, flag support issues, store documents, search customer history, and keep the company aligned from one clear source of truth.
+
+Claude's conversation memory must not be treated as the source of truth for the project. The repository documentation is the authoritative source. Before beginning new work, read all available project documentation.
+If required documentation does not exist, create it before proceeding.
+
+If any required project documentation file does not exist, create it before proceeding with development.
+
+Development Priority Order
+
+1. Database schema
+2. Authentication and users
+3. Customers
+4. Jobs
+5. Activity logging
+6. Tasks
+7. Scheduling
+8. NAS integration
+9. Reporting
+10. Notifications
+
+Do not begin advanced features until the underlying data model and core workflow are stable.
+
+Do not use mock data, placeholder data, or hardcoded datasets for completed features.
+
+Completed features should use the actual backend API and database.
+
+For every major feature:
+- Verify API endpoints
+- Verify permissions
+- Verify database writes
+- Verify database reads
+- Verify activity logging
+
+Initial Implementation Task
+
+Begin by creating the project foundation only.
+
+Do not build the full application in one pass.
+
+First deliver:
+
+1. Repository folder structure.
+2. Docker Compose setup.
+3. FastAPI backend skeleton.
+4. React TypeScript frontend skeleton.
+5. PostgreSQL connection.
+6. SQLAlchemy + Alembic setup.
+7. Initial database models for Users, Roles, Customers, Jobs, Activities, Tasks, and Documents.
+8. Authentication foundation.
+9. Required documentation files:
+   - README.md
+   - PROJECT_OVERVIEW.md
+   - CHANGES.md
+   - docs/architecture.md
+   - docs/database_schema.md
+   - docs/business_rules.md
+   - DEVELOPER_HANDOFF.md
+
+After creating the foundation, stop and summarize:
+- What was created
+- How to run it
+- What is still missing
+- What the next recommended task should be
+
+
+
+

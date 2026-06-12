@@ -1,0 +1,2 @@
+# Migration revision files are generated here via:
+#   alembic revision --autogenerate -m "init core schema"

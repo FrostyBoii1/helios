@@ -1,0 +1,25 @@
+# ---- Web framework ----
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# ---- Settings & validation ----
+pydantic==2.10.4
+pydantic-settings==2.7.1
+email-validator==2.2.0
+
+# ---- Database / ORM / migrations ----
+SQLAlchemy==2.0.36
+alembic==1.14.0
+psycopg[binary]==3.2.3
+
+# ---- Auth & security ----
+PyJWT==2.10.1
+argon2-cffi==23.1.0
+
+# ---- Logging ----
+structlog==24.4.0
+
+# ---- Dev / test (kept light; expand as needed) ----
+pytest==8.3.4
+httpx==0.28.1

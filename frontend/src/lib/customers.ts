@@ -1,0 +1,35 @@
+// Customer API calls (thin wrappers over apiFetch).
+
+import { apiFetch } from '@/lib/api'
+import type { Customer, CustomerInput, CustomerListResponse } from '@/types'
+
+export interface ListCustomersParams {
+  q?: string
+  limit?: number
+  offset?: number
+}
+
+export function listCustomers(params: ListCustomersParams = {}): Promise<CustomerListResponse> {
+  const search = new URLSearchParams()
+  if (params.q) search.set('q', params.q)
+  if (params.limit != null) search.set('limit', String(params.limit))
+  if (params.offset != null) search.set('offset', String(params.offset))
+  const qs = search.toString()
+  return apiFetch<CustomerListResponse>(`/customers${qs ? `?${qs}` : ''}`)
+}
+
+export function getCustomer(id: number): Promise<Customer> {
+  return apiFetch<Customer>(`/customers/${id}`)
+}
+
+export function createCustomer(input: CustomerInput): Promise<Customer> {
+  return apiFetch<Customer>('/customers', { method: 'POST', body: input })
+}
+
+export function updateCustomer(id: number, input: Partial<CustomerInput>): Promise<Customer> {
+  return apiFetch<Customer>(`/customers/${id}`, { method: 'PATCH', body: input })
+}
+
+export function deleteCustomer(id: number): Promise<void> {
+  return apiFetch<void>(`/customers/${id}`, { method: 'DELETE' })
+}

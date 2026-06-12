@@ -1,0 +1,44 @@
+# ---- Python / backend ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Node / frontend ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+*.tsbuildinfo
+
+# ---- Environment & secrets ----
+.env
+.env.*
+!.env.example
+backend/.env
+!backend/.env.example
+frontend/.env
+!frontend/.env.example
+
+# ---- Editor / OS / local tooling ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.claude/
+
+# ---- Data / runtime ----
+postgres_data/
+*.log
+storage/
+!storage/.gitkeep
+nas_mount/
+!nas_mount/.gitkeep
+backups/
+!backups/.gitkeep

@@ -1,0 +1,84 @@
+# ============================================================================
+# Helios Core — Docker Compose (development-oriented, NAS/local-server ready)
+#
+#   db        PostgreSQL 16 with a named volume for durable data
+#   backend   FastAPI (uvicorn) with the NAS + storage paths mounted in
+#   frontend  Vite dev server (React/TS)
+#
+# Production note: the frontend service here runs the Vite dev server for
+# convenience. For a real deployment, build the frontend to static assets and
+# serve them via a reverse proxy (see docs/architecture.md). See CHANGES.md.
+# ============================================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Exposed for local inspection; remove in production if not needed.
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      SECRET_KEY: ${SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
+      REFRESH_TOKEN_EXPIRE_MINUTES: ${REFRESH_TOKEN_EXPIRE_MINUTES}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS}
+      FIRST_ADMIN_EMAIL: ${FIRST_ADMIN_EMAIL}
+      FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD}
+      FIRST_ADMIN_NAME: ${FIRST_ADMIN_NAME}
+      NAS_ROOT: ${NAS_ROOT}
+      STORAGE_ROOT: ${STORAGE_ROOT}
+    volumes:
+      # Live code mount for development hot-reload.
+      - ./backend:/app
+      # NAS share + app storage. In production, point the host paths at the NAS.
+      - ${NAS_HOST_PATH}:${NAS_ROOT}
+      - ${STORAGE_HOST_PATH}:${STORAGE_ROOT}
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    volumes:
+      - ./frontend:/app
+      # Keep container node_modules from being shadowed by the host mount.
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+volumes:
+  postgres_data:
