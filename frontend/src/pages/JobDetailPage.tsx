@@ -8,6 +8,7 @@ import {
   canEditJobInstallDate,
 } from '@/auth/permissions'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
+import { Timeline } from '@/components/Timeline'
 import { useChangeJobStatus, useDeleteJob, useJob, useUpdateJob } from '@/hooks/useJobs'
 import type { JobInput, JobStatus } from '@/types'
 
@@ -290,11 +291,13 @@ export function JobDetailPage() {
         )}
       </div>
 
-      {/* Placeholders — wired in later phases (out of scope for the Jobs phase). */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      {/* Tasks/Documents remain later phases; the activity timeline is live. */}
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <PlaceholderPanel title="Tasks" hint="Job tasks appear here (Tasks phase)." />
         <PlaceholderPanel title="Documents" hint="Job files appear here (NAS phase)." />
-        <PlaceholderPanel title="Timeline" hint="Activity history appears here (Timeline phase)." />
+      </div>
+      <div className="mt-6">
+        <Timeline jobId={job.id} />
       </div>
     </div>
   )

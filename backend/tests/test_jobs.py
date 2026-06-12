@@ -7,12 +7,22 @@ matrix. Each test runs in a rolled-back transaction.
 
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.activity import Activity
 from app.models.enums import ActivityType
 from app.models.job import Job
+
+# SCS-YYYY-NNNNN, e.g. SCS-2026-00001
+CASE_NUMBER_RE = re.compile(r"^SCS-\d{4}-\d{5}$")
+
+
+def _case_suffix(case_number: str) -> int:
+    """Parse the numeric sequence suffix from a case number."""
+    return int(case_number.rsplit("-", 1)[1])
 
 
 def _activities(db: Session, job_id: int, activity_type: ActivityType) -> list[Activity]:
@@ -35,8 +45,8 @@ def test_admin_creates_job_with_case_number(client_for, users, customer, db_sess
     assert resp.status_code == 201
     body = resp.json()
     assert body["status"] == "new"
-    assert body["case_number"].startswith("SCS-")
-    assert body["case_number"].endswith("00001")
+    # Format only — the absolute sequence depends on pre-existing jobs in the DB.
+    assert CASE_NUMBER_RE.match(body["case_number"])
     assert body["customer"]["id"] == customer.id
 
     logged = _activities(db_session, body["id"], ActivityType.JOB_CREATED)
@@ -48,8 +58,10 @@ def test_case_numbers_increment(client_for, users, customer):
     client = client_for(users["admin"])
     first = _create(client, customer.id).json()["case_number"]
     second = _create(client, customer.id).json()["case_number"]
-    assert first.endswith("00001")
-    assert second.endswith("00002")
+    # Both well-formed; the second increments the first by 1 (no absolute value).
+    assert CASE_NUMBER_RE.match(first)
+    assert CASE_NUMBER_RE.match(second)
+    assert _case_suffix(second) == _case_suffix(first) + 1
 
 
 def test_sales_admin_can_create_job(client_for, users, customer):

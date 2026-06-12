@@ -9,10 +9,46 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.activity import Activity
 from app.models.enums import ActivityType
+
+
+def list_activities(
+    db: Session,
+    *,
+    customer_id: int | None = None,
+    job_id: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[Activity], int]:
+    """Return (page of activities, total) for a customer and/or job timeline.
+
+    Activities are append-only and never soft-deleted, so they remain readable
+    even if the linked customer/job is later soft-deleted (audit access). A
+    customer's timeline includes job activities, because job events are logged
+    with both customer_id and job_id. Ordered newest-first.
+    """
+    filters = []
+    if customer_id is not None:
+        filters.append(Activity.customer_id == customer_id)
+    if job_id is not None:
+        filters.append(Activity.job_id == job_id)
+
+    total = db.scalar(select(func.count()).select_from(Activity).where(*filters)) or 0
+
+    stmt = (
+        select(Activity)
+        .options(joinedload(Activity.actor))
+        .where(*filters)
+        .order_by(Activity.created_at.desc(), Activity.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    items = list(db.scalars(stmt).all())
+    return items, total
 
 
 def log_activity(

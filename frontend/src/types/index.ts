@@ -120,3 +120,43 @@ export interface JobListResponse {
   limit: number
   offset: number
 }
+
+export type ActivityType =
+  | 'job_created'
+  | 'job_updated'
+  | 'job_status_changed'
+  | 'job_deleted'
+  | 'install_rescheduled'
+  | 'customer_created'
+  | 'customer_updated'
+  | 'customer_deleted'
+  | 'task_assigned'
+  | 'task_completed'
+  | 'note_added'
+  | 'file_uploaded'
+  | 'file_deleted'
+  | 'user_created'
+  | 'user_updated'
+
+export interface ActorRef {
+  id: number
+  full_name: string
+}
+
+export interface Activity {
+  id: number
+  activity_type: ActivityType
+  description: string
+  meta: Record<string, unknown> | null
+  created_at: string
+  actor: ActorRef | null
+  customer_id: number | null
+  job_id: number | null
+}
+
+export interface ActivityListResponse {
+  items: Activity[]
+  total: number
+  limit: number
+  offset: number
+}

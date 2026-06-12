@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { canDeleteCustomers, canWriteCustomers } from '@/auth/permissions'
 import { CustomerJobsPanel } from '@/components/CustomerJobsPanel'
+import { Timeline } from '@/components/Timeline'
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
 import type { CustomerInput } from '@/types'
 
@@ -163,22 +164,13 @@ export function CustomerDetailPage() {
         )}
       </div>
 
-      {/* Jobs for this customer (Jobs phase). Timeline remains a later phase. */}
+      {/* Jobs for this customer, then the activity timeline. */}
       <div className="mt-6">
         <CustomerJobsPanel customerId={customer.id} customerName={customer.full_name} />
       </div>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <PlaceholderPanel title="Timeline" hint="Activity history appears here (Activity Timeline phase)." />
+      <div className="mt-6">
+        <Timeline customerId={customer.id} />
       </div>
-    </div>
-  )
-}
-
-function PlaceholderPanel({ title, hint }: { title: string; hint: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-line-strong bg-surface p-4">
-      <h3 className="font-medium text-fg">{title}</h3>
-      <p className="mt-1 text-sm text-faint">{hint}</p>
     </div>
   )
 }
