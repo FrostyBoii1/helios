@@ -172,10 +172,24 @@ def summary(db: Session, batch: ImportBatch) -> dict:
             ImportIssue.resolved.is_(False),
         )
     ) or 0
+    error_row_ids = select(ImportIssue.row_id).where(
+        ImportIssue.batch_id == batch.id,
+        ImportIssue.severity == "error",
+        ImportIssue.resolved.is_(False),
+    )
+    eligible_clean_count = db.scalar(
+        select(func.count()).select_from(ImportRow).where(
+            ImportRow.batch_id == batch.id,
+            ImportRow.review_status == ImportRowReviewStatus.PENDING.value,
+            ImportRow.row_class.in_(APPROVABLE_CLASSES),
+            ImportRow.id.not_in(error_row_ids),
+        )
+    ) or 0
     return {
         "batch_id": batch.id,
         "by_review_status": counts(ImportRow.review_status),
         "by_row_class": counts(ImportRow.row_class),
         "issues_by_severity": {str(k): v for k, v in issue_rows},
         "unresolved_error_rows": unresolved_error_rows,
+        "eligible_clean_count": eligible_clean_count,
     }

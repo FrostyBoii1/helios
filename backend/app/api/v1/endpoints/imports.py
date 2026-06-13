@@ -9,7 +9,7 @@ memory and never persisted to disk.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import require_admin
@@ -124,6 +124,8 @@ def list_import_rows(
     row_class: ImportRowClass | None = Query(default=None),
     review_status: ImportRowReviewStatus | None = Query(default=None),
     severity: str | None = Query(default=None, description="Only rows with an issue of this severity"),
+    unresolved_only: bool = Query(default=False, description="Only rows with an unresolved error-severity issue"),
+    q: str | None = Query(default=None, description="Search legacy reference or parsed customer name"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -141,6 +143,24 @@ def list_import_rows(
                 select(ImportIssue.row_id).where(
                     ImportIssue.batch_id == batch_id, ImportIssue.severity == severity
                 )
+            )
+        )
+    if unresolved_only:
+        filters.append(
+            ImportRow.id.in_(
+                select(ImportIssue.row_id).where(
+                    ImportIssue.batch_id == batch_id,
+                    ImportIssue.severity == "error",
+                    ImportIssue.resolved.is_(False),
+                )
+            )
+        )
+    if q:
+        term = f"%{q.strip()}%"
+        filters.append(
+            or_(
+                ImportRow.legacy_reference.ilike(term),
+                ImportRow.parsed["customer_name"].astext.ilike(term),
             )
         )
 

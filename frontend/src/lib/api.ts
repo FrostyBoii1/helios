@@ -70,8 +70,12 @@ async function refreshAccessToken(): Promise<boolean> {
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, auth = true, _retried = false, headers, ...rest } = options
 
+  // FormData (e.g. file upload) is sent as multipart — let the browser set the
+  // Content-Type boundary and pass the body through unserialized.
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+
   const finalHeaders = new Headers(headers)
-  if (body !== undefined) finalHeaders.set('Content-Type', 'application/json')
+  if (body !== undefined && !isForm) finalHeaders.set('Content-Type', 'application/json')
   if (auth && tokenStore.access) {
     finalHeaders.set('Authorization', `Bearer ${tokenStore.access}`)
   }
@@ -79,7 +83,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const resp = await fetch(`${BASE_URL}${path}`, {
     ...rest,
     headers: finalHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? (isForm ? (body as FormData) : JSON.stringify(body)) : undefined,
   })
 
   // Attempt a single transparent refresh on auth failure.

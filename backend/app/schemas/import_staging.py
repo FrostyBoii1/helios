@@ -43,6 +43,10 @@ class ImportIssueRead(BaseModel):
     field: str | None = None
     message: str
     resolved: bool
+    # Resolution audit (read-only; surfaced for the review UI).
+    resolution_note: str | None = None
+    resolved_by_id: int | None = None
+    resolved_at: datetime | None = None
 
 
 class ImportRowRead(BaseModel):
@@ -54,8 +58,14 @@ class ImportRowRead(BaseModel):
     legacy_reference: str | None = None
     raw: dict[str, Any] | None = None
     parsed: dict[str, Any] | None = None
+    # Immutable parser output snapshot, set on the first reviewer edit; lets the
+    # UI mark which parsed fields a reviewer has changed.
+    original_parsed: dict[str, Any] | None = None
     context_text: str | None = None
     review_status: ImportRowReviewStatus
+    review_notes: str | None = None
+    reviewer_id: int | None = None
+    reviewed_at: datetime | None = None
     committed_customer_id: int | None = None
     committed_job_id: int | None = None
     issues: list[ImportIssueRead] = []
@@ -134,3 +144,6 @@ class ImportBatchSummary(BaseModel):
     by_row_class: dict[str, int]
     issues_by_severity: dict[str, int]
     unresolved_error_rows: int
+    # Pending job/ambiguous rows with no unresolved error issue — i.e. how many
+    # rows a bulk "approve clean" would approve right now.
+    eligible_clean_count: int

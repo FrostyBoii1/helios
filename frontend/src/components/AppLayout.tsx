@@ -3,26 +3,38 @@
 
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
+import { canReviewImports } from '@/auth/permissions'
 
-const NAV_ITEMS = [
+interface NavItem {
+  to: string
+  label: string
+  end: boolean
+  adminOnly?: boolean
+}
+
+const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/customers', label: 'Customers', end: false },
   { to: '/jobs', label: 'Jobs', end: false },
   { to: '/schedule', label: 'Schedule', end: false },
   { to: '/tasks', label: 'Tasks', end: false },
+  { to: '/imports', label: 'Imports', end: false, adminOnly: true },
 ]
 
 export function AppLayout() {
   const { user, logout } = useAuth()
+  const navItems = NAV_ITEMS.filter(
+    (item) => !item.adminOnly || canReviewImports(user?.role.name),
+  )
 
   return (
     <div className="min-h-screen">
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Wordmark />
-            <nav className="flex items-center gap-1 text-sm">
-              {NAV_ITEMS.map((item) => (
+            <nav className="flex flex-wrap items-center gap-1 text-sm">
+              {navItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}

@@ -134,6 +134,69 @@ def test_summary(client_for, users):
     s = admin.get(f"/api/v1/imports/{bid}/summary").json()
     assert s["by_row_class"].get("job") == 4
     assert s["unresolved_error_rows"] == 1  # SCS0003
+    # 4 pending job rows minus SCS0003 (unresolved error) == 3 clean-eligible.
+    assert s["eligible_clean_count"] == 3
+
+
+# --------------------------------------------------------------------------- #
+# B2-supporting reads: filters + audit fields (read-only additions)
+# --------------------------------------------------------------------------- #
+def test_filter_unresolved_only(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    items = admin.get(
+        f"/api/v1/imports/{bid}/rows", params={"unresolved_only": "true", "limit": 200}
+    ).json()["items"]
+    # Only SCS0003 carries an unresolved error issue.
+    assert [r["legacy_reference"] for r in items] == ["SCS0003"]
+
+
+def test_search_by_reference_and_name(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    by_ref = admin.get(f"/api/v1/imports/{bid}/rows", params={"q": "SCS0002"}).json()["items"]
+    assert [r["legacy_reference"] for r in by_ref] == ["SCS0002"]
+    # Search also matches the parsed customer name.
+    by_name = admin.get(f"/api/v1/imports/{bid}/rows", params={"q": "Alex Roe"}).json()["items"]
+    assert any(r["legacy_reference"] == "SCS0001" for r in by_name)
+
+
+def test_read_exposes_audit_fields(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "SCS0001")
+    # Before any edit: original_parsed is null, review fields empty.
+    assert row["original_parsed"] is None
+    assert row["review_notes"] is None
+    assert row["reviewed_at"] is None
+
+    admin.patch(
+        f"/api/v1/imports/{bid}/rows/{row['id']}",
+        json={"customer_name": "Alexander Roe", "review_notes": "fixed"},
+    )
+    edited = admin.get(f"/api/v1/imports/{bid}/rows/{row['id']}").json()
+    # Original snapshot preserves the pre-edit value; audit fields populated.
+    assert edited["original_parsed"]["customer_name"] == "Alex Roe"
+    assert edited["parsed"]["customer_name"] == "Alexander Roe"
+    assert edited["review_notes"] == "fixed"
+    assert edited["reviewer_id"] is not None
+    assert edited["reviewed_at"] is not None
+
+
+def test_issue_read_exposes_resolution_audit(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "SCS0003")
+    err = next(i for i in row["issues"] if i["kind"] == "ambiguous_name")
+    admin.patch(
+        f"/api/v1/imports/{bid}/issues/{err['id']}", json={"resolution_note": "checked"}
+    )
+    fetched = _by_ref(_rows(admin, bid), "SCS0003")
+    resolved = next(i for i in fetched["issues"] if i["id"] == err["id"])
+    assert resolved["resolved"] is True
+    assert resolved["resolution_note"] == "checked"
+    assert resolved["resolved_by_id"] is not None
+    assert resolved["resolved_at"] is not None
 
 
 # --------------------------------------------------------------------------- #
