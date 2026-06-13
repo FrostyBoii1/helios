@@ -10,6 +10,7 @@ from app.db.base_class import Base
 from app.models.activity import Activity
 from app.models.customer import Customer
 from app.models.document import Document
+from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.models.job import Job
 from app.models.role import Role
 from app.models.task import Task
@@ -20,6 +21,9 @@ __all__ = [
     "Activity",
     "Customer",
     "Document",
+    "ImportBatch",
+    "ImportIssue",
+    "ImportRow",
     "Job",
     "Role",
     "Task",

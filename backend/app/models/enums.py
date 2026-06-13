@@ -78,3 +78,46 @@ class ActivityType(str, enum.Enum):
     FILE_DELETED = "file_deleted"
     USER_CREATED = "user_created"
     USER_UPDATED = "user_updated"
+
+
+# --------------------------------------------------------------------------- #
+# Spreadsheet import staging (Phase A — parse-only; no live writes)
+# --------------------------------------------------------------------------- #
+class ImportBatchStatus(str, enum.Enum):
+    PARSING = "parsing"
+    PARSED = "parsed"
+    FAILED = "failed"
+    # reviewing/committing/committed belong to later phases (B/C).
+
+
+class ImportRowClass(str, enum.Enum):
+    BLANK = "blank"
+    DIVIDER = "divider"
+    JOB = "job"
+    AMBIGUOUS = "ambiguous"
+
+
+class ImportRowReviewStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    SKIPPED = "skipped"
+    COMMITTED = "committed"  # set only by the future commit phase
+
+
+class ImportIssueSeverity(str, enum.Enum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class ImportIssueKind(str, enum.Enum):
+    AMBIGUOUS_NAME = "ambiguous_name"
+    MULTI_PHONE = "multi_phone"
+    MULTI_EMAIL = "multi_email"
+    NMI_UNMATCHED = "nmi_unmatched"
+    DISTRIBUTOR_MISMATCH = "distributor_mismatch"
+    HARDWARE_UNCERTAIN = "hardware_uncertain"
+    APPROVAL_PENDING_NO_DATE = "approval_pending_no_date"
+    DATE_DAY_MISMATCH = "date_day_mismatch"
+    DIVIDER_ORPHAN = "divider_orphan"
