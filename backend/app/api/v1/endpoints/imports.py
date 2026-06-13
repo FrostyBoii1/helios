@@ -1,9 +1,12 @@
-"""Spreadsheet import endpoints (Phase A — parse-only, admin-only).
+"""Spreadsheet import endpoints (admin-only).
 
-POST ingests an uploaded .xlsx into staging tables; GET endpoints inspect the
-created batch. NOTHING here creates or modifies Customer/Job/Task/Activity/
-Document records — this is staging only. The uploaded file is processed in
-memory and never persisted to disk.
+Upload parses an .xlsx into staging tables (in memory, never persisted to disk);
+GET endpoints inspect a batch; PATCH/POST review actions edit/approve staged
+rows. All of the above are staging-only and create NO live records.
+
+The one exception is POST /{id}/commit (Phase C1), which creates live Customer +
+Job records from APPROVED rows via app.services.import_commit — create-only, it
+never updates or deletes existing live records.
 """
 
 from __future__ import annotations
@@ -23,6 +26,8 @@ from app.schemas.import_staging import (
     ImportBatchRead,
     ImportBatchSummary,
     ImportCommitPreview,
+    ImportCommitRequest,
+    ImportCommitResult,
     ImportIssueRead,
     ImportRowEdit,
     ImportRowList,
@@ -30,7 +35,7 @@ from app.schemas.import_staging import (
     IssueResolveRequest,
     ReviewActionRequest,
 )
-from app.services import import_commit_preview, import_ingest, import_review
+from app.services import import_commit, import_commit_preview, import_ingest, import_review
 
 router = APIRouter()
 
@@ -218,6 +223,24 @@ def commit_preview(
     """
     batch = _get_batch(db, batch_id)
     return ImportCommitPreview(**import_commit_preview.preview(db, batch, sample_limit=sample_limit))
+
+
+@router.post("/{batch_id}/commit", response_model=ImportCommitResult)
+def commit_batch(
+    batch_id: int,
+    payload: ImportCommitRequest = ImportCommitRequest(),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> ImportCommitResult:
+    """Phase C1: commit eligible approved rows to live Customer + Job records.
+
+    Admin only. Creates live records (capped per call); never updates/deletes
+    existing live records. Idempotent: already-committed rows and rows whose
+    legacy_reference already exists on a live job are skipped.
+    """
+    batch = _get_batch(db, batch_id)
+    result = import_commit.commit_batch(db, batch, actor_id=admin.id, row_ids=payload.row_ids)
+    return ImportCommitResult(**result)
 
 
 @router.get("/{batch_id}/rows/{row_id}", response_model=ImportRowRead)

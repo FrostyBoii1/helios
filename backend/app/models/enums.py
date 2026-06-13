@@ -78,6 +78,10 @@ class ActivityType(str, enum.Enum):
     FILE_DELETED = "file_deleted"
     USER_CREATED = "user_created"
     USER_UPDATED = "user_updated"
+    # One per job created by the spreadsheet import commit (Phase C1). Kept as a
+    # distinct type so historical-import provenance can be filtered out of the
+    # normal/global activity feed.
+    RECORD_IMPORTED = "record_imported"
 
 
 # --------------------------------------------------------------------------- #
@@ -88,7 +92,10 @@ class ImportBatchStatus(str, enum.Enum):
     PARSED = "parsed"
     REVIEWING = "reviewing"  # set on the first review action (Phase B)
     FAILED = "failed"
-    # committing/committed belong to the later commit phase (C).
+    # Commit-to-live phase (C1):
+    COMMITTING = "committing"
+    COMMITTED = "committed"            # all eligible rows committed
+    COMMITTED_PARTIAL = "committed_partial"  # some committed; eligible rows remain
 
 
 class ImportRowClass(str, enum.Enum):

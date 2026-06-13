@@ -208,3 +208,37 @@ class ImportCommitPreview(BaseModel):
     sample_limit: int
     sample_truncated: bool
     samples: list[CommitRowPreview]
+
+
+# --------------------------------------------------------------------------- #
+# Phase C1 — commit-to-live (creates Customer + Job)
+# --------------------------------------------------------------------------- #
+class ImportCommitRequest(BaseModel):
+    # Omit to commit all eligible rows (up to the per-call cap). When provided,
+    # only these rows are considered (ineligible ones are returned as skips).
+    row_ids: list[int] | None = None
+
+
+class CommitRowResult(BaseModel):
+    row_id: int
+    source_row_index: int | None = None
+    legacy_reference: str | None = None
+    status: str  # committed | skipped | failed
+    reason: str | None = None
+    error: str | None = None
+    case_number: str | None = None
+    customer_id: int | None = None
+    job_id: int | None = None
+
+
+class ImportCommitResult(BaseModel):
+    batch_id: int
+    batch_status: str
+    attempted: int
+    committed: int
+    skipped: int
+    failed: int
+    remaining_eligible: int
+    cap: int
+    capped_out: int
+    results: list[CommitRowResult]

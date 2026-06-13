@@ -21,6 +21,7 @@ def list_activities(
     *,
     customer_id: int | None = None,
     job_id: int | None = None,
+    include_imports: bool = True,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[Activity], int]:
@@ -30,12 +31,18 @@ def list_activities(
     even if the linked customer/job is later soft-deleted (audit access). A
     customer's timeline includes job activities, because job events are logged
     with both customer_id and job_id. Ordered newest-first.
+
+    `include_imports` defaults to True (no behaviour change). Pass False to omit
+    the bulk RECORD_IMPORTED provenance entries — e.g. from a global/dashboard
+    feed — without hiding them from a specific job/customer timeline.
     """
     filters = []
     if customer_id is not None:
         filters.append(Activity.customer_id == customer_id)
     if job_id is not None:
         filters.append(Activity.job_id == job_id)
+    if not include_imports:
+        filters.append(Activity.activity_type != ActivityType.RECORD_IMPORTED)
 
     total = db.scalar(select(func.count()).select_from(Activity).where(*filters)) or 0
 

@@ -94,25 +94,36 @@ def customer_is_active(db: Session, customer_id: int) -> bool:
     )
 
 
-def create_job(db: Session, *, customer_id: int, data: dict) -> Job:
+def create_job(
+    db: Session,
+    *,
+    customer_id: int,
+    data: dict,
+    year: int | None = None,
+    status: JobStatus = JobStatus.NEW,
+) -> Job:
     """Create a job for an active customer with a unique generated case number.
 
     Retries case-number allocation on a unique-constraint collision (the final
     guard against the rare concurrent-insert race). Adds + flushes; the caller
     owns the commit. Raises ValueError if the customer is missing/soft-deleted,
     RuntimeError if a unique case number could not be allocated.
+
+    `year` overrides the case-number year (defaults to the current year); used by
+    the spreadsheet import to derive the year from the historical sale/install
+    date. `status` overrides the starting status (defaults to NEW).
     """
     if not customer_is_active(db, customer_id):
         raise ValueError("Customer not found")
 
-    year = datetime.now(timezone.utc).year
+    case_year = year if year is not None else datetime.now(timezone.utc).year
     last_error: IntegrityError | None = None
     for _ in range(MAX_CASE_NUMBER_RETRIES):
-        case_number = next_case_number(db, year)
+        case_number = next_case_number(db, case_year)
         job = Job(
             case_number=case_number,
             customer_id=customer_id,
-            status=JobStatus.NEW,
+            status=status,
             **data,
         )
         db.add(job)
