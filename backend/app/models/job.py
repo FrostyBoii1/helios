@@ -34,6 +34,14 @@ class Job(IntPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         String(32), unique=True, nullable=False, index=True
     )
 
+    # Legacy spreadsheet reference (e.g. "SCS0001") preserved on migrated jobs so
+    # the old invoice/reference number stays searchable during the transition.
+    # Null for jobs created natively in the app. Set only by the import commit
+    # engine (Phase C); not user-editable.
+    legacy_reference: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+
     customer_id: Mapped[int] = mapped_column(
         ForeignKey("customers.id"), nullable=False, index=True
     )

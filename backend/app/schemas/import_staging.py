@@ -147,3 +147,63 @@ class ImportBatchSummary(BaseModel):
     # Pending job/ambiguous rows with no unresolved error issue — i.e. how many
     # rows a bulk "approve clean" would approve right now.
     eligible_clean_count: int
+
+
+# --------------------------------------------------------------------------- #
+# Phase C0 — commit PREVIEW (read-only; describes what a future commit WOULD do)
+# --------------------------------------------------------------------------- #
+class CommitCustomerPreview(BaseModel):
+    full_name: str
+    email: str | None = None
+    phone: str | None = None
+    address_line1: str | None = None
+    extra_emails: list[str] = []
+    extra_phones: list[str] = []
+
+
+class CommitJobPreview(BaseModel):
+    predicted_case_number: str
+    legacy_reference: str | None = None
+    status: str
+    sale_date: str | None = None
+    install_date: str | None = None
+    salesperson_text: str | None = None
+    system_details: str | None = None
+    install_details: str | None = None
+    approval_details: str | None = None
+    notes: str | None = None
+
+
+class CommitRowPreview(BaseModel):
+    row_id: int
+    source_row_index: int
+    legacy_reference: str | None = None
+    case_year: int
+    predicted_case_number: str
+    customer: CommitCustomerPreview
+    job: CommitJobPreview
+
+
+class CommitExcludedCounts(BaseModel):
+    already_committed: int
+    blank_or_divider: int
+    not_approved: int
+    unresolved_error: int
+    missing_customer_name: int
+
+
+class CommitWouldCreate(BaseModel):
+    customers: int
+    jobs: int
+
+
+class ImportCommitPreview(BaseModel):
+    batch_id: int
+    total_rows: int
+    eligible_count: int
+    excluded: CommitExcludedCounts
+    would_create: CommitWouldCreate
+    predicted_case_numbers_by_year: dict[str, int]
+    sample_limit: int
+    sample_truncated: bool
+    samples: list[CommitRowPreview]

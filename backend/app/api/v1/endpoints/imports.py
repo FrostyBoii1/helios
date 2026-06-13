@@ -22,6 +22,7 @@ from app.schemas.import_staging import (
     ImportBatchList,
     ImportBatchRead,
     ImportBatchSummary,
+    ImportCommitPreview,
     ImportIssueRead,
     ImportRowEdit,
     ImportRowList,
@@ -29,7 +30,7 @@ from app.schemas.import_staging import (
     IssueResolveRequest,
     ReviewActionRequest,
 )
-from app.services import import_ingest, import_review
+from app.services import import_commit_preview, import_ingest, import_review
 
 router = APIRouter()
 
@@ -201,6 +202,22 @@ def import_summary(
 ) -> ImportBatchSummary:
     batch = _get_batch(db, batch_id)
     return ImportBatchSummary(**import_review.summary(db, batch))
+
+
+@router.get("/{batch_id}/commit-preview", response_model=ImportCommitPreview)
+def commit_preview(
+    batch_id: int,
+    sample_limit: int = Query(default=50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> ImportCommitPreview:
+    """Phase C0: read-only preview of what a future commit-to-live WOULD create.
+
+    Creates/modifies NOTHING — no Customer/Job/Activity records, no changes to
+    the batch or its rows, no reserved case numbers.
+    """
+    batch = _get_batch(db, batch_id)
+    return ImportCommitPreview(**import_commit_preview.preview(db, batch, sample_limit=sample_limit))
 
 
 @router.get("/{batch_id}/rows/{row_id}", response_model=ImportRowRead)

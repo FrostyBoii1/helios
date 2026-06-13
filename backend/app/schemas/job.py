@@ -51,6 +51,7 @@ class JobRead(BaseModel):
 
     id: int
     case_number: str
+    legacy_reference: str | None = None
     customer_id: int
     customer: CustomerRef
     status: JobStatus
