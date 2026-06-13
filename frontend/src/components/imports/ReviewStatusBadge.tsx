@@ -8,6 +8,7 @@ const REVIEW_STATUS_STYLES: Record<ImportRowReviewStatus, string> = {
   rejected: 'bg-red-500/15 text-red-300',
   skipped: 'bg-amber-500/15 text-amber-300',
   committed: 'bg-brand-500/15 text-brand-300',
+  reversed: 'bg-zinc-500/20 text-zinc-300',
 }
 
 export const REVIEW_STATUS_LABELS: Record<ImportRowReviewStatus, string> = {
@@ -16,6 +17,7 @@ export const REVIEW_STATUS_LABELS: Record<ImportRowReviewStatus, string> = {
   rejected: 'Rejected',
   skipped: 'Skipped',
   committed: 'Committed',
+  reversed: 'Reversed',
 }
 
 export const REVIEW_STATUS_ORDER: ImportRowReviewStatus[] = [
@@ -24,6 +26,7 @@ export const REVIEW_STATUS_ORDER: ImportRowReviewStatus[] = [
   'rejected',
   'skipped',
   'committed',
+  'reversed',
 ]
 
 export function ReviewStatusBadge({ status }: { status: ImportRowReviewStatus }) {

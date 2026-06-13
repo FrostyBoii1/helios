@@ -17,6 +17,7 @@ export type ImportRowReviewStatus =
   | 'rejected'
   | 'skipped'
   | 'committed'
+  | 'reversed'
 
 export type ImportIssueSeverity = 'info' | 'warning' | 'error'
 
@@ -259,4 +260,23 @@ export interface ImportCommitResult {
   cap: number
   capped_out: number
   results: CommitRowResult[]
+}
+
+// ---- Reverse (C3) ----
+export interface ReverseCheck {
+  row_id: number
+  reversible: boolean
+  reason: string | null
+  customer_id: number | null
+  job_id: number | null
+  case_number: string | null
+}
+
+export interface ReverseResult {
+  row_id: number
+  status: 'reversed' | 'blocked'
+  reason: string | null
+  customer_id: number | null
+  job_id: number | null
+  case_number: string | null
 }

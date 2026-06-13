@@ -8,10 +8,12 @@ import {
   getBatch,
   getBatchSummary,
   getCommitPreview,
+  getReverseCheck,
   getRow,
   listBatches,
   listRows,
   resolveIssue,
+  reverseRow,
   rowAction,
   uploadBatch,
   type RowAction,
@@ -26,6 +28,8 @@ const keys = {
   rows: (id: number, params: ListRowsParams) => ['imports', 'rows', id, params] as const,
   row: (batchId: number, rowId: number) => ['imports', 'row', batchId, rowId] as const,
   commitPreview: (id: number) => ['imports', 'commit-preview', id] as const,
+  reverseCheck: (batchId: number, rowId: number) =>
+    ['imports', 'reverse-check', batchId, rowId] as const,
 }
 
 export function useImportBatches() {
@@ -72,14 +76,31 @@ export function useImportCommitPreview(batchId: number, enabled = true) {
   })
 }
 
+export function useReverseCheck(batchId: number, rowId: number | null, enabled = true) {
+  return useQuery({
+    queryKey: keys.reverseCheck(batchId, rowId ?? 0),
+    queryFn: () => getReverseCheck(batchId, rowId as number),
+    enabled: enabled && Number.isFinite(batchId) && batchId > 0 && rowId != null && rowId > 0,
+  })
+}
+
 // Invalidate everything affected by a write within a batch (rows list, single
-// row, summary, commit-preview, batch status).
+// row, summary, commit-preview, reverse-check, batch status).
 function invalidateBatch(qc: ReturnType<typeof useQueryClient>, batchId: number) {
   void qc.invalidateQueries({ queryKey: ['imports', 'rows', batchId] })
   void qc.invalidateQueries({ queryKey: ['imports', 'row', batchId] })
   void qc.invalidateQueries({ queryKey: keys.summary(batchId) })
   void qc.invalidateQueries({ queryKey: keys.batch(batchId) })
   void qc.invalidateQueries({ queryKey: keys.commitPreview(batchId) })
+  void qc.invalidateQueries({ queryKey: ['imports', 'reverse-check', batchId] })
+}
+
+export function useReverseRow(batchId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (rowId: number) => reverseRow(batchId, rowId),
+    onSuccess: () => invalidateBatch(qc, batchId),
+  })
 }
 
 export function useCommitBatch(batchId: number) {

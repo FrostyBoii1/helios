@@ -14,6 +14,8 @@ import type {
   ImportRowList,
   ImportRowReviewStatus,
   ListRowsParams,
+  ReverseCheck,
+  ReverseResult,
 } from '@/types/imports'
 
 export function listBatches(): Promise<ImportBatchList> {
@@ -96,6 +98,16 @@ export function getCommitPreview(batchId: number, sampleLimit = 25): Promise<Imp
 // the backend deterministically commits the next batch in chronological order.
 export function commitBatch(batchId: number): Promise<ImportCommitResult> {
   return apiFetch<ImportCommitResult>(`/imports/${batchId}/commit`, { method: 'POST', body: {} })
+}
+
+// Read-only: can this committed row be reversed (and why not)?
+export function getReverseCheck(batchId: number, rowId: number): Promise<ReverseCheck> {
+  return apiFetch<ReverseCheck>(`/imports/${batchId}/rows/${rowId}/reverse-check`)
+}
+
+// Per-row reverse. Returns 200 with status 'reversed' | 'blocked' (not a 409).
+export function reverseRow(batchId: number, rowId: number): Promise<ReverseResult> {
+  return apiFetch<ReverseResult>(`/imports/${batchId}/rows/${rowId}/reverse`, { method: 'POST', body: {} })
 }
 
 export type { RowAction, ImportRowReviewStatus }

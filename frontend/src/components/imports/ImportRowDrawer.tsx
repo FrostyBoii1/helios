@@ -2,7 +2,6 @@
 // original-vs-edited indication, issues list with resolve, and review actions.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { ApiError } from '@/lib/api'
 import {
   useEditRow,
@@ -13,6 +12,7 @@ import {
 import type { RowAction } from '@/lib/imports'
 import { ReviewStatusBadge, RowClassBadge } from '@/components/imports/ReviewStatusBadge'
 import { SeverityChip } from '@/components/imports/IssueBadges'
+import { CommitReverseSection } from '@/components/imports/CommitReverseSection'
 import {
   PARSED_TEXT_FIELDS,
   type ImportRow,
@@ -182,8 +182,11 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
 
   const busy =
     editMutation.isPending || actionMutation.isPending || resolveMutation.isPending
-  // Committed rows are locked: their live Customer/Job already exist (C1).
+  // Committed rows have live records (C1); reversed rows are terminal (C3).
+  // Both are locked: no edits or review actions.
   const committed = row.review_status === 'committed'
+  const reversed = row.review_status === 'reversed'
+  const locked = committed || reversed
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-5">
@@ -205,20 +208,9 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
         </div>
       )}
 
-      {/* Review actions — committed rows are locked (live records exist). */}
-      {committed ? (
-        <section className="rounded-md border border-brand-500/30 bg-brand-500/10 px-3 py-2 text-sm text-brand-200">
-          <span className="font-medium">Committed to live.</span> This row created a live
-          Customer/Job and is now read-only.
-          {row.committed_job_id != null && (
-            <>
-              {' '}
-              <Link to={`/jobs/${row.committed_job_id}`} className="text-brand-300 underline">
-                View job
-              </Link>
-            </>
-          )}
-        </section>
+      {/* Review actions — committed/reversed rows are locked (live records). */}
+      {locked ? (
+        <CommitReverseSection batchId={batchId} row={row} />
       ) : (
         <>
           <section className="flex flex-wrap gap-2">
@@ -251,7 +243,7 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
       )}
 
       {/* Editable region — disabled wholesale once the row is committed. */}
-      <fieldset disabled={committed} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
+      <fieldset disabled={locked} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
       {/* Issues */}
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
