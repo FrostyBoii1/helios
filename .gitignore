@@ -42,3 +42,6 @@ nas_mount/
 !nas_mount/.gitkeep
 backups/
 !backups/.gitkeep
+
+# ---- Reference data (real customer PII — never commit) ----
+ref/

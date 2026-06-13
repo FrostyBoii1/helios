@@ -108,6 +108,37 @@ done. The next task is the **Activity timeline** (priority #5 surface):
 This surfaces the audit trail already being written by Customers and Jobs — low
 risk, high value, no new write paths. After that: **Tasks** (priority #6).
 
+## 5a. Spreadsheet import — dry-run parser (read-only, analysis only)
+
+`backend/scripts/import_dryrun.py` is a **read-only analysis tool** for the
+legacy jobs workbook. It is **NOT** a live import system:
+
+- It reads an `.xlsx` path **passed on the command line** (never hardcoded) and
+  analyses the `COMPLETED` sheet.
+- It **never writes to the database**, never creates customers/jobs, and never
+  modifies the workbook.
+- It classifies rows (blank / divider / job / ambiguous) and attempts to parse
+  legacy reference, salesperson + sale date, customer name vs extracted notes,
+  approval state, phones/emails, MSB tri-state, NMI→distributor inference,
+  hardware (with a confidence placeholder), dates, payment/compliance fields —
+  then prints a dry-run report (counts, distributions, issues, sample rows).
+
+Run it (the workbook lives under the git-ignored `ref/`, which holds real
+customer PII and must never be committed):
+
+```bash
+python backend/scripts/import_dryrun.py "/path/to/workbook.xlsx"
+python backend/scripts/import_dryrun.py "/path/to/workbook.xlsx" --samples 5
+# Optional full JSON (contains PII — save only to a git-ignored dir):
+python backend/scripts/import_dryrun.py "/path/to/workbook.xlsx" --json-output ref/dryrun.json
+```
+
+In the backend container the workbook is not mounted by default; copy it in
+(`docker cp`) or run the script on a machine that can see the file. The only
+dependency is `openpyxl` (in `requirements.txt`). This dry-run informs the
+design of the future staging/review import pipeline; no schema or migration
+exists for import yet.
+
 ## 6. Gotchas / conventions
 
 - **Never** call `Base.metadata.create_all()` — schema is Alembic-only.
