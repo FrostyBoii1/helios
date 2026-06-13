@@ -6,8 +6,10 @@ manage customers and jobs, schedule installs, track tasks, store documents
 against jobs (including NAS files), and keep the business aligned around one
 source of truth.
 
-> This repository currently contains the **project foundation only** (scaffold +
-> authentication). See [What's implemented](#whats-implemented) and the
+> Core workflow is implemented through **Scheduling** (Customers, Jobs, Activity
+> Timeline, Tasks, Weekly Scheduling) on the SunCentral dark theme, plus a
+> read-only spreadsheet dry-run parser. NAS files, reporting, and notifications
+> are still to come. See [What's implemented](#whats-implemented) and
 > [DEVELOPER_HANDOFF.md](DEVELOPER_HANDOFF.md) for the build order.
 
 ## Tech stack
@@ -136,6 +138,13 @@ cat backups/<file>.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$PO
 - ✅ React/TS frontend skeleton: login, protected routes, role-aware dashboard shell
 - ✅ **Customers**: searchable/paginated list, create modal, detail shell, edit, soft delete; role-gated API + activity logging; DB-backed tests
 - ✅ **Jobs**: belong to customers, auto case numbers (`SCS-YYYY-00001`), list/filter/search, create from customer, detail shell, descriptive + install-date edits, dedicated status endpoint, soft delete; role-gated API + activity logging; DB-backed tests
+- ✅ **Activity Timeline**: read-only `GET /activities?customer_id=&job_id=`; dark Timeline component on Customer and Job detail (surfaces the append-only audit trail)
+- ✅ **Tasks**: assignable/owned tasks linked to customers/jobs; statuses, priorities, due dates, dynamic overdue; create/update/complete/reopen/soft-delete; global `/tasks` page, detail panels, dashboard "My open tasks"; `GET /users/selectable`; role-gated API + activity logging; DB-backed tests
+- ✅ **Weekly Scheduling**: `/schedule` weekly board (current week + next 8, expandable, per-week counts), "Needs scheduling" panel, reschedule modal (admin/scheduling); backed by `GET /jobs` install-date-range + `unscheduled` filters
+- ✅ **SunCentral dark theme** across the app (charcoal surfaces, orange accent, status/priority badges, mobile-friendly)
+- ✅ **Spreadsheet dry-run parser** (`backend/scripts/import_dryrun.py`): read-only analysis of the legacy jobs workbook — no DB writes (see DEVELOPER_HANDOFF §5a)
+
+Still to come: **NAS file integration**, **reporting/analytics**, **notifications**, and a **staged spreadsheet import/review pipeline**.
 
 See [CHANGES.md](CHANGES.md) for decisions/deviations and
 [DEVELOPER_HANDOFF.md](DEVELOPER_HANDOFF.md) for what's next.

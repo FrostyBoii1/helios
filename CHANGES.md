@@ -9,6 +9,90 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-13 — Spreadsheet dry-run parser + `ref/` ignore (commit 87c6475)
+
+- **What:** Added `backend/scripts/import_dryrun.py`, a **read-only** analysis
+  tool for the legacy jobs workbook (COMPLETED sheet): classifies rows and parses
+  fields into a dry-run report. Ignored `ref/` (real customer PII workbook) in
+  `.gitignore`. Added `openpyxl` to `requirements.txt`. Documented in
+  DEVELOPER_HANDOFF §5a.
+- **Why:** Smallest safe step toward migrating the legacy spreadsheet — surfaces
+  real data patterns/issues before any schema or live import is built.
+- **Files:** `backend/scripts/import_dryrun.py`, `.gitignore`,
+  `backend/requirements.txt`, `DEVELOPER_HANDOFF.md`.
+- **Temporary or permanent:** Permanent (analysis tool). **No DB writes, no
+  migration.**
+- **Risks / follow-up:** Not a live import. The real workbook must stay
+  git-ignored (PII). Findings (e.g. ~39% date/day mismatches from Excel date
+  coercion, staff-name aliasing, unmatched NMI prefixes) feed the future staged
+  import pipeline.
+
+## 2026-06-12 — Weekly Scheduling (commit f3ae1e6)
+
+- **What:** A custom weekly schedule board at `/schedule` (expandable "Week of …"
+  sections, "Needs scheduling" panel, reschedule modal). Backend: extended
+  `GET /jobs` with `install_date_from` / `install_date_to` / `unscheduled=true`
+  filters. *(An initial FullCalendar implementation was pivoted out before commit
+  at the owner's request — no calendar-grid dependency remains.)*
+- **Why:** Operational scheduling surface over existing `Job.install_date`; a
+  weekly board fits the workflow better than a calendar grid.
+- **Files:** `backend/app/services/jobs.py`, `backend/app/api/v1/endpoints/jobs.py`,
+  `backend/tests/test_jobs.py`, frontend `pages/SchedulePage.tsx`,
+  `components/ScheduleJobModal.tsx`, `lib/jobs.ts`, `App.tsx`, `AppLayout.tsx`.
+- **Temporary or permanent:** Permanent. Query-only — **no migration**.
+- **Risks / follow-up:** Calendar window caps at the jobs endpoint's 100-row
+  limit (a 9-week span exceeding that is not expected in v1). No drag/drop or
+  time-of-day scheduling.
+
+## 2026-06-12 — Tasks (commit 709234f)
+
+- **What:** Tasks feature end-to-end: schemas/service/endpoints
+  (list/create/get/PATCH/complete/reopen/soft-delete), per-task permissions,
+  dynamic `is_overdue` (computed, never stored), `TASK_CREATED/UPDATED/DELETED`
+  activity types (existing `TASK_ASSIGNED/COMPLETED`), read-only
+  `GET /users/selectable` for assignee pickers, multi-status labels deferred.
+  Frontend: `/tasks` page, Customer/Job task panels, dashboard widget.
+- **Why:** Accountability/ownership of recurring work, linkable to customers/jobs.
+- **Files:** `backend/app/{models/task.py,models/enums.py,schemas/task.py,
+  services/tasks.py,api/v1/endpoints/tasks.py,api/v1/endpoints/users.py,
+  schemas/user.py,api/v1/router.py}`, `backend/tests/test_tasks.py`, +frontend
+  task types/api/hooks/components/pages, dashboard, Customer/Job detail.
+- **Temporary or permanent:** Permanent. New activity values are varchar +
+  `is_overdue` is computed — **no migration**.
+- **Risks / follow-up:** Completion notes via `window.prompt` (could become an
+  inline modal). Shared-admin task clearing not yet built.
+
+## 2026-06-12 — Activity Timeline (commit dfcdf76)
+
+- **What:** Read-only `list_activities` service + `GET /activities?customer_id=&
+  job_id=` (newest-first, actor, raw meta, paginated); dark Timeline component
+  wired into Customer and Job detail (replacing placeholders). Also made the two
+  job case-number tests independent of pre-existing soft-deleted jobs.
+- **Why:** Surfaces the append-only audit trail already written by Customers/Jobs.
+- **Files:** `backend/app/{schemas/activity.py,services/activity.py,
+  api/v1/endpoints/activities.py,api/v1/router.py}`, `backend/tests/test_activities.py`,
+  `backend/tests/test_jobs.py`, +frontend `components/Timeline.tsx`,
+  `hooks/useActivities.ts`, `lib/activities.ts`, Customer/Job detail, `types`.
+- **Temporary or permanent:** Permanent. Read-only — **no migration**.
+- **Risks / follow-up:** Standalone tasks (no customer/job link) won't appear in
+  any timeline until a global activity feed exists.
+
+## 2026-06-12 — SunCentral dark theme (commit bd1970f)
+
+- **What:** Full dark brand theme: Tailwind semantic tokens (charcoal surfaces,
+  SunCentral orange accent, muted text) + reusable button/input/card/badge
+  classes; restyled shell, login, dashboard, Customers/Jobs pages, modals,
+  tables, status badges; mobile table overflow fixed (horizontal scroll).
+- **Why:** Brand alignment with the SunCentral flyer; usable internal-ops feel.
+- **Files:** `frontend/tailwind.config.js`, `frontend/src/index.css`, and the
+  shell/login/dashboard/Customers/Jobs components/pages (visual/CSS only).
+- **Temporary or permanent:** Permanent (brand direction). Visual/CSS only — no
+  backend/DB/logic change.
+- **Risks / follow-up:** Single dark theme (no light/dark toggle). A real logo
+  asset is deferred (text wordmark used).
+
+---
+
 ## 2026-06-12 — Jobs phase
 
 Priority #4 built end-to-end on the existing `Job` model. Notable changes:

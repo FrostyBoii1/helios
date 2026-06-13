@@ -109,7 +109,13 @@ Full detail and relationships: [docs/database_schema.md](docs/database_schema.md
   - `GET /health`, `GET /health/db` — liveness/readiness.
   - `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`.
   - `GET/POST /users`, `GET/PATCH/DELETE /users/{id}`,
-    `POST /users/{id}/reset-password` (admin only).
+    `POST /users/{id}/reset-password` (admin), `GET /users/selectable` (any auth).
+  - `GET/POST /customers`, `GET/PATCH/DELETE /customers/{id}`.
+  - `GET/POST /jobs`, `GET/PATCH/DELETE /jobs/{id}`, `POST /jobs/{id}/status`
+    (jobs list also supports `install_date_from/to` + `unscheduled` for scheduling).
+  - `GET/POST /tasks`, `GET/PATCH/DELETE /tasks/{id}`,
+    `POST /tasks/{id}/complete`, `POST /tasks/{id}/reopen`.
+  - `GET /activities?customer_id=&job_id=` — read-only timeline.
 - Interactive docs at `/docs` (Swagger UI) when the backend runs.
 - The standard feature pattern: **schema validation → permission check → DB
   transaction → activity log → typed response** (see `endpoints/users.py`).

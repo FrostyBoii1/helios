@@ -4,10 +4,11 @@ Onboarding for anyone picking up Helios Core. Read this together with
 `PROJECT_OVERVIEW.md`, `docs/`, and `CHANGES.md`. The repository — not chat
 history — is the source of truth.
 
-## 1. What exists today (the foundation)
+## 1. What exists today
 
-The project foundation is complete and aligns with the spec's "Initial
-Implementation Task". Implemented:
+The foundation plus the core workflow (Customers → Jobs → Activity Timeline →
+Tasks → Weekly Scheduling) and the SunCentral dark theme are implemented at
+HEAD `87c6475`. Implemented:
 
 - Repository structure + Docker Compose (db, backend, frontend).
 - FastAPI backend skeleton: config, structured logging, CORS, versioned router.
@@ -30,22 +31,41 @@ Implementation Task". Implemented:
   with the approved per-field role matrix + activity logging; `Job` child
   cascades made non-destructive; React global `/jobs` page, `/jobs/:id` detail
   shell (status/edit/reschedule/delete), and a Jobs panel on Customer detail.
-- Tests: backend smoke (no DB) + database-backed Customers (10) and Jobs (17)
-  integration tests (rollback-isolated).
+- **Activity Timeline** (priority #5) — read-only `list_activities` service +
+  `GET /activities?customer_id=&job_id=` (newest-first, actor, raw meta); dark
+  Timeline component wired into Customer and Job detail. Surfaces the existing
+  audit trail; no new write paths.
+- **Tasks** (priority #6) — schemas, service, endpoints
+  (list/create/get/PATCH/complete/reopen/soft-delete) with per-task permissions
+  (admin-or-creator edit/reassign/reopen; assignee-or-admin complete; admin
+  delete); dynamic `is_overdue`; `TASK_CREATED/UPDATED/ASSIGNED/COMPLETED/DELETED`
+  activities; read-only `GET /users/selectable` for assignee pickers; React
+  global `/tasks` page, Customer/Job task panels, dashboard "My open tasks".
+- **Weekly Scheduling** (priority #7) — a custom weekly board (`/schedule`):
+  expandable "Week of …" sections (current week + next 8) with per-week counts,
+  a "Needs scheduling" panel, and a reschedule modal (admin/scheduling). Backed
+  by `GET /jobs` `install_date_from/to` + `unscheduled=true` filters. No
+  calendar-grid dependency.
+- **SunCentral dark theme** — Tailwind tokens + reusable button/input/card/badge
+  classes; restyled shell, login, dashboard, all feature pages, mobile-friendly.
+- Tests: backend smoke (no DB) + database-backed Customers (10), Jobs (17 +3
+  scheduling filters), Tasks (16), Activity (9) integration tests
+  (rollback-isolated). 58 backend tests total.
 
 ## 2. What is NOT built yet
 
 These are stubbed/absent and represent the next phases:
 
-- **Activity timeline** endpoint + UI (logging is written for customers and jobs;
-  the Customer and Job detail pages show Timeline placeholders) — recommended next.
-- **Tasks** workflow (model exists; no service/endpoints/UI).
-- **Scheduling** calendar view (FullCalendar).
-- Job **tags/flags** UI beyond status.
-- **Tasks** UI + shared-admin clearing + overdue surfacing.
-- **NAS file** browsing/linking + uploads + previews + permission gating.
-- **Reporting/analytics**, **reminders/notifications**.
+- **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
+  in-browser PDF/image preview, permission-gated serving (the `documents` table
+  exists; no service/endpoints/UI). Job detail shows a Documents placeholder.
+- **Staged spreadsheet import/review pipeline** — only the read-only dry-run
+  parser exists today (§5a); no `ImportBatch`/`ImportRow`/`ImportIssue` tables,
+  no live customer/job creation, no reference catalogs (Distributor/Retailer/
+  HardwareCatalog/StaffDirectory) or status labels.
+- **Reporting/analytics** and **reminders/notifications**.
 - **Frontend user-management** screens (the API exists; UI does not).
+- Job **tags/flags** UI beyond status; **shared-admin task clearing**.
 - Production deployment (static frontend build + reverse proxy + TLS).
 
 ## 3. First-run checklist
@@ -92,21 +112,24 @@ end-to-end.
 
 ## 5. Recommended next task
 
-Per the spec's development priority order (schema → auth → customers → jobs →
-activity → tasks → …), the foundation, auth, **Customers**, and **Jobs** are
-done. The next task is the **Activity timeline** (priority #5 surface):
+The core workflow (Customers → Jobs → Activity Timeline → Tasks → Weekly
+Scheduling) and the dark theme are done. Reasonable next choices, in order of
+recommendation:
 
-1. `schemas/activity.py` — `ActivityRead` (type, description, actor, meta,
-   created_at).
-2. `services/activity.py` — add a read/list helper (by `customer_id` and/or
-   `job_id`, newest-first, paginated). Logging already exists.
-3. `endpoints/activities.py` — `GET /activities?customer_id=&job_id=` (read-only;
-   all authenticated roles).
-4. Frontend: a Timeline component wired into the Customer detail and Job detail
-   placeholder panels.
+1. **Staged spreadsheet import/review pipeline** — build on the dry-run parser
+   (§5a): `ImportBatch`/`ImportRow`/`ImportIssue` staging tables, a persisted
+   dry-run report, and a human review queue **before** any live customer/job
+   creation. This is the safe foundation for migrating the legacy workbook
+   (≈1,672 completed jobs) and would need the first import-related migration, so
+   plan it first. Reference catalogs (Distributor/Retailer/HardwareCatalog/
+   StaffDirectory) and status labels are built incrementally against its output.
+2. **NAS file integration** (baseline priority #8) — link each job/customer to
+   its NAS folder, list/upload/preview files with permission gating. Heavier
+   (storage mounts, path safety), so plan-first.
+3. **Reporting/analytics** (#9), then **notifications** (#10).
 
-This surfaces the audit trail already being written by Customers and Jobs — low
-risk, high value, no new write paths. After that: **Tasks** (priority #6).
+Either path warrants a plan-first pass given the schema/migration and
+storage/permission complexity.
 
 ## 5a. Spreadsheet import — dry-run parser (read-only, analysis only)
 

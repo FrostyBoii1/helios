@@ -134,10 +134,16 @@ customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
 
 ## Migrations
 
-- The `versions/` folder ships empty. Generate the initial migration once models
-  are present:
+- The **initial baseline migration is committed**
+  (`backend/alembic/versions/b9a0ae06a010_init_core_schema.py`). First run just
+  applies it:
   ```
-  alembic revision --autogenerate -m "init core schema"
   alembic upgrade head
   ```
-- Adding a model? Import it in `backend/app/db/base.py` so autogenerate sees it.
+  Do **not** regenerate it. (See CHANGES.md, "Runtime verification fixes".)
+- Adding/changing a model? Import it in `backend/app/db/base.py`, then generate a
+  **new** migration: `alembic revision --autogenerate -m "..."`, review, and
+  `alembic upgrade head`.
+- **Enum values** (`JobStatus`, `TaskStatus`, `TaskPriority`, `ActivityType`)
+  are stored as strings, so adding a value needs **no migration**. The current
+  set lives in `backend/app/models/enums.py` (the authoritative source).
