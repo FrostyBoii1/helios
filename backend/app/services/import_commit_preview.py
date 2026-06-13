@@ -68,12 +68,14 @@ def map_customer_preview(parsed: dict, raw: dict) -> dict:
         for p in (parsed.get("phones") or [])
         if _str(p.get("number")).strip()
     ]
+    # Prefer the reviewer-editable parsed address; fall back to the raw cell.
+    address = _str(parsed.get("address")).strip() or _str(raw.get("address")).strip()
     return {
         "full_name": _str(parsed.get("customer_name")).strip(),
         "email": emails[0] if emails else None,
         "phone": phones[0] if phones else None,
         # Single-line only; no suburb/state/postcode parsing in v1 (D5).
-        "address_line1": _str(raw.get("address")).strip() or None,
+        "address_line1": address or None,
         "extra_emails": emails[1:],
         "extra_phones": phones[1:],
     }

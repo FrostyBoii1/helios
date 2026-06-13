@@ -56,6 +56,22 @@ def test_edit_snapshots_original_and_merges(client_for, users):
     assert fetched["parsed"]["customer_name"] == "Alexander Roe"
 
 
+def test_edit_address_merges_and_snapshots(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "SCS0001")
+    assert row["parsed"]["address"] == "1 Test St"  # parsed from the workbook
+
+    resp = admin.patch(
+        f"/api/v1/imports/{bid}/rows/{row['id']}",
+        json={"address": "42 New Road"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["parsed"]["address"] == "42 New Road"          # edit applied
+    assert body["original_parsed"]["address"] == "1 Test St"   # original preserved
+
+
 def test_edit_rejects_unknown_field(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)

@@ -97,6 +97,7 @@ class ImportRowEdit(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     customer_name: str | None = None
+    address: str | None = None
     salesperson: str | None = None
     sale_date: str | None = None
     install_date: str | None = None

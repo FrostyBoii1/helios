@@ -313,6 +313,7 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
             "sale_date": sales["sale_date"],
             "customer_name": name_info["name"],
             "name_extracted_notes": name_info["extracted"] or None,
+            "address": get(r, "address") or None,
             "approval_state": approval["state"],
             "approval_pending_date": approval["pending_date"],
             "phones": phones["numbers"],

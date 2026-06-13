@@ -123,6 +123,19 @@ def test_mapping_and_legacy_reference(client_for, users):
     assert s1["job"]["salesperson_text"] == "Jane Smith"  # text only, no user link
 
 
+def test_address_prefers_parsed_then_raw():
+    # Parsed (reviewer-editable) address wins.
+    m = preview_svc.map_customer_preview(
+        {"customer_name": "X", "address": "42 New Road"}, {"address": "1 Old St"}
+    )
+    assert m["address_line1"] == "42 New Road"
+    # Falls back to the raw cell when parsed address is missing/blank.
+    m2 = preview_svc.map_customer_preview({"customer_name": "X", "address": ""}, {"address": "1 Old St"})
+    assert m2["address_line1"] == "1 Old St"
+    m3 = preview_svc.map_customer_preview({"customer_name": "X"}, {"address": "1 Old St"})
+    assert m3["address_line1"] == "1 Old St"
+
+
 def test_missing_customer_name_excluded(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)

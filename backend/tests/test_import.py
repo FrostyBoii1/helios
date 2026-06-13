@@ -81,6 +81,7 @@ def test_parser_classifies_and_parses():
 
     clean = next(r for r in rows if r.legacy_reference == "SCS0001")
     assert clean.parsed["customer_name"] == "Alex Roe"
+    assert clean.parsed["address"] == "1 Test St"  # address now in parsed candidate
     assert clean.parsed["salesperson"] == "Jane Smith"
     assert clean.parsed["sale_date"] == "10/10/2025"
     assert clean.parsed["distributor_inferred"] == "NSW Essential"  # NMI 4204

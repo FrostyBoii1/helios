@@ -63,6 +63,7 @@ export interface PhoneEntry {
 // (the whitelisted ImportRowEdit schema). Other keys may exist read-only.
 export interface ParsedCandidate {
   customer_name?: string | null
+  address?: string | null
   salesperson?: string | null
   sale_date?: string | null
   install_date?: string | null
@@ -112,6 +113,7 @@ export interface ImportRowList {
 // Whitelisted, typed edits. Mirrors backend ImportRowEdit (extra="forbid").
 export interface ImportRowEdit {
   customer_name?: string | null
+  address?: string | null
   salesperson?: string | null
   sale_date?: string | null
   install_date?: string | null
@@ -137,6 +139,7 @@ export interface ImportRowEdit {
 // review_notes are handled with dedicated controls.
 export const PARSED_TEXT_FIELDS: { key: keyof ImportRowEdit; label: string }[] = [
   { key: 'customer_name', label: 'Customer name' },
+  { key: 'address', label: 'Address' },
   { key: 'salesperson', label: 'Salesperson' },
   { key: 'sale_date', label: 'Sale date' },
   { key: 'install_date', label: 'Install date' },
