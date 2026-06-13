@@ -219,7 +219,7 @@ def commit_batch(
             if r is None:
                 results.append({"row_id": rid, "status": "skipped", "reason": "not_in_batch"})
                 continue
-            reason = classify_row(r)
+            reason = classify_row(r, current_year=current_year)
             if reason is not None:
                 results.append(
                     {
@@ -233,7 +233,7 @@ def commit_batch(
                 continue
             candidate_rows.append(r)
     else:
-        candidate_rows = [r for r in rows if classify_row(r) is None]
+        candidate_rows = [r for r in rows if classify_row(r, current_year=current_year) is None]
 
     # Chronological order (matches the preview): dated rows first, then sheet order.
     def sort_key(r: ImportRow) -> tuple[bool, date, int]:

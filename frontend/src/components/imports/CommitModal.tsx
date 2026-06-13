@@ -16,6 +16,7 @@ const EXCLUDED_LABELS: Record<string, string> = {
   not_approved: 'Not approved',
   unresolved_error: 'Unresolved error',
   missing_customer_name: 'Missing customer name',
+  invalid_case_year: 'Invalid case year',
 }
 
 interface CommitModalProps {

@@ -186,6 +186,31 @@ def test_per_call_cap_25(users, db_session: Session):
 # --------------------------------------------------------------------------- #
 # Idempotency + duplicate legacy_reference
 # --------------------------------------------------------------------------- #
+def test_invalid_case_year_not_committed(client_for, users, db_session: Session):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "SCS0001")
+    # Malformed sale date -> derived case-year 2002 -> must be blocked.
+    admin.patch(f"/api/v1/imports/{bid}/rows/{row['id']}", json={"sale_date": "01/06/2002"})
+    admin.post(f"/api/v1/imports/{bid}/rows/{row['id']}/approve")
+    admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")
+
+    cust_before = db_session.scalar(select(func.count()).select_from(Customer))
+
+    # Targeting the bad row explicitly -> skipped with the reason, nothing created.
+    res = _commit(admin, bid, row_ids=[row["id"]])
+    assert res["committed"] == 0
+    assert res["results"][0]["reason"] == "invalid_case_year"
+    assert db_session.scalar(select(func.count()).select_from(Customer)) == cust_before
+
+    # Committing everything still commits the 2 valid rows but never the bad one.
+    res2 = _commit(admin, bid)
+    assert res2["committed"] == 2
+    bad = db_session.get(ImportRow, row["id"])
+    assert bad.committed_job_id is None
+    assert bad.review_status == ImportRowReviewStatus.APPROVED.value  # still approved, not committed
+
+
 def test_idempotent_rerun(client_for, users, db_session: Session):
     admin = client_for(users["admin"])
     bid = _ingest(admin)

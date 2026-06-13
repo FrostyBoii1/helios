@@ -30,6 +30,16 @@ PREVIEW_JOB_STATUS = "installed"
 # Row classes that could ever become a live job (mirror the review approval set).
 COMMITTABLE_CLASSES = (ImportRowClass.JOB.value, ImportRowClass.AMBIGUOUS.value)
 
+# Case-year sanity range. A row whose derived case-number year falls outside
+# this band almost certainly has a malformed source date (e.g. parsing to year
+# 202 or 2002) and must be corrected in staging before it can commit — otherwise
+# it would mint a nonsensical case number like "SCS-202-00001".
+MIN_CASE_YEAR = 2020
+
+
+def case_year_in_range(year: int, *, current_year: int) -> bool:
+    return MIN_CASE_YEAR <= year <= current_year + 1
+
 
 # --------------------------------------------------------------------------- #
 # Pure helpers (no DB)
@@ -133,14 +143,17 @@ EXCLUSION_REASONS = (
     "not_approved",
     "unresolved_error",
     "missing_customer_name",
+    "invalid_case_year",
 )
 
 
-def classify_row(row: ImportRow) -> str | None:
+def classify_row(row: ImportRow, *, current_year: int | None = None) -> str | None:
     """Return None if the row is eligible to commit, else its exclusion reason.
 
     Disjoint, priority-ordered so reasons sum cleanly with the eligible count.
+    `current_year` defaults to now; passed in by callers that already computed it.
     """
+    year_now = current_year if current_year is not None else datetime.now(timezone.utc).year
     if row.committed_customer_id is not None or row.committed_job_id is not None:
         return "already_committed"
     if row.row_class not in COMMITTABLE_CLASSES:
@@ -151,6 +164,10 @@ def classify_row(row: ImportRow) -> str | None:
         return "unresolved_error"
     if not _str((row.parsed or {}).get("customer_name")).strip():
         return "missing_customer_name"
+    # Malformed source date -> nonsensical case-number year. Block until fixed.
+    _src, year = case_year_source(row.parsed or {}, current_year=year_now)
+    if not case_year_in_range(year, current_year=year_now):
+        return "invalid_case_year"
     return None
 
 

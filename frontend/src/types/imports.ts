@@ -222,6 +222,7 @@ export interface CommitExcludedCounts {
   not_approved: number
   unresolved_error: number
   missing_customer_name: number
+  invalid_case_year: number
 }
 
 export interface ImportCommitPreview {

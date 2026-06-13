@@ -191,6 +191,7 @@ class CommitExcludedCounts(BaseModel):
     not_approved: int
     unresolved_error: int
     missing_customer_name: int
+    invalid_case_year: int
 
 
 class CommitWouldCreate(BaseModel):

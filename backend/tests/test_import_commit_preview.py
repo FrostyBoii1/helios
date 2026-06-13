@@ -136,6 +136,39 @@ def test_address_prefers_parsed_then_raw():
     assert m3["address_line1"] == "1 Old St"
 
 
+def test_invalid_case_year_excluded(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "SCS0001")
+    # Malformed sale date -> derived case-year 2002 (outside the sane range).
+    admin.patch(f"/api/v1/imports/{bid}/rows/{row['id']}", json={"sale_date": "01/06/2002"})
+    admin.post(f"/api/v1/imports/{bid}/rows/{row['id']}/approve")
+    admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")  # approve the rest (SCS0002/0004)
+
+    p = _preview(admin, bid)
+    assert p["excluded"]["invalid_case_year"] == 1
+    refs = [s["legacy_reference"] for s in p["samples"]]
+    assert "SCS0001" not in refs  # not previewed / no predicted case number
+    assert p["eligible_count"] == 2  # SCS0002 + SCS0004 still eligible
+
+
+def test_classify_row_invalid_case_year_unit():
+    base = dict(
+        committed_customer_id=None,
+        committed_job_id=None,
+        row_class="job",
+        review_status="approved",
+        issues=[],
+    )
+    bad = SimpleNamespace(**base, parsed={"customer_name": "X", "sale_date": "01/06/2002"})
+    assert preview_svc.classify_row(bad, current_year=2026) == "invalid_case_year"
+    ok = SimpleNamespace(**base, parsed={"customer_name": "X", "sale_date": "01/06/2025"})
+    assert preview_svc.classify_row(ok, current_year=2026) is None
+    # No date -> falls back to current year -> valid.
+    nodate = SimpleNamespace(**base, parsed={"customer_name": "X"})
+    assert preview_svc.classify_row(nodate, current_year=2026) is None
+
+
 def test_missing_customer_name_excluded(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
