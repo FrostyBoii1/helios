@@ -82,6 +82,9 @@ class ActivityType(str, enum.Enum):
     # distinct type so historical-import provenance can be filtered out of the
     # normal/global activity feed.
     RECORD_IMPORTED = "record_imported"
+    # One per job whose import was reversed (Phase C3) — the created Customer/Job
+    # were soft-deleted because they were still pristine.
+    RECORD_IMPORT_REVERSED = "record_import_reversed"
 
 
 # --------------------------------------------------------------------------- #
@@ -110,7 +113,8 @@ class ImportRowReviewStatus(str, enum.Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     SKIPPED = "skipped"
-    COMMITTED = "committed"  # set only by the future commit phase
+    COMMITTED = "committed"  # set by the commit phase (C1)
+    REVERSED = "reversed"    # set by the reverse phase (C3); terminal for now
 
 
 class ImportIssueSeverity(str, enum.Enum):

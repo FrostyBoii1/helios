@@ -33,9 +33,17 @@ from app.schemas.import_staging import (
     ImportRowList,
     ImportRowRead,
     IssueResolveRequest,
+    ReverseCheck,
+    ReverseResult,
     ReviewActionRequest,
 )
-from app.services import import_commit, import_commit_preview, import_ingest, import_review
+from app.services import (
+    import_commit,
+    import_commit_preview,
+    import_ingest,
+    import_review,
+    import_reverse,
+)
 
 router = APIRouter()
 
@@ -241,6 +249,36 @@ def commit_batch(
     batch = _get_batch(db, batch_id)
     result = import_commit.commit_batch(db, batch, actor_id=admin.id, row_ids=payload.row_ids)
     return ImportCommitResult(**result)
+
+
+@router.get("/{batch_id}/rows/{row_id}/reverse-check", response_model=ReverseCheck)
+def reverse_check(
+    batch_id: int,
+    row_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> ReverseCheck:
+    """Phase C3: read-only check of whether a committed row can be reversed.
+
+    Reverses NOTHING — evaluates the conservative reversibility predicate.
+    """
+    row = _row_or_404(db, batch_id, row_id)
+    return ReverseCheck(**import_reverse.reversibility(db, row))
+
+
+@router.post("/{batch_id}/rows/{row_id}/reverse", response_model=ReverseResult)
+def reverse_row(
+    batch_id: int,
+    row_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> ReverseResult:
+    """Phase C3: per-row reverse — soft-delete the created Customer + Job if the
+    row is still reversible. Admin only. Never hard-deletes; if blocked, nothing
+    is changed and the reason is returned.
+    """
+    row = _row_or_404(db, batch_id, row_id)
+    return ReverseResult(**import_reverse.reverse_row(db, row, actor_id=admin.id))
 
 
 @router.get("/{batch_id}/rows/{row_id}", response_model=ImportRowRead)

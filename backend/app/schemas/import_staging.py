@@ -242,3 +242,24 @@ class ImportCommitResult(BaseModel):
     cap: int
     capped_out: int
     results: list[CommitRowResult]
+
+
+# --------------------------------------------------------------------------- #
+# Phase C3 — per-row reverse/undo (soft-delete the created Customer + Job)
+# --------------------------------------------------------------------------- #
+class ReverseCheck(BaseModel):
+    row_id: int
+    reversible: bool
+    reason: str | None = None
+    customer_id: int | None = None
+    job_id: int | None = None
+    case_number: str | None = None
+
+
+class ReverseResult(BaseModel):
+    row_id: int
+    status: str  # reversed | blocked
+    reason: str | None = None
+    customer_id: int | None = None
+    job_id: int | None = None
+    case_number: str | None = None
