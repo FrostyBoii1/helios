@@ -18,12 +18,18 @@ from app.models.enums import ImportRowClass, ImportRowReviewStatus
 from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.models.user import User
 from app.schemas.import_staging import (
+    BulkApproveResult,
     ImportBatchList,
     ImportBatchRead,
+    ImportBatchSummary,
+    ImportIssueRead,
+    ImportRowEdit,
     ImportRowList,
     ImportRowRead,
+    IssueResolveRequest,
+    ReviewActionRequest,
 )
-from app.services import import_ingest
+from app.services import import_ingest, import_review
 
 router = APIRouter()
 
@@ -154,3 +160,134 @@ def list_import_rows(
         limit=limit,
         offset=offset,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Phase B review actions (admin-only, staging-only — no live writes)
+# --------------------------------------------------------------------------- #
+def _row_or_404(db: Session, batch_id: int, row_id: int) -> ImportRow:
+    _get_batch(db, batch_id)
+    row = import_review.get_row(db, batch_id, row_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import row not found")
+    return row
+
+
+@router.get("/{batch_id}/summary", response_model=ImportBatchSummary)
+def import_summary(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> ImportBatchSummary:
+    batch = _get_batch(db, batch_id)
+    return ImportBatchSummary(**import_review.summary(db, batch))
+
+
+@router.get("/{batch_id}/rows/{row_id}", response_model=ImportRowRead)
+def get_import_row(
+    batch_id: int,
+    row_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> ImportRowRead:
+    return ImportRowRead.model_validate(_row_or_404(db, batch_id, row_id))
+
+
+@router.patch("/{batch_id}/rows/{row_id}", response_model=ImportRowRead)
+def edit_import_row(
+    batch_id: int,
+    row_id: int,
+    payload: ImportRowEdit,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> ImportRowRead:
+    batch = _get_batch(db, batch_id)
+    row = _row_or_404(db, batch_id, row_id)
+    edits = payload.model_dump(exclude_unset=True)
+    import_review.edit_row(db, batch, row, edits, actor_id=admin.id)
+    db.commit()
+    db.refresh(row)
+    return ImportRowRead.model_validate(row)
+
+
+def _action(
+    batch_id: int,
+    row_id: int,
+    new_status: ImportRowReviewStatus,
+    notes: str | None,
+    db: Session,
+    admin: User,
+) -> ImportRowRead:
+    batch = _get_batch(db, batch_id)
+    row = _row_or_404(db, batch_id, row_id)
+    try:
+        import_review.set_review_status(db, batch, row, new_status, actor_id=admin.id, notes=notes)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    db.commit()
+    db.refresh(row)
+    return ImportRowRead.model_validate(row)
+
+
+@router.post("/{batch_id}/rows/{row_id}/approve", response_model=ImportRowRead)
+def approve_row(
+    batch_id: int, row_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)
+) -> ImportRowRead:
+    return _action(batch_id, row_id, ImportRowReviewStatus.APPROVED, None, db, admin)
+
+
+@router.post("/{batch_id}/rows/{row_id}/reject", response_model=ImportRowRead)
+def reject_row(
+    batch_id: int,
+    row_id: int,
+    payload: ReviewActionRequest = ReviewActionRequest(),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> ImportRowRead:
+    return _action(batch_id, row_id, ImportRowReviewStatus.REJECTED, payload.notes, db, admin)
+
+
+@router.post("/{batch_id}/rows/{row_id}/skip", response_model=ImportRowRead)
+def skip_row(
+    batch_id: int,
+    row_id: int,
+    payload: ReviewActionRequest = ReviewActionRequest(),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> ImportRowRead:
+    return _action(batch_id, row_id, ImportRowReviewStatus.SKIPPED, payload.notes, db, admin)
+
+
+@router.post("/{batch_id}/rows/{row_id}/reopen", response_model=ImportRowRead)
+def reopen_row(
+    batch_id: int, row_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)
+) -> ImportRowRead:
+    return _action(batch_id, row_id, ImportRowReviewStatus.PENDING, None, db, admin)
+
+
+@router.patch("/{batch_id}/issues/{issue_id}", response_model=ImportIssueRead)
+def resolve_issue(
+    batch_id: int,
+    issue_id: int,
+    payload: IssueResolveRequest = IssueResolveRequest(),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> ImportIssueRead:
+    _get_batch(db, batch_id)
+    issue = import_review.get_issue(db, batch_id, issue_id)
+    if issue is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import issue not found")
+    import_review.resolve_issue(db, issue, actor_id=admin.id, note=payload.resolution_note)
+    db.commit()
+    db.refresh(issue)
+    return ImportIssueRead.model_validate(issue)
+
+
+@router.post("/{batch_id}/bulk-approve-clean", response_model=BulkApproveResult)
+def bulk_approve_clean(
+    batch_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)
+) -> BulkApproveResult:
+    batch = _get_batch(db, batch_id)
+    approved, examined = import_review.bulk_approve_clean(db, batch, actor_id=admin.id)
+    db.commit()
+    return BulkApproveResult(approved=approved, eligible_examined=examined)

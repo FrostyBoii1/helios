@@ -66,3 +66,71 @@ class ImportRowList(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+# --------------------------------------------------------------------------- #
+# Phase B review schemas
+# --------------------------------------------------------------------------- #
+class PhoneEntry(BaseModel):
+    number: str
+    label: str = ""
+
+
+class ImportRowEdit(BaseModel):
+    """Whitelisted, typed edits to a row's parsed candidate.
+
+    Only these fields may be changed — arbitrary parsed-JSON patches are NOT
+    accepted. Unset fields are left untouched. `review_notes` updates the row
+    note (not part of `parsed`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    customer_name: str | None = None
+    salesperson: str | None = None
+    sale_date: str | None = None
+    install_date: str | None = None
+    install_day: str | None = None
+    install_time: str | None = None
+    approval_state: str | None = None
+    approval_pending_date: str | None = None
+    distributor_inferred: str | None = None
+    retailer_raw: str | None = None
+    nmi_raw: str | None = None
+    meter_no: str | None = None
+    no_of_panels: str | None = None
+    panel_raw: str | None = None
+    inverter_raw: str | None = None
+    msb_state: str | None = None
+    notes_raw: str | None = None
+    emails: list[str] | None = None
+    phones: list[PhoneEntry] | None = None
+
+    review_notes: str | None = None
+
+
+# Fields above that are merged into `parsed` (everything except review_notes).
+PARSED_EDIT_FIELDS = frozenset(ImportRowEdit.model_fields) - {"review_notes"}
+
+
+class ReviewActionRequest(BaseModel):
+    """Optional note for reject/skip/reopen actions."""
+
+    notes: str | None = None
+
+
+class IssueResolveRequest(BaseModel):
+    resolution_note: str | None = None
+
+
+class BulkApproveResult(BaseModel):
+    approved: int
+    eligible_examined: int
+
+
+class ImportBatchSummary(BaseModel):
+    batch_id: int
+    by_review_status: dict[str, int]
+    by_row_class: dict[str, int]
+    issues_by_severity: dict[str, int]
+    unresolved_error_rows: int

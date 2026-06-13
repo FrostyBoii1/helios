@@ -86,8 +86,9 @@ class ActivityType(str, enum.Enum):
 class ImportBatchStatus(str, enum.Enum):
     PARSING = "parsing"
     PARSED = "parsed"
+    REVIEWING = "reviewing"  # set on the first review action (Phase B)
     FAILED = "failed"
-    # reviewing/committing/committed belong to later phases (B/C).
+    # committing/committed belong to the later commit phase (C).
 
 
 class ImportRowClass(str, enum.Enum):

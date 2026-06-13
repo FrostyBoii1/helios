@@ -8,9 +8,10 @@ structured candidates and issues are stored as JSONB / first-class rows.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import BigInteger, ForeignKey, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -67,6 +68,9 @@ class ImportRow(IntPkMixin, TimestampMixin, Base):
 
     raw: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     parsed: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # Immutable snapshot of the parser's output, taken on the first reviewer edit
+    # so the original suggestion is preserved alongside the edited `parsed`.
+    original_parsed: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     context_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     review_status: Mapped[ImportRowReviewStatus] = mapped_column(
@@ -74,6 +78,7 @@ class ImportRow(IntPkMixin, TimestampMixin, Base):
     )
     review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Set ONLY by the future commit phase; null in Phase A (proves no live writes).
     committed_customer_id: Mapped[int | None] = mapped_column(
@@ -107,6 +112,7 @@ class ImportIssue(IntPkMixin, TimestampMixin, Base):
     resolved: Mapped[bool] = mapped_column(default=False, nullable=False)
     resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     row: Mapped["ImportRow"] = relationship(back_populates="issues")
 
