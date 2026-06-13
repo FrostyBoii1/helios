@@ -2,6 +2,7 @@
 // original-vs-edited indication, issues list with resolve, and review actions.
 
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ApiError } from '@/lib/api'
 import {
   useEditRow,
@@ -181,6 +182,8 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
 
   const busy =
     editMutation.isPending || actionMutation.isPending || resolveMutation.isPending
+  // Committed rows are locked: their live Customer/Job already exist (C1).
+  const committed = row.review_status === 'committed'
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-5">
@@ -202,34 +205,53 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
         </div>
       )}
 
-      {/* Review actions */}
-      <section className="flex flex-wrap gap-2">
-        <button
-          onClick={() => handleAction('approve')}
-          disabled={busy || approveDisabledReason != null}
-          title={approveDisabledReason ?? undefined}
-          className="btn-primary disabled:opacity-50"
-        >
-          Approve
-        </button>
-        <button
-          onClick={() => handleAction('reject')}
-          disabled={busy}
-          className="btn-secondary"
-        >
-          Reject
-        </button>
-        <button onClick={() => handleAction('skip')} disabled={busy} className="btn-secondary">
-          Skip
-        </button>
-        <button onClick={() => handleAction('reopen')} disabled={busy} className="btn-secondary">
-          Reopen
-        </button>
-      </section>
-      {approveDisabledReason && (
-        <p className="-mt-3 text-xs text-amber-300">{approveDisabledReason}</p>
+      {/* Review actions — committed rows are locked (live records exist). */}
+      {committed ? (
+        <section className="rounded-md border border-brand-500/30 bg-brand-500/10 px-3 py-2 text-sm text-brand-200">
+          <span className="font-medium">Committed to live.</span> This row created a live
+          Customer/Job and is now read-only.
+          {row.committed_job_id != null && (
+            <>
+              {' '}
+              <Link to={`/jobs/${row.committed_job_id}`} className="text-brand-300 underline">
+                View job
+              </Link>
+            </>
+          )}
+        </section>
+      ) : (
+        <>
+          <section className="flex flex-wrap gap-2">
+            <button
+              onClick={() => handleAction('approve')}
+              disabled={busy || approveDisabledReason != null}
+              title={approveDisabledReason ?? undefined}
+              className="btn-primary disabled:opacity-50"
+            >
+              Approve
+            </button>
+            <button
+              onClick={() => handleAction('reject')}
+              disabled={busy}
+              className="btn-secondary"
+            >
+              Reject
+            </button>
+            <button onClick={() => handleAction('skip')} disabled={busy} className="btn-secondary">
+              Skip
+            </button>
+            <button onClick={() => handleAction('reopen')} disabled={busy} className="btn-secondary">
+              Reopen
+            </button>
+          </section>
+          {approveDisabledReason && (
+            <p className="-mt-3 text-xs text-amber-300">{approveDisabledReason}</p>
+          )}
+        </>
       )}
 
+      {/* Editable region — disabled wholesale once the row is committed. */}
+      <fieldset disabled={committed} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
       {/* Issues */}
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
@@ -397,6 +419,7 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           </button>
         </div>
       </section>
+      </fieldset>
 
       {/* Raw cells (read-only) */}
       <section>

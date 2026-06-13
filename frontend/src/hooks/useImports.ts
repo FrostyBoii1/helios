@@ -3,9 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   bulkApproveClean,
+  commitBatch,
   editRow,
   getBatch,
   getBatchSummary,
+  getCommitPreview,
   getRow,
   listBatches,
   listRows,
@@ -23,6 +25,7 @@ const keys = {
   summary: (id: number) => ['imports', 'summary', id] as const,
   rows: (id: number, params: ListRowsParams) => ['imports', 'rows', id, params] as const,
   row: (batchId: number, rowId: number) => ['imports', 'row', batchId, rowId] as const,
+  commitPreview: (id: number) => ['imports', 'commit-preview', id] as const,
 }
 
 export function useImportBatches() {
@@ -61,13 +64,30 @@ export function useImportRow(batchId: number, rowId: number | null) {
   })
 }
 
+export function useImportCommitPreview(batchId: number, enabled = true) {
+  return useQuery({
+    queryKey: keys.commitPreview(batchId),
+    queryFn: () => getCommitPreview(batchId),
+    enabled: enabled && Number.isFinite(batchId) && batchId > 0,
+  })
+}
+
 // Invalidate everything affected by a write within a batch (rows list, single
-// row, summary, batch status which flips to "reviewing" on the first action).
+// row, summary, commit-preview, batch status).
 function invalidateBatch(qc: ReturnType<typeof useQueryClient>, batchId: number) {
   void qc.invalidateQueries({ queryKey: ['imports', 'rows', batchId] })
   void qc.invalidateQueries({ queryKey: ['imports', 'row', batchId] })
   void qc.invalidateQueries({ queryKey: keys.summary(batchId) })
   void qc.invalidateQueries({ queryKey: keys.batch(batchId) })
+  void qc.invalidateQueries({ queryKey: keys.commitPreview(batchId) })
+}
+
+export function useCommitBatch(batchId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => commitBatch(batchId),
+    onSuccess: () => invalidateBatch(qc, batchId),
+  })
 }
 
 export function useEditRow(batchId: number) {

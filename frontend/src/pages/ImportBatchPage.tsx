@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useImportBatch, useImportRows, useImportSummary } from '@/hooks/useImports'
+import {
+  useImportBatch,
+  useImportCommitPreview,
+  useImportRows,
+  useImportSummary,
+} from '@/hooks/useImports'
 import { ImportRowTable } from '@/components/imports/ImportRowTable'
 import { ImportRowDrawer } from '@/components/imports/ImportRowDrawer'
 import { BulkApproveCleanModal } from '@/components/imports/BulkApproveCleanModal'
+import { CommitModal } from '@/components/imports/CommitModal'
 import {
   REVIEW_STATUS_LABELS,
   REVIEW_STATUS_ORDER,
@@ -32,6 +38,7 @@ export function ImportBatchPage() {
   const [offset, setOffset] = useState(0)
   const [openRowId, setOpenRowId] = useState<number | null>(null)
   const [showBulk, setShowBulk] = useState(false)
+  const [showCommit, setShowCommit] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string | null>(null)
 
   // Debounce search; reset to the first page on a new query.
@@ -45,6 +52,8 @@ export function ImportBatchPage() {
 
   const batchQuery = useImportBatch(batchId)
   const summaryQuery = useImportSummary(batchId)
+  const commitPreviewQuery = useImportCommitPreview(batchId)
+  const eligibleToCommit = commitPreviewQuery.data?.eligible_count ?? 0
   const rowsQuery = useImportRows(batchId, {
     row_class: rowClass || undefined,
     review_status: reviewStatus || undefined,
@@ -97,21 +106,35 @@ export function ImportBatchPage() {
               {batchQuery.data.total_rows} rows
             </p>
           </div>
-          <button
-            onClick={() => {
-              setBulkMessage(null)
-              setShowBulk(true)
-            }}
-            className="btn-secondary"
-            disabled={(summaryQuery.data?.eligible_clean_count ?? 0) === 0}
-            title={
-              (summaryQuery.data?.eligible_clean_count ?? 0) === 0
-                ? 'No clean rows are eligible right now.'
-                : undefined
-            }
-          >
-            Approve clean ({summaryQuery.data?.eligible_clean_count ?? 0})
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                setBulkMessage(null)
+                setShowBulk(true)
+              }}
+              className="btn-secondary"
+              disabled={(summaryQuery.data?.eligible_clean_count ?? 0) === 0}
+              title={
+                (summaryQuery.data?.eligible_clean_count ?? 0) === 0
+                  ? 'No clean rows are eligible right now.'
+                  : undefined
+              }
+            >
+              Approve clean ({summaryQuery.data?.eligible_clean_count ?? 0})
+            </button>
+            <button
+              onClick={() => setShowCommit(true)}
+              className="btn-primary disabled:opacity-50"
+              disabled={eligibleToCommit === 0}
+              title={
+                eligibleToCommit === 0
+                  ? 'No approved rows are ready to commit.'
+                  : 'Create live Customer/Job records from approved rows'
+              }
+            >
+              Commit to live ({eligibleToCommit})
+            </button>
+          </div>
         </div>
       )}
 
@@ -233,6 +256,8 @@ export function ImportBatchPage() {
           }}
         />
       )}
+
+      {showCommit && <CommitModal batchId={batchId} onClose={() => setShowCommit(false)} />}
     </div>
   )
 }

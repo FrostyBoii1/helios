@@ -181,3 +181,82 @@ export interface ListRowsParams {
   limit?: number
   offset?: number
 }
+
+// ---- Commit preview (C0, read-only) ----
+export interface CommitCustomerPreview {
+  full_name: string
+  email: string | null
+  phone: string | null
+  address_line1: string | null
+  extra_emails: string[]
+  extra_phones: string[]
+}
+
+export interface CommitJobPreview {
+  predicted_case_number: string
+  legacy_reference: string | null
+  status: string
+  sale_date: string | null
+  install_date: string | null
+  salesperson_text: string | null
+  system_details: string | null
+  install_details: string | null
+  approval_details: string | null
+  notes: string | null
+}
+
+export interface CommitRowPreview {
+  row_id: number
+  source_row_index: number
+  legacy_reference: string | null
+  case_year: number
+  predicted_case_number: string
+  customer: CommitCustomerPreview
+  job: CommitJobPreview
+}
+
+export interface CommitExcludedCounts {
+  already_committed: number
+  blank_or_divider: number
+  not_approved: number
+  unresolved_error: number
+  missing_customer_name: number
+}
+
+export interface ImportCommitPreview {
+  batch_id: number
+  total_rows: number
+  eligible_count: number
+  excluded: CommitExcludedCounts
+  would_create: { customers: number; jobs: number }
+  predicted_case_numbers_by_year: Record<string, number>
+  sample_limit: number
+  sample_truncated: boolean
+  samples: CommitRowPreview[]
+}
+
+// ---- Commit-to-live (C1) ----
+export interface CommitRowResult {
+  row_id: number
+  source_row_index: number | null
+  legacy_reference: string | null
+  status: 'committed' | 'skipped' | 'failed'
+  reason: string | null
+  error: string | null
+  case_number: string | null
+  customer_id: number | null
+  job_id: number | null
+}
+
+export interface ImportCommitResult {
+  batch_id: number
+  batch_status: string
+  attempted: number
+  committed: number
+  skipped: number
+  failed: number
+  remaining_eligible: number
+  cap: number
+  capped_out: number
+  results: CommitRowResult[]
+}

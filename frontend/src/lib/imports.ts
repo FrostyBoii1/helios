@@ -6,6 +6,8 @@ import type {
   ImportBatch,
   ImportBatchList,
   ImportBatchSummary,
+  ImportCommitPreview,
+  ImportCommitResult,
   ImportIssue,
   ImportRow,
   ImportRowEdit,
@@ -82,6 +84,18 @@ export function uploadBatch(file: File): Promise<ImportBatch> {
   const form = new FormData()
   form.append('file', file)
   return apiFetch<ImportBatch>('/imports', { method: 'POST', body: form })
+}
+
+export function getCommitPreview(batchId: number, sampleLimit = 25): Promise<ImportCommitPreview> {
+  return apiFetch<ImportCommitPreview>(
+    `/imports/${batchId}/commit-preview?sample_limit=${sampleLimit}`,
+  )
+}
+
+// Commit the next eligible rows (backend caps the count). No row_ids in C2 —
+// the backend deterministically commits the next batch in chronological order.
+export function commitBatch(batchId: number): Promise<ImportCommitResult> {
+  return apiFetch<ImportCommitResult>(`/imports/${batchId}/commit`, { method: 'POST', body: {} })
 }
 
 export type { RowAction, ImportRowReviewStatus }
