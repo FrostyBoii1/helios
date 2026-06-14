@@ -43,13 +43,17 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 - **Temporary or permanent:** Permanent. **One migration** (`legacy_reference`);
   all status/activity additions are string enums (no migration).
 - **Status / safety:** The real workbook is staged as **`ImportBatch` 388 (dev
-  DB only; real PII — never committed to git)**; **all rows are still `pending`
-  and nothing has been committed to live** (0 `committed_*` links, 0 derived
-  Customer/Job). No live write happens until a row is approved **and** a commit
-  is explicitly confirmed.
-- **Risks / follow-up:** No real batch commit has been performed yet — recommend
-  a small supervised commit first (review/correct rows → approve a subset →
-  commit ≤25 → inspect). v1 maps one Customer per Job, keeps salesperson/
+  DB only; real PII — never committed to git)**, **2,561 rows**. A **supervised
+  3-row trial** has now been committed to live (**3 committed / 2,558 pending**,
+  3 `committed_*` links); the trial's imported Customers/Jobs are **pristine and
+  reversible while unchanged**. Live totals after the trial: **19 customers /
+  22 jobs / 131 activities**. No live write happens until a row is approved
+  **and** a commit is explicitly confirmed.
+- **Risks / follow-up:** Only the supervised 3-row trial has been committed; the
+  remaining 2,558 rows are unmigrated. The next safe step is to continue the
+  supervised migration in small approved batches (review/correct rows → approve a
+  subset → **commit ≤25/call** → inspect). No NAS work has started. v1 maps one
+  Customer per Job, keeps salesperson/
   installer as text, single-line address; no NAS/reference catalogs/StaffDirectory/
   status labels/CustomerContact, no batch/bulk reverse, no re-commit-after-reverse.
   Frontend `npm run lint` remains red from **pre-existing** unrelated errors

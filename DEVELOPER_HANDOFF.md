@@ -120,13 +120,16 @@ The core workflow (Customers → Jobs → Activity Timeline → Tasks → Weekly
 Scheduling), the dark theme, and the **spreadsheet import pipeline** (§5a) are
 done. Reasonable next choices, in order of recommendation:
 
-1. **First supervised real import commit** — the legacy workbook is staged as
-   `ImportBatch` 388 (dev DB only) but **nothing has been committed to live**
-   yet (all rows `pending`). The recommended operational next step is to
-   review/correct a small subset, approve it, **commit ≤25 rows** via the UI,
-   and **inspect the created Customers/Jobs** (case numbers, mapping, address,
-   provenance) and timelines before scaling. This is an owner-initiated
-   live-write action.
+1. **Continue the supervised real import** — the legacy workbook is staged as
+   `ImportBatch` 388 (dev DB only, **2,561 rows**). A **supervised 3-row trial
+   has been committed to live** (**3 committed / 2,558 pending**, 3 `committed_*`
+   links); those imported Customers/Jobs are pristine and reversible while
+   unchanged, and live totals after the trial are **19 customers / 22 jobs /
+   131 activities**. The recommended operational next step is to keep migrating
+   in **small approved batches** — review/correct a subset, approve it,
+   **commit ≤25 rows/call** via the UI, then **inspect the created
+   Customers/Jobs** (case numbers, mapping, address, provenance) and timelines
+   before scaling. Each commit is an owner-initiated live-write action.
 2. **NAS file integration** (baseline priority #8) — link each job/customer to
    its NAS folder, list/upload/preview files with permission gating. Heavier
    (storage mounts, path safety), so plan-first.
