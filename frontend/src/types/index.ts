@@ -1,6 +1,9 @@
 // Shared domain types. These mirror the backend Pydantic schemas. Keep in sync
 // with backend/app/schemas until/unless a type-generation step is added.
 
+// Registry-shaped structured details (same shape on import rows and live jobs).
+import type { ParsedDetails } from './imports'
+
 export type RoleName =
   | 'admin'
   | 'scheduling'
@@ -93,6 +96,10 @@ export interface Job {
   install_details: string | null
   approval_details: string | null
   notes: string | null
+  // Phase 4: structured, registry-shaped attributes. Null for jobs imported
+  // before the structured commit mapping (currently all live jobs) — those fall
+  // back to the legacy *_details blobs above.
+  details: ParsedDetails | null
   sale_date: string | null
   install_date: string | null
   salesperson_id: number | null

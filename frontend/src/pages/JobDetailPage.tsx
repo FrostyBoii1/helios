@@ -9,9 +9,11 @@ import {
 } from '@/auth/permissions'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
 import { ImportedJobDetails } from '@/components/ImportedJobDetails'
+import { StructuredDetailsView } from '@/components/structured/StructuredDetailsView'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
 import { useChangeJobStatus, useDeleteJob, useJob, useUpdateJob } from '@/hooks/useJobs'
+import { useFieldRegistry } from '@/hooks/useImports'
 import { parseImportedJobDetails } from '@/lib/importedJobDetails'
 import type { JobInput, JobStatus } from '@/types'
 
@@ -34,6 +36,8 @@ export function JobDetailPage() {
   const updateMutation = useUpdateJob(jobId)
   const statusMutation = useChangeJobStatus(jobId)
   const deleteMutation = useDeleteJob()
+  // Phase 4a: drives the read-only structured view when job.details is present.
+  const { data: registry } = useFieldRegistry()
 
   const [editingDetails, setEditingDetails] = useState(false)
   const [form, setForm] = useState<Record<string, string>>({})
@@ -270,8 +274,24 @@ export function JobDetailPage() {
               </div>
             ))}
           </dl>
+        ) : job.details && registry ? (
+          // Phase 4a: structured Job.details (registry-driven, read-only). Takes
+          // priority over the legacy pipe-string view when details is present.
+          <div className="flex flex-col gap-4">
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+              <div>
+                <dt className="eyebrow text-faint">Title</dt>
+                <dd className="mt-0.5 text-fg">{job.title || '—'}</dd>
+              </div>
+              <div>
+                <dt className="eyebrow text-faint">Sale date</dt>
+                <dd className="mt-0.5 text-fg">{job.sale_date || '—'}</dd>
+              </div>
+            </dl>
+            <StructuredDetailsView registry={registry} details={job.details} />
+          </div>
         ) : importedView ? (
-          // Imported job: title/sale-date + structured detail sections.
+          // Imported job (legacy blobs): title/sale-date + structured detail sections.
           <div className="flex flex-col gap-4">
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
               <div>

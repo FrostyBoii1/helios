@@ -14,7 +14,7 @@ import type { RowAction } from '@/lib/imports'
 import { ReviewStatusBadge, RowClassBadge } from '@/components/imports/ReviewStatusBadge'
 import { SeverityChip } from '@/components/imports/IssueBadges'
 import { CommitReverseSection } from '@/components/imports/CommitReverseSection'
-import { StructuredDetailsView, detailsPath } from '@/components/imports/StructuredDetailsView'
+import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
 import {
   PARSED_TEXT_FIELDS,
   type FieldSpec,

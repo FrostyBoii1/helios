@@ -1,4 +1,6 @@
-// Structured view of a row's parsed.details (Phase 3b). Dual-mode:
+// Shared structured view of a registry-shaped details object (Phase 3b/4).
+// Used by the import review drawer (row.parsed.details) and the live Job detail
+// page (job.details) — both carry the same registry shape. Dual-mode:
 //  - read-only by default (display values);
 //  - editable when `editable` + `edits`/`onChange` are passed (registry-driven
 //    inputs by input_type). Misfiled/flag/readonly stay read-only either way.
