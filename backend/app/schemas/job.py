@@ -18,8 +18,10 @@ class JobBase(BaseModel):
     install_details: str | None = None
     approval_details: str | None = None
     notes: str | None = None
-    # Structured import attributes (Phase 1). Optional free-form JSON for now; a
-    # later phase will validate it against the field registry.
+    # Structured, registry-shaped attributes. On CREATE (commit) this is a full
+    # object; on UPDATE (Phase 4b) it is treated as a path-restricted PARTIAL
+    # PATCH — validated against the field registry and deep-merged, never a full
+    # replacement (see services.details_patch + endpoints.jobs.update_job).
     details: dict[str, Any] | None = None
     sale_date: date | None = None
     install_date: date | None = None

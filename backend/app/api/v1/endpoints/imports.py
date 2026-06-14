@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import require_admin
+from app.api.deps import get_current_user, require_admin
 from app.db.session import get_db
 from app.models.enums import ImportRowClass, ImportRowReviewStatus
 from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
@@ -64,11 +64,14 @@ def _get_batch(db: Session, batch_id: int) -> ImportBatch:
 
 
 @router.get("/field-registry", response_model=FieldRegistryRead)
-def get_field_registry(_: User = Depends(require_admin)) -> FieldRegistryRead:
-    """Read-only structured-field registry that drives the review UI (admin only).
+def get_field_registry(_: User = Depends(get_current_user)) -> FieldRegistryRead:
+    """Read-only structured-field registry that drives the review + structured Job UI.
 
-    Pure metadata (field labels/sections/input types/visibility); no PII, no DB.
-    Declared before the dynamic /{batch_id} routes so it is matched as a static path.
+    Any authenticated user (Phase 4b): it is pure metadata (field labels/sections/
+    input types/visibility) with no PII and no DB — sales_admin needs it for the
+    structured Job detail UI. Edit permissions stay enforced on the jobs/import
+    endpoints, not here. Declared before the dynamic /{batch_id} routes so it is
+    matched as a static path.
     """
     return FieldRegistryRead(
         sections=[{"key": k, "label": label} for k, label in import_field_registry.SECTIONS],

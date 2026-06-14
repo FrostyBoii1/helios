@@ -17,6 +17,8 @@ from app.models.customer import Customer
 from app.models.enums import JobStatus
 from app.models.job import Job
 from app.services.case_number import next_case_number
+from app.services.details_patch import merge_details_patch
+from app.services.import_details import render_structured_blobs
 
 MAX_CASE_NUMBER_RETRIES = 5
 
@@ -138,11 +140,50 @@ def create_job(
 
 
 def apply_job_update(db: Session, job: Job, data: dict) -> list[str]:
-    """Apply a partial update in place. Returns the list of changed field names."""
+    """Apply a partial update in place. Returns the list of changed field names.
+
+    `details` is NOT handled here — the endpoint pops it out and routes it through
+    `apply_job_details_patch` so it can never be clobbered as a full replacement.
+    """
     changed: list[str] = []
     for field, value in data.items():
         if getattr(job, field) != value:
             setattr(job, field, value)
+            changed.append(field)
+    return changed
+
+
+def apply_job_details_patch(job: Job, patch: object) -> list[str]:
+    """Apply a path-restricted structured `details` patch to a live job (Phase 4b).
+
+    - Rejects a patch on a job that has no structured details yet (`details` is
+      NULL): those jobs stay on the legacy *_details path until a Phase 7
+      re-import gives them structured details (raises ValueError -> 422).
+    - Validates + deep-merges only registry-allowed leaf paths; a disallowed/
+      derived path or a non-dict patch raises ValueError -> 422.
+    - Re-renders `system_details`/`install_details` from the merged details so the
+      two fully-derived legacy blobs stay consistent (decision D1). `details` is
+      authoritative for those, so this also overrides any direct edit of them made
+      earlier in the same request (decision D5). `approval_details`/`notes` are
+      left untouched.
+
+    Returns the list of changed field names. Mutates `job` in place.
+    """
+    if job.details is None:
+        raise ValueError(
+            "This job has no structured details; structured editing is available after re-import"
+        )
+
+    merged = merge_details_patch(job.details, patch)
+    changed: list[str] = []
+    if merged != job.details:
+        job.details = merged
+        changed.append("details")
+
+    blobs = render_structured_blobs(merged)
+    for field in ("system_details", "install_details"):
+        if getattr(job, field) != blobs[field]:
+            setattr(job, field, blobs[field])
             changed.append(field)
     return changed
 

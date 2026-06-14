@@ -158,7 +158,12 @@ def update_job(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job not found")
 
     data = payload.model_dump(exclude_unset=True)
-    has_descriptive = any(field in data for field in DESCRIPTIVE_FIELDS)
+    # `details` is a path-restricted partial patch (Phase 4b), not a flat field —
+    # pull it out so the generic update never clobbers it as a full replacement.
+    details_provided = "details" in data
+    details_patch = data.pop("details", None)
+    # A structured details edit counts as a descriptive change for permissions.
+    has_descriptive = details_provided or any(field in data for field in DESCRIPTIVE_FIELDS)
     has_install = "install_date" in data
 
     # Conditional permission checks based on what the payload changes.
@@ -167,11 +172,21 @@ def update_job(
         raise _forbidden("You do not have permission to edit job details")
     if has_install and role not in INSTALL_ROLES:
         raise _forbidden("You do not have permission to change the install date")
-    if not data:
+    if not data and not details_provided:
         return JobRead.model_validate(job)
 
     old_install = job.install_date
     changed = jobs_service.apply_job_update(db, job, data)
+    # Apply the structured details patch AFTER the generic update so re-rendered
+    # system_details/install_details win over any direct edit in the same payload.
+    if details_provided:
+        try:
+            changed += jobs_service.apply_job_details_patch(job, details_patch)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            )
+    changed = list(dict.fromkeys(changed))  # de-dup (details patch may re-touch a blob)
 
     reschedule = "install_date" in changed and jobs_service.is_reschedule(
         old_install, job.install_date

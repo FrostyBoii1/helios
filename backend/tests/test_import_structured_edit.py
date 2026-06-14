@@ -56,9 +56,20 @@ def test_field_registry_endpoint(client_for, users):
     assert "notes.misfiled" not in paths
 
 
-def test_field_registry_admin_only(client_for, users):
-    support = client_for(users["support"])
-    assert support.get("/api/v1/imports/field-registry").status_code == 403
+def test_field_registry_authenticated_access(client_for, users):
+    # Phase 4b: relaxed from admin-only to any authenticated user (PII-free metadata
+    # the structured Job UI needs). A non-admin (support) and sales_admin can read it.
+    assert client_for(users["support"]).get("/api/v1/imports/field-registry").status_code == 200
+    assert client_for(users["sales"]).get("/api/v1/imports/field-registry").status_code == 200
+
+
+def test_field_registry_unauthenticated_rejected():
+    # No get_current_user override here (must not use client_for) -> real auth -> 401.
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    assert TestClient(app).get("/api/v1/imports/field-registry").status_code == 401
 
 
 # --------------------------------------------------------------------------- #

@@ -220,27 +220,20 @@ def _join_bits(bits: list[tuple[str, Any]]) -> str | None:
     return " | ".join(parts) or None
 
 
-def render_legacy_blobs(
-    details: dict | None,
-    parsed: dict | None,
-    *,
-    batch_id: int,
-    source_row_index: int,
-    legacy_reference: str | None,
-) -> dict[str, str | None]:
-    """Render the legacy text blobs from structured ``details`` (+ ``parsed`` for
-    approval, which is not yet a registry field). Empty fields are omitted."""
+def render_structured_blobs(details: dict | None) -> dict[str, str | None]:
+    """Render the two legacy blobs that are 100% derived from structured details
+    (``system_details``, ``install_details``).
+
+    Shared by ``render_legacy_blobs`` (commit/preview) and by live ``Job.details``
+    edits (Phase 4b) — re-rendering just these two keeps them consistent with
+    ``details`` without needing the ``parsed`` / batch context that
+    ``approval_details`` and ``notes`` require. Empty fields are omitted.
+    """
     details = details or {}
-    parsed = parsed or {}
     system = details.get("system", {})
     electrical = details.get("electrical", {})
     install = details.get("install", {})
     compliance = details.get("compliance", {})
-    payment = details.get("payment", {})
-    flags = details.get("flags", {})
-    notes_sec = details.get("notes", {})
-    sales = details.get("sales", {})
-    legacy = details.get("legacy", {})
 
     system_details = _join_bits([
         ("Panels", system.get("panel_count")),
@@ -260,6 +253,31 @@ def render_legacy_blobs(
         ("Time", install.get("time")),
         ("Installer", install.get("installer")),
     ])
+    return {"system_details": system_details, "install_details": install_details}
+
+
+def render_legacy_blobs(
+    details: dict | None,
+    parsed: dict | None,
+    *,
+    batch_id: int,
+    source_row_index: int,
+    legacy_reference: str | None,
+) -> dict[str, str | None]:
+    """Render the legacy text blobs from structured ``details`` (+ ``parsed`` for
+    approval, which is not yet a registry field). Empty fields are omitted."""
+    details = details or {}
+    parsed = parsed or {}
+    compliance = details.get("compliance", {})
+    payment = details.get("payment", {})
+    flags = details.get("flags", {})
+    notes_sec = details.get("notes", {})
+    sales = details.get("sales", {})
+    legacy = details.get("legacy", {})
+
+    structured = render_structured_blobs(details)
+    system_details = structured["system_details"]
+    install_details = structured["install_details"]
     # Approval preserves current behaviour (sourced from parsed, not details).
     approval_details = _join_bits([
         ("Approval", parsed.get("approval_state")),
