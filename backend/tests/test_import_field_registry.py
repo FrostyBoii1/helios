@@ -22,8 +22,24 @@ EXPECTED_CORE_VISIBLE = {
     "panel", "inverter", "storey", "phase", "roof_type", "install_date",
     "install_day", "install_time", "installer", "welcome_call", "total",
     "deposit", "balance", "pay_result", "pay_notes", "stc_amount",
-    "post_install_review", "ces_ecoc_email",
+    "post_install_review", "post_install_status", "ces_ecoc_email",
 }
+
+
+def test_phase_select_options_include_two():
+    f = reg.field_spec("phase")
+    assert f is not None
+    assert f.validation.get("select_options") == ["single", "two", "three"]
+
+
+def test_post_install_status_field_is_editable_text():
+    f = reg.field_spec("post_install_status")
+    assert f is not None
+    assert f.section == "post_install"
+    assert f.storage == "job.details.post_install.review_status"
+    assert f.input_type == reg.INPUT_TEXT and f.editable is True
+    # editable job.details.* leaf -> writable via the path-restricted patch
+    assert "post_install.review_status" in reg.allowed_details_paths()
 
 
 # --------------------------------------------------------------------------- #

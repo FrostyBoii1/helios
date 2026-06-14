@@ -142,7 +142,7 @@ FIELDS: tuple[FieldSpec, ...] = (
        entity=ENTITY_JOB, storage="job.details.system.phase", input_type=INPUT_SELECT,
        visible_when_blank=True, category=CATEGORY_CORE, editable=True,
        source_columns=("Phase",), captured=CAPTURED_RAW,
-       validation={"select_options": ["single", "three"], "divert_unrecognized": True}),
+       validation={"select_options": ["single", "two", "three"], "divert_unrecognized": True}),
     _f(key="roof_type", label="Roof Type", section="system",
        entity=ENTITY_JOB, storage="job.details.system.roof_type", input_type=INPUT_SELECT,
        visible_when_blank=True, category=CATEGORY_CORE, editable=True,
@@ -242,6 +242,11 @@ FIELDS: tuple[FieldSpec, ...] = (
        visible_when_blank=True, category=CATEGORY_CORE, editable=True,
        source_columns=("Date of Post Installation Call/Review Request",),
        captured=CAPTURED_REINGEST, validation={"coerce": "date"}),
+    _f(key="post_install_status", label="Post-Install Call/Review status", section="post_install",
+       entity=ENTITY_JOB, storage="job.details.post_install.review_status", input_type=INPUT_TEXT,
+       visible_when_blank=True, category=CATEGORY_CORE, editable=True,
+       source_columns=("Date of Post Installation Call/Review Request",),
+       captured=CAPTURED_REINGEST),
 
     # --- Legacy / import-only (hidden when blank) ---
     _f(key="solar_vic", label="Solar Vic Payment", section="legacy",

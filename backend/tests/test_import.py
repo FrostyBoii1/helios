@@ -146,7 +146,9 @@ def test_clean_name_cell_notes_strips_network_approval_residue():
 
     r3 = cn("ESSENTIAL APPROVED - prescreened wk24/2 - REMOVE OLD SYSTEM")
     assert "ESSENTIAL" not in r3.upper()
-    assert "prescreened wk24/2" in r3 and "REMOVE OLD SYSTEM" in r3
+    # Phase-7 fix: the decommission marker is stripped from name-cell notes (the
+    # remove-old-system flag is detected separately); meaningful note text remains.
+    assert "prescreened wk24/2" in r3 and "REMOVE OLD SYSTEM" not in r3.upper()
 
     # Other network labels are stripped as part of an APPROVED phrase.
     for net in ("ENERGEX", "ERGON", "ENDEAVOUR", "AUSGRID", "AUSNET",
@@ -162,13 +164,31 @@ def test_clean_name_cell_notes_strips_network_approval_residue():
     # Case-insensitive.
     assert "ESSENTIAL" not in cn("note - essential approved").upper()
 
-    # Decommission content is preserved.
-    assert "REMOVE OLD SYSTEM" in cn("ENDEAVOUR APPROVED - REMOVE OLD SYSTEM")
+    # Phase-7 fix: decommission markers are stripped from name-cell notes (the
+    # flag is set separately); an approval+marker-only cell leaves nothing.
+    assert cn("ENDEAVOUR APPROVED - REMOVE OLD SYSTEM") == ""
 
     # A network word that is NOT part of an approval status is meaningful content
     # and must be kept.
     assert cn("ESSENTIAL repairs needed") == "ESSENTIAL repairs needed"
     assert cn("needs ENERGEX meter upgrade") == "needs ENERGEX meter upgrade"
+
+
+def test_clean_name_cell_notes_strips_decommission_marker_keeps_dates_and_text():
+    cn = import_parser.clean_name_cell_notes
+    # Marker-only -> nothing left (the flag is detected separately).
+    assert cn("REMOVE OLD SYSTEM") == ""
+    assert cn("DECOM") == ""
+    # Marker stripped; a standalone date is PRESERVED verbatim (never inferred).
+    out = cn("remove old system - 15/04/1983")
+    assert "REMOVE OLD SYSTEM" not in out.upper()
+    assert "15/04/1983" in out
+    # Marker stripped; meaningful note preserved.
+    out2 = cn("includes hot water timer - DECOM")
+    assert "DECOM" not in out2.upper()
+    assert "includes hot water timer" in out2
+    # The remove-old-system flag is still detected independently from the raw text.
+    assert import_parser.detect_decommission("remove old system - 15/04/1983") is not None
 
 
 def test_detect_decommission_variants():

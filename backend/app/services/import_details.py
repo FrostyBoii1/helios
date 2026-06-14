@@ -65,6 +65,8 @@ def _coerce_phase(s: str) -> tuple[str | None, str]:
     t = s.strip().lower()
     if t in ("1", "single", "single phase", "1 phase", "1ph", "sp"):
         return "single", ""
+    if t in ("2", "two", "two phase", "2 phase", "2ph"):
+        return "two", ""
     if t in ("3", "three", "three phase", "3 phase", "3ph", "tp"):
         return "three", ""
     return None, s.strip()
@@ -168,13 +170,26 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
     put_text("compliance", "ces_ecoc_email", raw.get("ces_ecoc_email"))
 
     # --- Post-install ---
-    pir = _s(raw.get("post_install_review"))
-    if pir.strip():
+    # The Post-Install Call/Review column holds a date, a completion status
+    # ("DONE"), or a status + date ("Done 8/3/2023"). A pure date -> review_date;
+    # anything else -> review_status (with any embedded date pulled into
+    # review_date). The column is never misfiled — its value is always captured.
+    pir = _s(raw.get("post_install_review")).strip()
+    if pir:
         dt = parse_date_maybe(pir)
         if dt:
             d["post_install"]["review_date"] = dt.isoformat()
         else:
-            divert("Date of Post Installation Call/Review Request", pir)
+            m = re.search(r"\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}", pir)
+            if m:
+                edt = parse_date_maybe(m.group(0))
+                if edt:
+                    d["post_install"]["review_date"] = edt.isoformat()
+                status = (pir[: m.start()] + pir[m.end():]).strip(" -,:;|")
+            else:
+                status = pir
+            if status:
+                d["post_install"]["review_status"] = status
 
     # --- Legacy / import-only (only when populated) ---
     put_text("legacy", "solar_vic", raw.get("solar_vic"))

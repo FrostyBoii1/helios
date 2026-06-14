@@ -60,6 +60,35 @@ def test_phase_invalid_free_text_diverted():
     assert build_details({}, {"phase": "1"})["system"]["phase"] == "single"
 
 
+def test_phase_two_normalizes_and_is_not_misfiled():
+    # Two-phase is valid (owner decision): TWO/two/2/2 phase/two phase/2ph -> "two".
+    for val in ("TWO", "two", "2", "2 phase", "two phase", "2ph"):
+        d = build_details({}, {"phase": val})
+        assert d["system"]["phase"] == "two", val
+        assert not any(m["source_column"] == "Phase" for m in d.get("notes", {}).get("misfiled", [])), val
+
+
+def test_post_install_status_and_date_captured_not_misfiled():
+    # Pure date -> review_date only.
+    d = build_details({}, {"post_install_review": "8/3/2023"})
+    assert d["post_install"]["review_date"] == "2023-03-08"
+    assert "review_status" not in d["post_install"]
+    # Status only -> review_status, no misfile.
+    d2 = build_details({}, {"post_install_review": "DONE"})
+    assert d2["post_install"]["review_status"] == "DONE"
+    assert "review_date" not in d2["post_install"]
+    assert not any(
+        m["source_column"].startswith("Date of Post") for m in d2.get("notes", {}).get("misfiled", [])
+    )
+    # Status + date -> both captured, no misfile.
+    d3 = build_details({}, {"post_install_review": "Done 8/3/2023"})
+    assert d3["post_install"]["review_status"] == "Done"
+    assert d3["post_install"]["review_date"] == "2023-03-08"
+    assert not any(
+        m["source_column"].startswith("Date of Post") for m in d3.get("notes", {}).get("misfiled", [])
+    )
+
+
 def test_currency_and_int_coercion_with_divert():
     # Pure number coerces; trailing text is preserved as misfiled, value kept.
     d = build_details({"payment": {"total": "$12,345.67", "deposit": "5000 deposit paid"}}, {})

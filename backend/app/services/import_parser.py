@@ -190,15 +190,22 @@ def parse_customer_name(raw: str) -> dict[str, Any]:
 
 
 def clean_name_cell_notes(extracted: str) -> str:
-    """Strip pure approval tokens (APPROVED / PENDING[date]) from the name-cell
-    trailing text, leaving the meaningful remainder (e.g. 'includes hot water
-    timer', 'undersold Brighte fees, check after install'). Returns '' when
-    nothing meaningful remains."""
+    """Strip pure approval tokens (APPROVED / PENDING[date]) AND decommission /
+    remove-old-system markers from the name-cell trailing text, leaving the
+    meaningful remainder (e.g. 'includes hot water timer', 'undersold Brighte
+    fees, check after install'). The decommission flag is still detected
+    independently by detect_decommission(); stripping here only stops the marker
+    from being duplicated into customer_name_notes. All other text — including any
+    standalone date — is preserved verbatim. Returns '' when nothing meaningful
+    remains."""
     if not extracted:
         return ""
     cleaned = _APPROVAL_TOKEN_RE.sub(" ", extracted)
+    # Remove the decommission/remove-old-system marker text only; the flag is set
+    # separately, and any other note content (incl. standalone dates) is kept.
+    cleaned = DECOMMISSION_RE.sub(" ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned)
-    # Collapse separators orphaned where an approval phrase was removed from the
+    # Collapse separators orphaned where a stripped phrase was removed from the
     # middle of the note ("timer - ESSENTIAL APPROVED - ref" -> "timer - ref").
     cleaned = re.sub(r"(?:\s*[-,;|]\s*){2,}", " - ", cleaned)
     return cleaned.strip(" -,;|")
