@@ -19,7 +19,11 @@ from app.models.job import Job
 from app.services import import_reparse
 from app.services import jobs as jobs_service
 from app.services.customers import create_customer
-from app.services.import_reparse import ADDITIVE_KEYS, compute_additive_patch
+from app.services.import_reparse import (
+    ADDITIVE_KEYS,
+    compute_additive_patch,
+    compute_note_refresh,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -239,3 +243,123 @@ def test_apply_is_idempotent(db_session: Session):
     assert first["rows_changed"] >= 3
     second = import_reparse.apply_reparse(db_session, bid)
     assert second["rows_changed"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# Refresh-parser-notes mode
+# --------------------------------------------------------------------------- #
+def test_compute_note_refresh_categories():
+    raw = {"customer_name": "Cust A - includes timer - ESSENTIAL APPROVED"}  # new -> "includes timer"
+    stale = {"customer_name_notes": "includes timer - ESSENTIAL"}
+    # change: never edited, new non-empty, differs.
+    val, cat = compute_note_refresh(raw, stale, None)
+    assert cat == "change" and val == "includes timer"
+    # reviewer-edited snapshot present -> never overwrite (checked first).
+    assert compute_note_refresh(raw, stale, {"customer_name": "Cust A"}) == (None, "original_parsed_exists")
+    # new cleans to empty -> keep existing.
+    assert compute_note_refresh({"customer_name": "Cust B - ESSENTIAL APPROVED"}, {"customer_name_notes": "ESSENTIAL"}, None) == (None, "empty_new")
+    # already matches the current parser -> nothing to do.
+    assert compute_note_refresh({"customer_name": "Cust D - includes timer"}, {"customer_name_notes": "includes timer"}, None) == (None, "same")
+
+
+def _seed_refresh(db: Session) -> dict:
+    b = ImportBatch(source_filename="syn.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db.add(b)
+    db.flush()
+    link_cust = create_customer(db, data={"full_name": "Linked Cust"})
+    db.flush()
+    link_job = jobs_service.create_job(db, customer_id=link_cust.id, data={}, year=2025, status=JobStatus.INSTALLED)
+    db.flush()
+
+    STALE = "includes timer - ESSENTIAL"  # old-parser residue; new parser -> "includes timer"
+    APPR = " - includes timer - ESSENTIAL APPROVED"
+
+    def row(idx, name_cell, note, status, *, klass="job", linked=False, original=None):
+        parsed = {"customer_name": name_cell.split(" - ")[0]}
+        if note is not None:
+            parsed["customer_name_notes"] = note
+        r = ImportRow(
+            batch_id=b.id, source_row_index=idx, row_class=klass,
+            legacy_reference=f"RF{idx:04d}",
+            raw={"customer_name": name_cell, "notes": ""},
+            parsed=parsed, original_parsed=original, review_status=status,
+        )
+        if linked:
+            r.committed_customer_id = link_cust.id
+            r.committed_job_id = link_job.id
+        db.add(r)
+        return r
+
+    rows = {
+        "stale": row(201, "Cust A" + APPR, STALE, "pending"),
+        "edited": row(202, "Cust B" + APPR, STALE, "pending", original={"customer_name": "Cust B"}),
+        "empty_new": row(203, "Cust C - ESSENTIAL APPROVED", "ESSENTIAL", "pending"),
+        "same": row(204, "Cust D - includes timer", "includes timer", "pending"),
+        "committed": row(205, "Cust E" + APPR, STALE, "committed", linked=True),
+        "reversed": row(206, "Cust F" + APPR, STALE, "reversed", linked=True),
+        "rejected": row(207, "Cust G" + APPR, STALE, "rejected"),
+        "skipped": row(208, "Cust H" + APPR, STALE, "skipped"),
+    }
+    db.flush()
+    return {"batch": b, "rows": rows}
+
+
+def test_refresh_plan_categories(db_session: Session):
+    seed = _seed_refresh(db_session)
+    plan = import_reparse.plan_reparse(db_session, seed["batch"].id, refresh_notes=True)
+    assert plan["refresh_notes"] is True
+    # Candidates = gated (pending/approved, job, unlinked) rows that already hold a note:
+    # stale, edited, empty_new, same = 4 (committed/reversed/rejected/skipped excluded).
+    assert plan["refresh_candidates"] == 4
+    assert plan["refresh_would_change"] == 1
+    assert plan["skipped_original_parsed_exists"] == 1
+    assert plan["skipped_empty_new_note"] == 1
+    assert plan["skipped_same_note"] == 1
+
+
+def test_refresh_apply_overwrites_only_safe_rows(db_session: Session):
+    seed = _seed_refresh(db_session)
+    bid = seed["batch"].id
+    rows = seed["rows"]
+    c0 = db_session.scalar(select(func.count()).select_from(Customer))
+    j0 = db_session.scalar(select(func.count()).select_from(Job))
+    a0 = db_session.scalar(select(func.count()).select_from(Activity))
+
+    counts = import_reparse.apply_reparse(db_session, bid, refresh_notes=True)
+    for r in rows.values():
+        db_session.refresh(r)
+
+    assert counts["notes_refreshed"] == 1
+    # Only the safe stale row was refreshed.
+    assert rows["stale"].parsed["customer_name_notes"] == "includes timer"
+    # Reviewer-edited, empty-new, and same-note rows are left exactly as-is.
+    assert rows["edited"].parsed["customer_name_notes"] == "includes timer - ESSENTIAL"
+    assert rows["empty_new"].parsed["customer_name_notes"] == "ESSENTIAL"
+    assert rows["same"].parsed["customer_name_notes"] == "includes timer"
+    # Committed / reversed / rejected / skipped rows untouched.
+    for key in ("committed", "reversed", "rejected", "skipped"):
+        assert rows[key].parsed["customer_name_notes"] == "includes timer - ESSENTIAL"
+    # Live counts unchanged.
+    assert db_session.scalar(select(func.count()).select_from(Customer)) == c0
+    assert db_session.scalar(select(func.count()).select_from(Job)) == j0
+    assert db_session.scalar(select(func.count()).select_from(Activity)) == a0
+
+
+def test_normal_mode_does_not_refresh(db_session: Session):
+    seed = _seed_refresh(db_session)
+    bid = seed["batch"].id
+    counts = import_reparse.apply_reparse(db_session, bid)  # refresh_notes defaults False
+    db_session.refresh(seed["rows"]["stale"])
+    # Fill-only mode never overwrites the existing (stale) note.
+    assert seed["rows"]["stale"].parsed["customer_name_notes"] == "includes timer - ESSENTIAL"
+    assert "notes_refreshed" in counts and counts["notes_refreshed"] == 0
+
+
+def test_refresh_apply_is_idempotent(db_session: Session):
+    seed = _seed_refresh(db_session)
+    bid = seed["batch"].id
+    first = import_reparse.apply_reparse(db_session, bid, refresh_notes=True)
+    assert first["notes_refreshed"] == 1
+    second = import_reparse.apply_reparse(db_session, bid, refresh_notes=True)
+    assert second["notes_refreshed"] == 0 and second["rows_changed"] == 0

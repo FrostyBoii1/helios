@@ -95,6 +95,35 @@ def compute_additive_patch(
     return patch
 
 
+def compute_note_refresh(
+    raw: dict | None,
+    parsed: dict | None,
+    original_parsed: dict | None,
+) -> tuple[str | None, str]:
+    """Refresh decision for an EXISTING ``customer_name_notes`` (refresh mode).
+
+    Returns ``(new_value, category)``:
+      * ``(<note>, "change")``  -> safe to overwrite with the freshly-cleaned note
+      * ``(None, "original_parsed_exists")`` -> reviewer-edited, never overwrite
+      * ``(None, "empty_new")`` -> new note cleans to empty; keep existing (conservative)
+      * ``(None, "same")`` -> already matches the current parser; nothing to do
+
+    Only meaningful for a row that already holds a non-empty note; callers gate
+    the "candidate" universe on that. Priority order matches the dry-run report:
+    reviewer-edit guard first, then empty-new, then same, else change.
+    """
+    cur = _s((parsed or {}).get("customer_name_notes"))
+    info = parse_customer_name(_s((raw or {}).get("customer_name")))
+    new = clean_name_cell_notes(info["extracted"])
+    if original_parsed is not None:
+        return None, "original_parsed_exists"
+    if not new.strip():
+        return None, "empty_new"
+    if new == cur:
+        return None, "same"
+    return new, "change"
+
+
 # --------------------------------------------------------------------------- #
 # Row selection + classification (for the dry-run report)
 # --------------------------------------------------------------------------- #
@@ -117,14 +146,21 @@ def _is_committed_reversed_or_linked(row: ImportRow) -> bool:
     )
 
 
-def plan_reparse(db: Session, batch_id: int, *, samples: int = 10) -> dict:
-    """Read-only dry-run. Returns a summary dict and writes NOTHING."""
+def plan_reparse(db: Session, batch_id: int, *, samples: int = 10, refresh_notes: bool = False) -> dict:
+    """Read-only dry-run. Returns a summary dict and writes NOTHING.
+
+    With ``refresh_notes=True`` the report additionally classifies, for gated
+    rows that already hold a non-empty ``customer_name_notes``, whether a
+    parser-note refresh would overwrite it (see ``compute_note_refresh``). The
+    fill-only additive counters are unchanged.
+    """
     rows = db.scalars(
         select(ImportRow).where(ImportRow.batch_id == batch_id).order_by(ImportRow.source_row_index)
     ).all()
 
     s = {
         "batch_id": batch_id,
+        "refresh_notes": refresh_notes,
         "rows_total": len(rows),
         "rows_considered": 0,
         "rows_would_change": 0,
@@ -139,6 +175,13 @@ def plan_reparse(db: Session, batch_id: int, *, samples: int = 10) -> dict:
         "skipped_blank_divider_nonjob": 0,
         "sample_name_notes_src": [],
         "sample_decom_src": [],
+        # Refresh-mode counters (populated only when refresh_notes=True).
+        "refresh_candidates": 0,
+        "refresh_would_change": 0,
+        "skipped_original_parsed_exists": 0,
+        "skipped_empty_new_note": 0,
+        "skipped_same_note": 0,
+        "sample_refresh_src": [],
     }
 
     for r in rows:
@@ -153,6 +196,22 @@ def plan_reparse(db: Session, batch_id: int, *, samples: int = 10) -> dict:
             continue
 
         s["rows_considered"] += 1
+
+        # Refresh-mode classification: only rows that already hold a note.
+        if refresh_notes and _s((r.parsed or {}).get("customer_name_notes")).strip():
+            s["refresh_candidates"] += 1
+            _val, cat = compute_note_refresh(r.raw, r.parsed, r.original_parsed)
+            if cat == "change":
+                s["refresh_would_change"] += 1
+                if len(s["sample_refresh_src"]) < samples:
+                    s["sample_refresh_src"].append(r.source_row_index)
+            elif cat == "original_parsed_exists":
+                s["skipped_original_parsed_exists"] += 1
+            elif cat == "empty_new":
+                s["skipped_empty_new_note"] += 1
+            elif cat == "same":
+                s["skipped_same_note"] += 1
+
         p_patch = compute_additive_patch(r.raw, r.parsed)
         op_patch = (
             compute_additive_patch(r.raw, r.original_parsed)
@@ -187,21 +246,29 @@ def plan_reparse(db: Session, batch_id: int, *, samples: int = 10) -> dict:
     return s
 
 
-def apply_reparse(db: Session, batch_id: int) -> dict:
+def apply_reparse(db: Session, batch_id: int, *, refresh_notes: bool = False) -> dict:
     """Apply the additive patch to in-scope rows in one transaction.
 
     Writes ONLY `parsed` (and `original_parsed` when it already exists). Leaves
     `raw`, issues, `review_status`, `reviewer_id`, `reviewed_at`, committed links,
     and batch status untouched. Idempotent.
+
+    With ``refresh_notes=True`` it additionally overwrites a row's existing,
+    non-empty ``customer_name_notes`` with the freshly-cleaned parser output when
+    ``compute_note_refresh`` returns ``"change"`` (reviewer-edited rows, empty-new
+    notes, and unchanged notes are left alone). With ``refresh_notes=False`` the
+    behaviour is exactly the original fill-only path.
     """
     rows = db.scalars(_candidates_stmt(batch_id)).all()
     counts = {
         "batch_id": batch_id,
+        "refresh_notes": refresh_notes,
         "rows_changed": 0,
         "name_notes_gained": 0,
         "removes_old_system_gained": 0,
         "decommission_marker_gained": 0,
         "original_parsed_mirrored": 0,
+        "notes_refreshed": 0,
     }
 
     for r in rows:
@@ -211,12 +278,22 @@ def apply_reparse(db: Session, batch_id: int) -> dict:
             if r.original_parsed is not None
             else {}
         )
-        if not p_patch and not op_patch:
+        # Refresh overwrite (refresh mode only): disjoint from the fill-only note
+        # in p_patch — that only fires on an EMPTY note, this only on a non-empty one.
+        new_note: str | None = None
+        if refresh_notes and _s((r.parsed or {}).get("customer_name_notes")).strip():
+            val, cat = compute_note_refresh(r.raw, r.parsed, r.original_parsed)
+            if cat == "change":
+                new_note = val
+
+        if not p_patch and not op_patch and new_note is None:
             continue
 
         if p_patch:
             # Reassign a new dict so SQLAlchemy tracks the JSONB change.
             r.parsed = {**(r.parsed or {}), **p_patch}
+        if new_note is not None:
+            r.parsed = {**(r.parsed or {}), "customer_name_notes": new_note}
         if op_patch:
             r.original_parsed = {**(r.original_parsed or {}), **op_patch}
             counts["original_parsed_mirrored"] += 1
@@ -225,6 +302,7 @@ def apply_reparse(db: Session, batch_id: int) -> dict:
         counts["name_notes_gained"] += int("customer_name_notes" in p_patch)
         counts["removes_old_system_gained"] += int("removes_old_system" in p_patch)
         counts["decommission_marker_gained"] += int("decommission_marker" in p_patch)
+        counts["notes_refreshed"] += int(new_note is not None)
 
     db.commit()
     return counts
