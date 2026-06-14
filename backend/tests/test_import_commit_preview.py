@@ -236,6 +236,35 @@ def test_map_job_preview_surfaces_decommission_and_name_notes():
     assert plain["customer_name_notes"] is None
 
 
+def test_preview_blobs_match_commit_renderer():
+    # Phase 2b: with raw, the preview renders blobs via the SAME render_legacy_blobs
+    # the commit uses -> preview blobs are byte-identical to the committed job's.
+    from app.services.import_details import render_legacy_blobs
+
+    parsed = {
+        "approval_state": "approved", "notes_raw": "call first",
+        "details": {
+            "_v": 2,
+            "system": {"panel_count": 16, "phase": "three"},
+            "payment": {"total": "5000"},
+            "flags": {"removes_old_system": True, "decommission_marker": "REMOVE OLD SYSTEM"},
+            "notes": {"misfiled": [{"source_column": "Phase", "text": "ask sparky"}]},
+        },
+    }
+    m = preview_svc.map_job_preview(
+        parsed, predicted_case_number="SCS-2025-00001", legacy_reference="R1",
+        raw={}, batch_id=5, source_row_index=7,
+    )
+    expected = render_legacy_blobs(
+        parsed["details"], parsed, batch_id=5, source_row_index=7, legacy_reference="R1"
+    )
+    assert m["details"] == parsed["details"]
+    assert m["system_details"] == expected["system_details"]
+    assert m["install_details"] == expected["install_details"]
+    assert m["approval_details"] == expected["approval_details"]
+    assert m["notes"] == expected["notes"]
+
+
 # --------------------------------------------------------------------------- #
 # Permissions
 # --------------------------------------------------------------------------- #

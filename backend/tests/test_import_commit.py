@@ -23,6 +23,7 @@ from app.models.enums import (
 from app.models.import_staging import ImportBatch, ImportRow
 from app.models.job import Job
 from app.services import import_commit
+from app.services.import_details import render_legacy_blobs
 from tests.test_import import _synthetic_bytes
 
 
@@ -349,3 +350,84 @@ def test_no_decommission_means_no_marker_line(users, db_session: Session):
     row = db_session.scalars(select(ImportRow).where(ImportRow.batch_id == b.id)).one()
     job = db_session.get(Job, row.committed_job_id)
     assert "REMOVE OLD SYSTEM" not in (job.notes or "")
+
+
+# --------------------------------------------------------------------------- #
+# Phase 2b: commit writes Job.details + derived legacy blobs
+# --------------------------------------------------------------------------- #
+def _details_parsed(**extra):
+    parsed = {
+        "customer_name": "Pat Lee", "sale_date": "01/06/2025", "address": "1 Test St",
+        "approval_state": "approved", "notes_raw": "call first",
+        "details": {
+            "_v": 2,
+            "sales": {"salesperson_text": "Rep"},
+            "system": {"panel_count": 16, "panel": "Longi 440", "phase": "three"},
+            "payment": {"total": "5000"},
+            "flags": {"removes_old_system": True, "decommission_marker": "REMOVE OLD SYSTEM"},
+            "notes": {
+                "customer_name_notes": "includes hot water timer",
+                "misfiled": [{"source_column": "MSB/SB PICS IN FILE?", "text": "DONT CALL PLEASE"}],
+            },
+            "legacy": {"solar_vic": "100"},
+        },
+    }
+    parsed.update(extra)
+    return parsed
+
+
+def _commit_one_seeded(db, users, parsed, ref):
+    b = _seed_one(db, parsed, ref=ref)
+    res = import_commit.commit_batch(db, b, actor_id=users["admin"].id)
+    assert res["committed"] == 1
+    row = db.scalars(select(ImportRow).where(ImportRow.batch_id == b.id)).one()
+    return b, row, db.get(Job, row.committed_job_id)
+
+
+def test_commit_writes_job_details(users, db_session: Session):
+    parsed = _details_parsed()
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMP2B01")
+    assert job.details is not None
+    assert job.details["_v"] == 2
+    assert job.details["system"]["panel_count"] == 16
+    assert job.details == parsed["details"]  # written verbatim from the staged details
+
+
+def test_commit_blobs_match_renderer(users, db_session: Session):
+    parsed = _details_parsed()
+    b, row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMP2B02")
+    expected = render_legacy_blobs(
+        job.details, parsed,
+        batch_id=b.id, source_row_index=row.source_row_index, legacy_reference="TESTIMP2B02",
+    )
+    assert job.system_details == expected["system_details"]
+    assert job.install_details == expected["install_details"]
+    assert job.approval_details == expected["approval_details"]
+    assert job.notes == expected["notes"]
+    # And the derived blobs are populated (back-compat).
+    assert job.system_details and "Panels: 16" in job.system_details
+    assert job.notes.splitlines()[0].startswith("REMOVE OLD SYSTEM")
+
+
+def test_commit_misfiled_and_legacy_in_notes(users, db_session: Session):
+    parsed = _details_parsed()
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMP2B03")
+    assert "Misfiled — MSB/SB PICS IN FILE?: DONT CALL PLEASE" in job.notes
+    assert "Legacy — solar_vic: 100" in job.notes
+    # Without a populated legacy section, no Legacy line appears.
+    p2 = _details_parsed()
+    p2["details"] = dict(p2["details"]); p2["details"].pop("legacy")
+    _b2, _r2, job2 = _commit_one_seeded(db_session, users, p2, "TESTIMP2B04")
+    assert "Legacy —" not in (job2.notes or "")
+
+
+def test_commit_fallback_builds_details_when_absent(users, db_session: Session):
+    # Staged before Phase 2a -> parsed has no "details"; commit must still write it.
+    parsed = {
+        "customer_name": "Pat Lee", "sale_date": "01/06/2025", "address": "1 Test St",
+        "no_of_panels": "16", "panel_raw": "Longi 440",
+    }
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMP2B05")
+    assert job.details is not None and job.details["_v"] == 2
+    assert job.details["system"]["panel_count"] == 16
+    assert job.system_details and "Panels: 16" in job.system_details

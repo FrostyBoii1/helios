@@ -97,17 +97,57 @@ def map_job_preview(
     predicted_case_number: str,
     legacy_reference: str | None,
     raw: dict | None = None,
+    batch_id: int = 0,
+    source_row_index: int = 0,
 ) -> dict:
     """Preview the Job fields a commit would set (D3/D9). No persistence.
 
-    When ``raw`` is provided (the commit-preview path), the response also carries
-    the Phase 2a structured ``details`` object (read-only). Callers that omit
-    ``raw`` — e.g. the commit-to-live builder — get the unchanged legacy shape.
-    """
+    When ``raw`` is provided (the commit-preview path), the structured ``details``
+    is included AND the legacy blobs are rendered with the SAME
+    ``render_legacy_blobs`` the commit uses (Phase 2b) — so the preview matches
+    exactly what commit will write (pass ``batch_id``/``source_row_index`` so the
+    provenance line matches too). Callers that omit ``raw`` get the legacy
+    pipe-string shape (back-compat)."""
     sale = parse_date_maybe(_str(parsed.get("sale_date")))
     install = parse_date_maybe(_str(parsed.get("install_date")))
 
-    system_bits = [
+    out: dict[str, Any] = {
+        "predicted_case_number": predicted_case_number,
+        "legacy_reference": legacy_reference,
+        "status": PREVIEW_JOB_STATUS,
+        "sale_date": sale.isoformat() if sale else None,
+        "install_date": install.isoformat() if install else None,
+        "salesperson_text": _str(parsed.get("salesperson")).strip() or None,
+        # Surfaced so the preview UI can flag an old-system removal before commit.
+        "removes_old_system": bool(parsed.get("removes_old_system")),
+        "customer_name_notes": _str(parsed.get("customer_name_notes")).strip() or None,
+        "details": None,
+    }
+
+    if raw is not None:
+        # Phase 2b: render the blobs from the same structured details the commit
+        # writes, so preview blobs are byte-identical to the committed job.
+        from app.services.import_details import build_details, render_legacy_blobs
+
+        details = parsed.get("details") or build_details(parsed, raw)
+        blobs = render_legacy_blobs(
+            details, parsed,
+            batch_id=batch_id, source_row_index=source_row_index,
+            legacy_reference=legacy_reference,
+        )
+        out["details"] = details
+        out["system_details"] = blobs["system_details"]
+        out["install_details"] = blobs["install_details"]
+        out["approval_details"] = blobs["approval_details"]
+        out["notes"] = blobs["notes"]
+        return out
+
+    # Legacy pipe-string preview (no raw): unchanged shape for back-compat.
+    def join(bits: list[tuple[str, Any]]) -> str | None:
+        parts = [f"{label}: {_str(v).strip()}" for label, v in bits if _str(v).strip()]
+        return " | ".join(parts) or None
+
+    out["system_details"] = join([
         ("Panels", parsed.get("no_of_panels")),
         ("Panel", parsed.get("panel_raw")),
         ("Inverter", parsed.get("inverter_raw")),
@@ -116,42 +156,17 @@ def map_job_preview(
         ("Distributor", parsed.get("distributor_inferred") or parsed.get("distributor_raw")),
         ("Retailer", parsed.get("retailer_raw")),
         ("MSB", parsed.get("msb_state")),
-    ]
-    install_bits = [
+    ])
+    out["install_details"] = join([
         ("Day", parsed.get("install_day")),
         ("Time", parsed.get("install_time")),
         ("Installer", parsed.get("installer_raw")),
-    ]
-    approval_bits = [
+    ])
+    out["approval_details"] = join([
         ("Approval", parsed.get("approval_state")),
         ("Pending date", parsed.get("approval_pending_date")),
-    ]
-
-    def join(bits: list[tuple[str, Any]]) -> str | None:
-        parts = [f"{label}: {_str(v).strip()}" for label, v in bits if _str(v).strip()]
-        return " | ".join(parts) or None
-
-    out = {
-        "predicted_case_number": predicted_case_number,
-        "legacy_reference": legacy_reference,
-        "status": PREVIEW_JOB_STATUS,
-        "sale_date": sale.isoformat() if sale else None,
-        "install_date": install.isoformat() if install else None,
-        "salesperson_text": _str(parsed.get("salesperson")).strip() or None,
-        "system_details": join(system_bits),
-        "install_details": join(install_bits),
-        "approval_details": join(approval_bits),
-        "notes": _str(parsed.get("notes_raw")).strip() or None,
-        # Surfaced so the preview UI can flag an old-system removal before commit.
-        "removes_old_system": bool(parsed.get("removes_old_system")),
-        "customer_name_notes": _str(parsed.get("customer_name_notes")).strip() or None,
-    }
-    if raw is not None:
-        # Read-only structured view: prefer a stored details object, else compute
-        # it on the fly (so existing batches preview structured data too).
-        from app.services.import_details import build_details
-
-        out["details"] = parsed.get("details") or build_details(parsed, raw)
+    ])
+    out["notes"] = _str(parsed.get("notes_raw")).strip() or None
     return out
 
 
@@ -263,6 +278,8 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
                         predicted_case_number=predicted,
                         legacy_reference=row.legacy_reference,
                         raw=raw,
+                        batch_id=batch.id,
+                        source_row_index=row.source_row_index,
                     ),
                 }
             )

@@ -32,8 +32,8 @@ from app.services.import_commit_preview import (
     case_year_source,
     classify_row,
     map_customer_preview,
-    map_job_preview,
 )
+from app.services.import_details import build_details, render_legacy_blobs
 from app.services.import_parser import parse_date_maybe
 
 # Conservative cap for this first live-write release (owner decision D3).
@@ -74,61 +74,30 @@ def build_customer_data(parsed: dict, raw: dict, *, batch_id: int, source_row_in
     }
 
 
-def build_job_data(parsed: dict, *, legacy_reference: str | None, batch_id: int, source_row_index: int) -> dict:
+def build_job_data(
+    parsed: dict, raw: dict, *, legacy_reference: str | None, batch_id: int, source_row_index: int
+) -> dict:
     """Job model kwargs (excluding case_number/customer_id/status, which the
-    create path sets). Detail fields come from the shared preview mapper; the
-    notes field preserves payment/compliance/salesperson + provenance (D6)."""
-    pv = map_job_preview(parsed, predicted_case_number="", legacy_reference=legacy_reference)
+    create path sets).
 
-    note_lines: list[str] = []
-    # Old-system removal is operationally critical — put it first so staff see it
-    # at the top of the Job notes, not buried below payment/compliance detail.
-    if parsed.get("removes_old_system"):
-        marker = _str(parsed.get("decommission_marker")).strip()
-        note_lines.append(
-            "REMOVE OLD SYSTEM - decommission the existing system"
-            + (f" (flagged: {marker})" if marker else "")
-            + "."
-        )
-    # Preserved meaningful text from the Customer Name cell (approval removed).
-    name_cell_notes = _str(parsed.get("customer_name_notes")).strip()
-    if name_cell_notes:
-        note_lines.append("From name cell: " + name_cell_notes)
-    if pv["salesperson_text"]:
-        note_lines.append("Salesperson: " + pv["salesperson_text"])
-    payment = parsed.get("payment") or {}
-    pay_bits = [
-        f"{k}: {_str(payment.get(k)).strip()}"
-        for k in ("total", "deposit", "balance", "result", "notes")
-        if _str(payment.get(k)).strip()
-    ]
-    if pay_bits:
-        note_lines.append("Payment — " + ", ".join(pay_bits))
-    compliance = parsed.get("compliance") or {}
-    comp_bits = [
-        f"{k}: {_str(compliance.get(k)).strip()}"
-        for k in ("accreditation_code", "welcome_call")
-        if _str(compliance.get(k)).strip()
-    ]
-    if comp_bits:
-        note_lines.append("Compliance — " + ", ".join(comp_bits))
-    raw_notes = _str(parsed.get("notes_raw")).strip()
-    if raw_notes:
-        note_lines.append("Notes: " + raw_notes)
-    note_lines.append(
-        f"Imported from legacy workbook (batch {batch_id}, row {source_row_index}"
-        + (f", ref {legacy_reference}" if legacy_reference else "")
-        + ")."
+    Phase 2b: writes the structured ``details`` (computed if the staged row
+    predates Phase 2a) and derives the legacy ``*_details`` / ``notes`` blobs
+    from it via the shared ``render_legacy_blobs`` renderer — so the blobs stay
+    populated and exactly match the commit-preview."""
+    details = parsed.get("details") or build_details(parsed, raw)
+    blobs = render_legacy_blobs(
+        details, parsed,
+        batch_id=batch_id, source_row_index=source_row_index, legacy_reference=legacy_reference,
     )
-
     return {
         "legacy_reference": legacy_reference,
         "sale_date": parse_date_maybe(_str(parsed.get("sale_date"))),
         "install_date": parse_date_maybe(_str(parsed.get("install_date"))),
-        "system_details": pv["system_details"],
-        "install_details": pv["install_details"],
-        "approval_details": pv["approval_details"],
-        "notes": "\n".join(note_lines) or None,
+        "details": details,
+        "system_details": blobs["system_details"],
+        "install_details": blobs["install_details"],
+        "approval_details": blobs["approval_details"],
+        "notes": blobs["notes"],
     }
 
 
@@ -176,7 +145,7 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
         job = jobs_service.create_job(
             db,
             customer_id=customer.id,
-            data=build_job_data(parsed, legacy_reference=legacy, batch_id=batch_id, source_row_index=sidx),
+            data=build_job_data(parsed, raw, legacy_reference=legacy, batch_id=batch_id, source_row_index=sidx),
             year=year,
             status=JobStatus.INSTALLED,
         )

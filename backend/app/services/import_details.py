@@ -208,3 +208,125 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
         if d[section]:
             out[section] = d[section]
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Derived legacy text blobs (Phase 2b) — rendered FROM the structured details so
+# the legacy *_details / notes fields stay populated and consistent with what
+# commit writes. Pure; the single source of truth for both commit and preview.
+# --------------------------------------------------------------------------- #
+def _join_bits(bits: list[tuple[str, Any]]) -> str | None:
+    parts = [f"{label}: {_s(v).strip()}" for label, v in bits if _s(v).strip()]
+    return " | ".join(parts) or None
+
+
+def render_legacy_blobs(
+    details: dict | None,
+    parsed: dict | None,
+    *,
+    batch_id: int,
+    source_row_index: int,
+    legacy_reference: str | None,
+) -> dict[str, str | None]:
+    """Render the legacy text blobs from structured ``details`` (+ ``parsed`` for
+    approval, which is not yet a registry field). Empty fields are omitted."""
+    details = details or {}
+    parsed = parsed or {}
+    system = details.get("system", {})
+    electrical = details.get("electrical", {})
+    install = details.get("install", {})
+    compliance = details.get("compliance", {})
+    payment = details.get("payment", {})
+    flags = details.get("flags", {})
+    notes_sec = details.get("notes", {})
+    sales = details.get("sales", {})
+    legacy = details.get("legacy", {})
+
+    system_details = _join_bits([
+        ("Panels", system.get("panel_count")),
+        ("Panel", system.get("panel")),
+        ("Inverter", system.get("inverter")),
+        ("Storey", system.get("storey")),
+        ("Phase", system.get("phase")),
+        ("Roof", system.get("roof_type")),
+        ("Meter", electrical.get("meter_no")),
+        ("NMI", electrical.get("nmi")),
+        ("Distributor", electrical.get("distributor")),
+        ("Retailer", electrical.get("retailer")),
+        ("MSB", compliance.get("msb_status")),
+    ])
+    install_details = _join_bits([
+        ("Day", install.get("day")),
+        ("Time", install.get("time")),
+        ("Installer", install.get("installer")),
+    ])
+    # Approval preserves current behaviour (sourced from parsed, not details).
+    approval_details = _join_bits([
+        ("Approval", parsed.get("approval_state")),
+        ("Pending date", parsed.get("approval_pending_date")),
+    ])
+
+    lines: list[str] = []
+    # 1. Decommission first — operationally critical, never buried.
+    if flags.get("removes_old_system"):
+        marker = _s(flags.get("decommission_marker")).strip()
+        lines.append(
+            "REMOVE OLD SYSTEM - decommission the existing system"
+            + (f" (flagged: {marker})" if marker else "")
+            + "."
+        )
+    # 2. Name-cell notes.
+    cnn = _s(notes_sec.get("customer_name_notes")).strip()
+    if cnn:
+        lines.append("From name cell: " + cnn)
+    # 3. Salesperson.
+    sp = _s(sales.get("salesperson_text")).strip()
+    if sp:
+        lines.append("Salesperson: " + sp)
+    # 4. Payment summary.
+    pay_bits = [
+        f"{k}: {_s(payment.get(k)).strip()}"
+        for k in ("total", "deposit", "balance", "result", "notes", "stc_amount")
+        if _s(payment.get(k)).strip()
+    ]
+    if pay_bits:
+        lines.append("Payment — " + ", ".join(pay_bits))
+    # 5. Compliance / admin summary.
+    comp_bits = [
+        f"{k}: {_s(compliance.get(k)).strip()}"
+        for k in ("accreditation", "welcome_call", "ces_ecoc_email")
+        if _s(compliance.get(k)).strip()
+    ]
+    if comp_bits:
+        lines.append("Compliance — " + ", ".join(comp_bits))
+    # 6. Free-text Notes column.
+    raw_notes = _s(parsed.get("notes_raw")).strip()
+    if raw_notes:
+        lines.append("Notes: " + raw_notes)
+    # 7. Misfiled notes — diverted text, labelled with its source column.
+    for m in notes_sec.get("misfiled") or []:
+        col = _s(m.get("source_column")).strip()
+        txt = _s(m.get("text")).strip()
+        if txt:
+            lines.append(f"Misfiled — {col}: {txt}" if col else "Misfiled: " + txt)
+    # 8. Legacy / import-only — only when populated.
+    leg_bits = [
+        f"{k}: {_s(legacy.get(k)).strip()}"
+        for k in ("solar_vic", "ces_submission")
+        if _s(legacy.get(k)).strip()
+    ]
+    if leg_bits:
+        lines.append("Legacy — " + ", ".join(leg_bits))
+    # 9. Provenance (preserved verbatim).
+    lines.append(
+        f"Imported from legacy workbook (batch {batch_id}, row {source_row_index}"
+        + (f", ref {legacy_reference}" if legacy_reference else "")
+        + ")."
+    )
+
+    return {
+        "system_details": system_details,
+        "install_details": install_details,
+        "approval_details": approval_details,
+        "notes": "\n".join(lines) or None,
+    }

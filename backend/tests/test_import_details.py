@@ -12,7 +12,7 @@ from io import BytesIO
 import openpyxl
 
 from app.services import import_parser
-from app.services.import_details import build_details
+from app.services.import_details import build_details, render_legacy_blobs
 
 
 # --------------------------------------------------------------------------- #
@@ -147,3 +147,54 @@ def test_parser_captures_widened_headers_and_unmapped_passthrough():
     # Flat parsed keys still present (back-compat).
     assert row.parsed["customer_name"] == "Alex Roe"
     assert row.parsed["msb_state"] == "yes"
+
+
+# --------------------------------------------------------------------------- #
+# render_legacy_blobs (Phase 2b) — derived legacy text blobs
+# --------------------------------------------------------------------------- #
+def _full_details():
+    return {
+        "_v": 2,
+        "sales": {"salesperson_text": "Rep"},
+        "system": {"panel_count": 16, "panel": "Longi 440", "phase": "three"},
+        "electrical": {"nmi": "42041234567", "distributor": "NSW Essential"},
+        "install": {"day": "Mon", "installer": "Installer One"},
+        "payment": {"total": "5000", "stc_amount": "2000"},
+        "compliance": {"msb_status": "yes", "accreditation": "ACC1"},
+        "flags": {"removes_old_system": True, "decommission_marker": "REMOVE OLD SYSTEM"},
+        "legacy": {"solar_vic": "100"},
+        "notes": {
+            "customer_name_notes": "includes hot water timer",
+            "misfiled": [{"source_column": "Phase", "text": "ask sparky"}],
+        },
+    }
+
+
+def test_render_blobs_from_details():
+    parsed = {"approval_state": "approved", "notes_raw": "call first"}
+    b = render_legacy_blobs(_full_details(), parsed, batch_id=9, source_row_index=42, legacy_reference="R1")
+    # system_details from system+electrical+MSB; install_details from install.
+    assert "Panels: 16" in b["system_details"] and "Phase: three" in b["system_details"]
+    assert "MSB: yes" in b["system_details"]
+    assert "Installer: Installer One" in b["install_details"]
+    assert b["approval_details"] == "Approval: approved"  # approval preserved from parsed
+    notes = b["notes"]
+    # Order: decommission first, then name-cell, salesperson, payment, compliance,
+    # free-text notes, misfiled, legacy, provenance (last).
+    assert notes.splitlines()[0].startswith("REMOVE OLD SYSTEM")
+    assert "From name cell: includes hot water timer" in notes
+    assert "Salesperson: Rep" in notes
+    assert "Payment — " in notes and "stc_amount: 2000" in notes
+    assert "Notes: call first" in notes
+    assert "Misfiled — Phase: ask sparky" in notes
+    assert "Legacy — solar_vic: 100" in notes
+    assert notes.splitlines()[-1] == "Imported from legacy workbook (batch 9, row 42, ref R1)."
+
+
+def test_render_blobs_omit_blank_and_legacy_only_when_populated():
+    b = render_legacy_blobs({"_v": 2}, {}, batch_id=1, source_row_index=2, legacy_reference=None)
+    assert b["system_details"] is None and b["install_details"] is None
+    assert b["approval_details"] is None
+    # Only the provenance line remains; no Legacy line when legacy is empty.
+    assert b["notes"] == "Imported from legacy workbook (batch 1, row 2)."
+    assert "Legacy" not in b["notes"]
