@@ -8,6 +8,7 @@ import {
   getBatch,
   getBatchSummary,
   getCommitPreview,
+  getFieldRegistry,
   getReverseCheck,
   getRow,
   listBatches,
@@ -22,6 +23,7 @@ import type { ImportRowEdit, ListRowsParams } from '@/types/imports'
 
 const keys = {
   all: ['imports'] as const,
+  fieldRegistry: ['imports', 'field-registry'] as const,
   batches: ['imports', 'batches'] as const,
   batch: (id: number) => ['imports', 'batch', id] as const,
   summary: (id: number) => ['imports', 'summary', id] as const,
@@ -30,6 +32,16 @@ const keys = {
   commitPreview: (id: number) => ['imports', 'commit-preview', id] as const,
   reverseCheck: (batchId: number, rowId: number) =>
     ['imports', 'reverse-check', batchId, rowId] as const,
+}
+
+export function useFieldRegistry() {
+  // Static metadata — cache aggressively; one fetch drives the structured UI.
+  return useQuery({
+    queryKey: keys.fieldRegistry,
+    queryFn: getFieldRegistry,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
 }
 
 export function useImportBatches() {

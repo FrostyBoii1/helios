@@ -88,7 +88,54 @@ export interface ParsedCandidate {
   notes_raw?: string | null
   emails?: string[] | null
   phones?: PhoneEntry[] | null
+  // Phase 2a/2b structured candidate (grouped sections). Free-form nested JSON;
+  // the registry describes its shape. Present on rows parsed after Phase 2a.
+  details?: ParsedDetails | null
   [key: string]: unknown
+}
+
+// Structured details object (registry-shaped). Sections are nested dicts of
+// individual fields; misfiled holds diverted text labelled with its source column.
+export interface MisfiledNote {
+  source_column?: string | null
+  text?: string | null
+}
+export interface ParsedDetails {
+  _v?: number
+  notes?: { customer_name_notes?: string | null; misfiled?: MisfiledNote[] } & Record<string, unknown>
+  flags?: { removes_old_system?: boolean; decommission_marker?: string | null } & Record<string, unknown>
+  [section: string]: unknown
+}
+
+// ---- Field registry (GET /imports/field-registry); drives the structured UI ----
+export interface FieldSpec {
+  key: string
+  label: string
+  section: string
+  entity: 'customer' | 'job'
+  storage: string
+  input_type:
+    | 'text'
+    | 'textarea'
+    | 'number'
+    | 'currency'
+    | 'date'
+    | 'select'
+    | 'contact_list'
+    | 'flag'
+    | 'readonly'
+  visible_when_blank: boolean
+  category: 'core' | 'legacy' | 'derived'
+  editable: boolean
+  source_columns: string[]
+  captured: string
+  validation: Record<string, unknown>
+}
+
+export interface FieldRegistry {
+  sections: { key: string; label: string }[]
+  fields: FieldSpec[]
+  editable_details_paths: string[]
 }
 
 export interface ImportRow {

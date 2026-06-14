@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '@/lib/api'
 import {
   useEditRow,
+  useFieldRegistry,
   useImportRow,
   useResolveIssue,
   useRowAction,
@@ -13,6 +14,7 @@ import type { RowAction } from '@/lib/imports'
 import { ReviewStatusBadge, RowClassBadge } from '@/components/imports/ReviewStatusBadge'
 import { SeverityChip } from '@/components/imports/IssueBadges'
 import { CommitReverseSection } from '@/components/imports/CommitReverseSection'
+import { StructuredDetailsView } from '@/components/imports/StructuredDetailsView'
 import {
   PARSED_TEXT_FIELDS,
   type ImportRow,
@@ -88,6 +90,9 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const editMutation = useEditRow(batchId)
   const actionMutation = useRowAction(batchId)
   const resolveMutation = useResolveIssue(batchId)
+  const { data: registry } = useFieldRegistry()
+  // Phase 3b-1: structured read-only view when the row carries parsed.details.
+  const details = row.parsed?.details ?? null
 
   const [text, setText] = useState<Record<string, string>>({})
   const [emails, setEmails] = useState<string[]>([])
@@ -218,6 +223,18 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
               ? ` (matched: “${asString(row.parsed?.decommission_marker)}”)`
               : ''}
             . Confirm and plan the old-system removal.
+          </p>
+        </div>
+      )}
+
+      {/* Phase 3b-1: registry-driven structured read-only view. Falls back to the
+          flat fields below (with a hint) for rows staged before structured parsing. */}
+      {details && registry ? (
+        <StructuredDetailsView registry={registry} details={details} />
+      ) : (
+        <div className="rounded-md border border-dashed border-line-strong bg-surface px-3 py-2">
+          <p className="text-xs text-faint">
+            Structured view available after re-ingest — showing the legacy fields below.
           </p>
         </div>
       )}

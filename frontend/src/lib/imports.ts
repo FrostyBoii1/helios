@@ -3,6 +3,7 @@
 import { apiFetch } from '@/lib/api'
 import type {
   BulkApproveResult,
+  FieldRegistry,
   ImportBatch,
   ImportBatchList,
   ImportBatchSummary,
@@ -17,6 +18,10 @@ import type {
   ReverseCheck,
   ReverseResult,
 } from '@/types/imports'
+
+export function getFieldRegistry(): Promise<FieldRegistry> {
+  return apiFetch<FieldRegistry>('/imports/field-registry')
+}
 
 export function listBatches(): Promise<ImportBatchList> {
   return apiFetch<ImportBatchList>('/imports')
