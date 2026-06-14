@@ -8,9 +8,11 @@ import {
   canEditJobInstallDate,
 } from '@/auth/permissions'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
+import { ImportedJobDetails } from '@/components/ImportedJobDetails'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
 import { useChangeJobStatus, useDeleteJob, useJob, useUpdateJob } from '@/hooks/useJobs'
+import { parseImportedJobDetails } from '@/lib/importedJobDetails'
 import type { JobInput, JobStatus } from '@/types'
 
 const DESCRIPTIVE_FIELDS: { key: keyof JobInput; label: string; textarea?: boolean }[] = [
@@ -123,6 +125,9 @@ export function JobDetailPage() {
       setError('Could not delete the job.')
     }
   }
+
+  // Structured view for imported jobs (null for native jobs -> plain rendering).
+  const importedView = parseImportedJobDetails(job)
 
   return (
     <div>
@@ -241,12 +246,13 @@ export function JobDetailPage() {
           )}
         </div>
 
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-          {DESCRIPTIVE_FIELDS.map(({ key, label, textarea }) => (
-            <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
-              <dt className="eyebrow text-faint">{label}</dt>
-              {editingDetails ? (
-                textarea ? (
+        {editingDetails ? (
+          // Edit mode is unchanged — raw fields (imported details edit as text).
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+            {DESCRIPTIVE_FIELDS.map(({ key, label, textarea }) => (
+              <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
+                <dt className="eyebrow text-faint">{label}</dt>
+                {textarea ? (
                   <textarea
                     rows={2}
                     value={form[key] ?? ''}
@@ -260,15 +266,38 @@ export function JobDetailPage() {
                     onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
                     className="input mt-1 px-2 py-1 text-sm"
                   />
-                )
-              ) : (
+                )}
+              </div>
+            ))}
+          </dl>
+        ) : importedView ? (
+          // Imported job: title/sale-date + structured detail sections.
+          <div className="flex flex-col gap-4">
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+              <div>
+                <dt className="eyebrow text-faint">Title</dt>
+                <dd className="mt-0.5 text-fg">{job.title || '—'}</dd>
+              </div>
+              <div>
+                <dt className="eyebrow text-faint">Sale date</dt>
+                <dd className="mt-0.5 text-fg">{job.sale_date || '—'}</dd>
+              </div>
+            </dl>
+            <ImportedJobDetails view={importedView} />
+          </div>
+        ) : (
+          // Non-imported job: original plain rendering, unchanged.
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+            {DESCRIPTIVE_FIELDS.map(({ key, label, textarea }) => (
+              <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
+                <dt className="eyebrow text-faint">{label}</dt>
                 <dd className="mt-0.5 whitespace-pre-wrap text-fg">
                   {(job[key] as string | null) || '—'}
                 </dd>
-              )}
-            </div>
-          ))}
-        </dl>
+              </div>
+            ))}
+          </dl>
+        )}
 
         {editingDetails && (
           <div className="mt-5 flex justify-end gap-3">
