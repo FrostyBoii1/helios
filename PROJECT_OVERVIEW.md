@@ -116,6 +116,12 @@ Full detail and relationships: [docs/database_schema.md](docs/database_schema.md
   - `GET/POST /tasks`, `GET/PATCH/DELETE /tasks/{id}`,
     `POST /tasks/{id}/complete`, `POST /tasks/{id}/reopen`.
   - `GET /activities?customer_id=&job_id=` — read-only timeline.
+  - **Imports** (admin-only): `POST /imports` (parse-only upload),
+    `GET /imports[/{id}[/rows[/{rowId}]]]`, row review (`PATCH` edit,
+    `approve`/`reject`/`skip`/`reopen`, `PATCH issues/{id}`,
+    `bulk-approve-clean`), `GET …/summary`, `GET …/commit-preview`,
+    `POST …/commit` (capped commit-to-live), and per-row reverse
+    (`GET …/reverse-check`, `POST …/reverse`).
 - Interactive docs at `/docs` (Swagger UI) when the backend runs.
 - The standard feature pattern: **schema validation → permission check → DB
   transaction → activity log → typed response** (see `endpoints/users.py`).

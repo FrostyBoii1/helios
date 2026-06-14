@@ -74,6 +74,33 @@ a rule is implemented, the code is the authority; this document explains intent.
   phone, email, case number, install date, salesperson, status, assigned staff).
   Full-text search is future scope.
 
+## Spreadsheet import (legacy migration)
+
+- The legacy workbook is migrated through staging, **never** by writing live
+  records directly. Upload parses an `.xlsx` into staging tables only.
+- **No live Customer/Job is created until a row is `approved` AND a commit is
+  explicitly confirmed.** Eligibility (re-checked server-side at commit) requires
+  an approved job/ambiguous row with no unresolved error, a non-empty customer
+  name, a plausible case-number year, and no existing commit link.
+- **Commit is capped at 25 rows per call** (conservative first release) and is
+  **create-only** — it never updates or deletes an existing live record. It is
+  idempotent: already-committed rows and rows whose `legacy_reference` already
+  exists on a live job are skipped.
+- **Case-year guard:** a row whose derived case-number year (sale_date →
+  install_date → current year) is outside `2020 … current year + 1` is excluded
+  (`invalid_case_year`). Such rows must have their dates corrected in review (or
+  be excluded) before they can commit — this prevents nonsensical numbers like
+  `SCS-202-00001`.
+- **Reverse** is per-row and **soft-delete only**, allowed **only while the
+  imported Customer/Job is pristine** (unedited since import, no tasks/documents/
+  non-import activity, status unchanged, customer owns only that one job). It
+  sets the row `reversed`, preserves the commit links as audit, and logs one
+  `RECORD_IMPORT_REVERSED` activity. Reversed rows are terminal (no re-open /
+  re-commit yet).
+- **v1 scope:** one Customer per Job (no dedup/merge), salesperson/installer kept
+  as text, single-line address. No NAS matching, reference catalogs,
+  StaffDirectory, status-label tables, or CustomerContact.
+
 ## Environments
 
 - Development, testing, and production are separated. Development is never run

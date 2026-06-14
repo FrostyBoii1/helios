@@ -48,9 +48,12 @@ HEAD `87c6475`. Implemented:
   calendar-grid dependency.
 - **SunCentral dark theme** — Tailwind tokens + reusable button/input/card/badge
   classes; restyled shell, login, dashboard, all feature pages, mobile-friendly.
-- Tests: backend smoke (no DB) + database-backed Customers (10), Jobs (17 +3
-  scheduling filters), Tasks (16), Activity (9) integration tests
-  (rollback-isolated). 58 backend tests total.
+- **Spreadsheet import pipeline** (§5a) — parse-only staging, review backend +
+  UI, commit-preview, commit-to-live (+ UI), scoped reverse (+ UI), and a
+  case-year guard.
+- Tests: backend smoke (no DB) + database-backed integration tests
+  (rollback-isolated) across Customers/Jobs/Tasks/Activity and the import
+  pipeline. **124 backend tests total.**
 
 ## 2. What is NOT built yet
 
@@ -59,12 +62,13 @@ These are stubbed/absent and represent the next phases:
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.
-- **Staged spreadsheet import/review pipeline** — only the read-only dry-run
-  parser exists today (§5a); no `ImportBatch`/`ImportRow`/`ImportIssue` tables,
-  no live customer/job creation, no reference catalogs (Distributor/Retailer/
-  HardwareCatalog/StaffDirectory) or status labels.
 - **Reporting/analytics** and **reminders/notifications**.
 - **Frontend user-management** screens (the API exists; UI does not).
+- Import pipeline scope **not** in v1: reference catalogs (Distributor/Retailer/
+  HardwareCatalog/StaffDirectory), status-label tables, a CustomerContact table,
+  customer dedup/merge, batch/bulk reverse, and re-commit-after-reverse. (The
+  **staged spreadsheet import/review/commit/reverse pipeline itself is built** —
+  see §5a.)
 - Job **tags/flags** UI beyond status; **shared-admin task clearing**.
 - Production deployment (static frontend build + reverse proxy + TLS).
 
@@ -113,25 +117,63 @@ end-to-end.
 ## 5. Recommended next task
 
 The core workflow (Customers → Jobs → Activity Timeline → Tasks → Weekly
-Scheduling) and the dark theme are done. Reasonable next choices, in order of
-recommendation:
+Scheduling), the dark theme, and the **spreadsheet import pipeline** (§5a) are
+done. Reasonable next choices, in order of recommendation:
 
-1. **Staged spreadsheet import/review pipeline** — build on the dry-run parser
-   (§5a): `ImportBatch`/`ImportRow`/`ImportIssue` staging tables, a persisted
-   dry-run report, and a human review queue **before** any live customer/job
-   creation. This is the safe foundation for migrating the legacy workbook
-   (≈1,672 completed jobs) and would need the first import-related migration, so
-   plan it first. Reference catalogs (Distributor/Retailer/HardwareCatalog/
-   StaffDirectory) and status labels are built incrementally against its output.
+1. **First supervised real import commit** — the legacy workbook is staged as
+   `ImportBatch` 388 (dev DB only) but **nothing has been committed to live**
+   yet (all rows `pending`). The recommended operational next step is to
+   review/correct a small subset, approve it, **commit ≤25 rows** via the UI,
+   and **inspect the created Customers/Jobs** (case numbers, mapping, address,
+   provenance) and timelines before scaling. This is an owner-initiated
+   live-write action.
 2. **NAS file integration** (baseline priority #8) — link each job/customer to
    its NAS folder, list/upload/preview files with permission gating. Heavier
    (storage mounts, path safety), so plan-first.
 3. **Reporting/analytics** (#9), then **notifications** (#10).
 
-Either path warrants a plan-first pass given the schema/migration and
-storage/permission complexity.
+A live import commit and the NAS work each warrant care (live writes /
+storage + permission complexity).
 
-## 5a. Spreadsheet import — dry-run parser (read-only, analysis only)
+## 5a. Spreadsheet import pipeline (parse → review → commit → reverse)
+
+The legacy-workbook migration is built end to end, admin-only. Phases (each its
+own commit; see CHANGES.md):
+
+- **A — staging**: `POST /imports` parses an `.xlsx` (in memory, never written
+  to disk) into `ImportBatch`/`ImportRow`/`ImportIssue`. No live writes.
+- **B1/B2 — review**: edit the parsed candidate (whitelisted `ImportRowEdit`
+  fields incl. address), approve/reject/skip/reopen, resolve issues,
+  bulk-approve-clean; admin review UI (`/imports`, `/imports/:id`) with
+  filters/search, paginated table, and a row drawer.
+- **C0 — commit-preview**: `GET /imports/{id}/commit-preview` (read-only)
+  reports eligibility, excluded reasons, and **predicted (estimated)** case
+  numbers. Added `jobs.legacy_reference` (nullable, indexed).
+- **C1/C2 — commit-to-live**: `POST /imports/{id}/commit` creates live
+  Customer + Job from approved rows, **capped at 25 rows/call**, create-only,
+  idempotent (skips already-committed + duplicate `legacy_reference`), one
+  `RECORD_IMPORTED` activity per job; UI preview/confirm/result modal.
+- **C3a/C3b — scoped reverse**: `GET …/reverse-check` + `POST …/reverse`
+  (per-row) soft-delete the created Customer + Job **only** while pristine
+  (re-checked server-side), set the row `reversed`, log `RECORD_IMPORT_REVERSED`;
+  UI confirm modal + read-only "Reversed" state.
+- **Case-year guard**: a row whose derived case-number year is outside
+  `2020 … current year + 1` is excluded (`invalid_case_year`) from both preview
+  and commit — protects against malformed source dates minting `SCS-202-…`.
+
+**Safety model:** no live record is created until a row is `approved` **and** a
+commit is explicitly confirmed; commit is capped at 25/call; reverse is
+soft-delete-only and never touches a record that's been edited/used; the
+case-year guard blocks implausible years. No migration beyond `legacy_reference`
+(status/activity additions are string enums). v1 maps one Customer per Job,
+keeps salesperson/installer as text, and uses a single-line address — no NAS
+matching, reference catalogs, StaffDirectory, status-label tables, or
+CustomerContact.
+
+The dry-run parser below shares the same parser and remains useful for offline
+analysis.
+
+### Dry-run parser (read-only, analysis only)
 
 `backend/scripts/import_dryrun.py` is a **read-only analysis tool** for the
 legacy jobs workbook. It is **NOT** a live import system:
@@ -158,9 +200,8 @@ python backend/scripts/import_dryrun.py "/path/to/workbook.xlsx" --json-output r
 
 In the backend container the workbook is not mounted by default; copy it in
 (`docker cp`) or run the script on a machine that can see the file. The only
-dependency is `openpyxl` (in `requirements.txt`). This dry-run informs the
-design of the future staging/review import pipeline; no schema or migration
-exists for import yet.
+dependency is `openpyxl` (in `requirements.txt`). The same parser backs the live
+staging ingest, so the dry-run and the staged import classify identically.
 
 ## 6. Gotchas / conventions
 

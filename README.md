@@ -8,9 +8,10 @@ source of truth.
 
 > Core workflow is implemented through **Scheduling** (Customers, Jobs, Activity
 > Timeline, Tasks, Weekly Scheduling) on the SunCentral dark theme, plus a
-> read-only spreadsheet dry-run parser. NAS files, reporting, and notifications
-> are still to come. See [What's implemented](#whats-implemented) and
-> [DEVELOPER_HANDOFF.md](DEVELOPER_HANDOFF.md) for the build order.
+> complete **spreadsheet import pipeline** (parse → review → commit-to-live →
+> reverse, with a case-year safety guard). NAS files, reporting, and
+> notifications are still to come. See [What's implemented](#whats-implemented)
+> and [DEVELOPER_HANDOFF.md](DEVELOPER_HANDOFF.md) for the build order.
 
 ## Tech stack
 
@@ -142,9 +143,15 @@ cat backups/<file>.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$PO
 - ✅ **Tasks**: assignable/owned tasks linked to customers/jobs; statuses, priorities, due dates, dynamic overdue; create/update/complete/reopen/soft-delete; global `/tasks` page, detail panels, dashboard "My open tasks"; `GET /users/selectable`; role-gated API + activity logging; DB-backed tests
 - ✅ **Weekly Scheduling**: `/schedule` weekly board (current week + next 8, expandable, per-week counts), "Needs scheduling" panel, reschedule modal (admin/scheduling); backed by `GET /jobs` install-date-range + `unscheduled` filters
 - ✅ **SunCentral dark theme** across the app (charcoal surfaces, orange accent, status/priority badges, mobile-friendly)
-- ✅ **Spreadsheet dry-run parser** (`backend/scripts/import_dryrun.py`): read-only analysis of the legacy jobs workbook — no DB writes (see DEVELOPER_HANDOFF §5a)
+- ✅ **Spreadsheet import pipeline** (legacy jobs workbook → live records), admin-only, end to end:
+  - **A — staging**: parse-only `.xlsx` upload into `ImportBatch`/`ImportRow`/`ImportIssue` (no live writes); the read-only dry-run parser (`backend/scripts/import_dryrun.py`) shares the same parser
+  - **B1/B2 — review**: edit the parsed candidate (whitelisted fields incl. address), approve/reject/skip/reopen, resolve issues, bulk-approve-clean; admin review UI with filters/search, paginated table, and a row drawer
+  - **C0 — commit-preview**: read-only eligibility + excluded reasons + predicted (estimated) case numbers; `jobs.legacy_reference` column added
+  - **C1/C2 — commit-to-live**: create live Customer + Job from approved rows, **capped at 25 rows/call**, create-only, idempotent, one `RECORD_IMPORTED` activity/job; preview/confirm/result modal in the UI
+  - **C3a/C3b — scoped reverse**: per-row, soft-delete-only undo of a *pristine* imported record (re-checked server-side), with a confirm modal and a read-only "Reversed" state
+  - **Case-year guard**: blocks rows whose derived case-number year is outside `2020 … current year + 1`
 
-Still to come: **NAS file integration**, **reporting/analytics**, **notifications**, and a **staged spreadsheet import/review pipeline**.
+Still to come: **NAS file integration**, **reporting/analytics**, and **notifications**.
 
 See [CHANGES.md](CHANGES.md) for decisions/deviations and
 [DEVELOPER_HANDOFF.md](DEVELOPER_HANDOFF.md) for what's next.

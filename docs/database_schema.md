@@ -51,6 +51,7 @@ the physical schema is produced by Alembic migrations.
 |--------|------|-------|
 | id | int PK | |
 | case_number | varchar(32) unique, indexed | `SCS-YYYY-00001` |
+| legacy_reference | varchar(64) indexed, nullable | legacy spreadsheet/invoice ref on imported jobs; set only by the import commit; null for natively-created jobs |
 | customer_id | int FK → customers.id | required |
 | status | varchar(40) indexed | `JobStatus` enum |
 | title | varchar(200) | |
@@ -106,6 +107,31 @@ the physical schema is produced by Alembic migrations.
 | uploaded_by_id | int FK → users.id null | |
 | timestamps + deleted_at | | |
 
+### import staging (parse → review → commit pipeline)
+
+Staging tables hold the legacy-workbook import. They are **separate** from the
+live tables; rows become live Customer/Job records only via an explicit,
+admin-confirmed commit. Raw cells + the parsed candidate are stored as JSONB.
+
+**import_batches** — one per uploaded `.xlsx`. Columns: `id`, `source_filename`,
+`sheet_name`, `file_sha256` (dup-detect), `status` (`ImportBatchStatus`:
+parsing/parsed/reviewing/committing/committed/committed_partial/failed), counts
+(`total/job/divider/blank/ambiguous_rows`, `issue_count`), `created_by_id`,
+timestamps + `deleted_at`.
+
+**import_rows** — one per spreadsheet row. Columns: `id`, `batch_id` FK,
+`source_row_index`, `row_class` (`ImportRowClass`: blank/divider/job/ambiguous),
+`legacy_reference`, `raw` JSONB, `parsed` JSONB, `original_parsed` JSONB
+(pre-edit snapshot), `context_text`, `review_status` (`ImportRowReviewStatus`:
+pending/approved/rejected/skipped/committed/reversed), `review_notes`,
+`reviewer_id`, `reviewed_at`, **`committed_customer_id` / `committed_job_id`**
+(set by commit; preserved as audit after reverse), timestamps.
+
+**import_issues** — first-class data-quality flags per row. Columns: `id`,
+`row_id` FK, `batch_id` FK, `kind`, `severity` (`ImportIssueSeverity`:
+info/warning/error), `field`, `message`, `resolved` + `resolution_note` /
+`resolved_by_id` / `resolved_at`.
+
 ## Relationships
 
 ```
@@ -144,6 +170,11 @@ customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
 - Adding/changing a model? Import it in `backend/app/db/base.py`, then generate a
   **new** migration: `alembic revision --autogenerate -m "..."`, review, and
   `alembic upgrade head`.
-- **Enum values** (`JobStatus`, `TaskStatus`, `TaskPriority`, `ActivityType`)
-  are stored as strings, so adding a value needs **no migration**. The current
-  set lives in `backend/app/models/enums.py` (the authoritative source).
+- **Enum values** (`JobStatus`, `TaskStatus`, `TaskPriority`, `ActivityType`,
+  and the import enums `ImportBatchStatus`/`ImportRowClass`/
+  `ImportRowReviewStatus`/`ImportIssueSeverity`) are stored as strings, so adding
+  a value needs **no migration**. The current set lives in
+  `backend/app/models/enums.py` (the authoritative source).
+- **Import migrations:** the staging tables (Phase A) and `jobs.legacy_reference`
+  (Phase C0) are the only import-related migrations. The commit-to-live, reverse,
+  and case-year-guard work added **no** migrations (string-enum values only).

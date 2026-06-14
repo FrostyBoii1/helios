@@ -9,6 +9,52 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-14 — Spreadsheet import pipeline: parse → review → commit → reverse (commits f938100 → a60fe83)
+
+- **What:** Built the full legacy-workbook migration pipeline, admin-only, in
+  small reviewed slices (each its own commit):
+  - **A** (`f938100`) parse-only staging tables (`ImportBatch`/`ImportRow`/
+    `ImportIssue`) + `POST /imports`; no live writes.
+  - **B1** (`a979079`) review backend: typed whitelist edit, approve/reject/skip/
+    reopen, resolve issues, bulk-approve-clean, audit columns.
+  - **B2** (`5c23e3b`) admin review UI (`/imports`, `/imports/:id`): upload,
+    filters/search, paginated table, row drawer.
+  - **C0** (`6b248d2`) read-only commit-preview + `jobs.legacy_reference` column
+    (the **only** import migration, `91a6e16b2a20`).
+  - **pre-C1 refinement** (`6fce2a5`) made `address` a reviewable/editable field
+    and added a read-only date-orientation audit that **confirmed DD/MM is
+    correct** (so `date_day_mismatch` warnings reflect an unreliable Day column,
+    not a date error, and are non-blocking).
+  - **C1** (`2fa8aa3`) commit-to-live engine: create live Customer + Job from
+    approved rows, **cap 25/call**, create-only, per-row durable, idempotent,
+    one `RECORD_IMPORTED` activity/job.
+  - **C2** (`90fd83c`) commit UI: preview/confirm/result modal.
+  - **C3a** (`724a140`) scoped reverse engine: per-row, soft-delete-only undo of
+    a **pristine** imported record; **C3b** (`7c55aaf`) the reverse UI.
+  - **Case-year guard** (`a60fe83`): excludes rows whose derived case-number year
+    is outside `2020 … current year + 1` (`invalid_case_year`).
+- **Why:** Replace the messy ~2,500-row legacy spreadsheet with structured live
+  records, **non-destructively** — staging + human review + explicit, capped,
+  reversible commit, so a migration mistake can be caught (or undone) before it
+  spreads.
+- **Files:** `backend/app/{models,schemas,services,api/v1/endpoints}/import_*`
+  and the live `customers`/`jobs`/`activity` services they reuse; one migration
+  (`legacy_reference`); `frontend/src/{components/imports,pages,hooks,lib,types}`.
+- **Temporary or permanent:** Permanent. **One migration** (`legacy_reference`);
+  all status/activity additions are string enums (no migration).
+- **Status / safety:** The real workbook is staged as **`ImportBatch` 388 (dev
+  DB only; real PII — never committed to git)**; **all rows are still `pending`
+  and nothing has been committed to live** (0 `committed_*` links, 0 derived
+  Customer/Job). No live write happens until a row is approved **and** a commit
+  is explicitly confirmed.
+- **Risks / follow-up:** No real batch commit has been performed yet — recommend
+  a small supervised commit first (review/correct rows → approve a subset →
+  commit ≤25 → inspect). v1 maps one Customer per Job, keeps salesperson/
+  installer as text, single-line address; no NAS/reference catalogs/StaffDirectory/
+  status labels/CustomerContact, no batch/bulk reverse, no re-commit-after-reverse.
+  Frontend `npm run lint` remains red from **pre-existing** unrelated errors
+  (`JobDetailPage`, `SchedulePage`).
+
 ## 2026-06-13 — Spreadsheet dry-run parser + `ref/` ignore (commit 87c6475)
 
 - **What:** Added `backend/scripts/import_dryrun.py`, a **read-only** analysis
