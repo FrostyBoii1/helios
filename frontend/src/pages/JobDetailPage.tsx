@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import {
@@ -9,13 +9,16 @@ import {
 } from '@/auth/permissions'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
 import { ImportedJobDetails } from '@/components/ImportedJobDetails'
-import { StructuredDetailsView } from '@/components/structured/StructuredDetailsView'
+import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
 import { useChangeJobStatus, useDeleteJob, useJob, useUpdateJob } from '@/hooks/useJobs'
 import { useFieldRegistry } from '@/hooks/useImports'
+import { ApiError } from '@/lib/api'
+import { buildDetailsPatch } from '@/lib/detailsPatch'
 import { parseImportedJobDetails } from '@/lib/importedJobDetails'
 import type { JobInput, JobStatus } from '@/types'
+import type { FieldSpec } from '@/types/imports'
 
 const DESCRIPTIVE_FIELDS: { key: keyof JobInput; label: string; textarea?: boolean }[] = [
   { key: 'title', label: 'Title' },
@@ -25,6 +28,28 @@ const DESCRIPTIVE_FIELDS: { key: keyof JobInput; label: string; textarea?: boole
   { key: 'approval_details', label: 'Approval details', textarea: true },
   { key: 'notes', label: 'Notes', textarea: true },
 ]
+
+// In structured edit mode the derived blobs (system_details/install_details) are
+// re-rendered by the backend from Job.details, so they are NOT edited directly —
+// only these legacy fields are editable alongside the structured fields (D-A).
+const STRUCTURED_MODE_LEGACY_FIELDS = DESCRIPTIVE_FIELDS.filter(
+  (f) => f.key !== 'system_details' && f.key !== 'install_details',
+)
+
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    if (err.status === 403) {
+      return typeof err.detail === 'string' ? err.detail : 'You do not have permission to do that.'
+    }
+    if (err.status === 422) {
+      return typeof err.detail === 'string'
+        ? err.detail
+        : 'Some structured fields could not be saved (disallowed path or invalid value).'
+    }
+    if (typeof err.detail === 'string') return err.detail
+  }
+  return fallback
+}
 
 export function JobDetailPage() {
   const { id } = useParams()
@@ -41,6 +66,8 @@ export function JobDetailPage() {
 
   const [editingDetails, setEditingDetails] = useState(false)
   const [form, setForm] = useState<Record<string, string>>({})
+  // Phase 4c: string UI state for structured fields, keyed by "<section>.<key>".
+  const [detailsEdits, setDetailsEdits] = useState<Record<string, string>>({})
   const [installDate, setInstallDate] = useState('')
   const [editingInstall, setEditingInstall] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,8 +80,48 @@ export function JobDetailPage() {
         ),
       )
       setInstallDate(job.install_date ?? '')
+      setDetailsEdits({})
     }
   }, [job])
+
+  // path ("<section>.<key>") → field spec, for input_type-aware coercion on save.
+  const fieldByPath = useMemo(() => {
+    const m = new Map<string, FieldSpec>()
+    if (registry) for (const f of registry.fields) m.set(detailsPath(f.storage), f)
+    return m
+  }, [registry])
+
+  // A details-bearing job (with the registry loaded) edits structured fields;
+  // a details=NULL job keeps the legacy pipe-string textareas.
+  const structuredEditable = !!(job?.details && registry)
+
+  function handleDetailsChange(path: string, value: string) {
+    setDetailsEdits((prev) => ({ ...prev, [path]: value }))
+  }
+
+  // One PATCH: changed legacy fields + (structured mode) the coerced details patch.
+  function buildPayload(): JobInput {
+    const payload: JobInput = {}
+    const legacyFields = structuredEditable ? STRUCTURED_MODE_LEGACY_FIELDS : DESCRIPTIVE_FIELDS
+    for (const { key } of legacyFields) {
+      const current = (job?.[key] as string | null) ?? ''
+      const next = form[key] ?? ''
+      if (next !== current) (payload as Record<string, string | null>)[key] = next || null
+    }
+    if (structuredEditable) {
+      const patch = buildDetailsPatch(detailsEdits, job?.details ?? null, fieldByPath)
+      if (patch) payload.details = patch
+    }
+    return payload
+  }
+  const pendingPayload = useMemo(buildPayload, [
+    form,
+    detailsEdits,
+    structuredEditable,
+    fieldByPath,
+    job,
+  ])
+  const hasDetailChanges = Object.keys(pendingPayload).length > 0
 
   const role = user?.role.name
   const mayEditDetails = canEditJobDetails(role)
@@ -76,23 +143,16 @@ export function JobDetailPage() {
 
   async function saveDetails() {
     setError(null)
-    const payload: JobInput = {}
-    for (const { key } of DESCRIPTIVE_FIELDS) {
-      const current = (job![key] as string | null) ?? ''
-      const next = form[key] ?? ''
-      if (next !== current) {
-        ;(payload as Record<string, string | null>)[key] = next || null
-      }
-    }
-    if (Object.keys(payload).length === 0) {
+    if (!hasDetailChanges) {
       setEditingDetails(false)
       return
     }
     try {
-      await updateMutation.mutateAsync(payload)
+      await updateMutation.mutateAsync(pendingPayload)
+      setDetailsEdits({})
       setEditingDetails(false)
-    } catch {
-      setError('Could not save job details.')
+    } catch (err) {
+      setError(describeError(err, 'Could not save job details.'))
     }
   }
 
@@ -251,29 +311,66 @@ export function JobDetailPage() {
         </div>
 
         {editingDetails ? (
-          // Edit mode is unchanged — raw fields (imported details edit as text).
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-            {DESCRIPTIVE_FIELDS.map(({ key, label, textarea }) => (
-              <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
-                <dt className="eyebrow text-faint">{label}</dt>
-                {textarea ? (
-                  <textarea
-                    rows={2}
-                    value={form[key] ?? ''}
-                    onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                    className="input mt-1 px-2 py-1 text-sm"
-                  />
-                ) : (
-                  <input
-                    type={key === 'sale_date' ? 'date' : 'text'}
-                    value={form[key] ?? ''}
-                    onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                    className="input mt-1 px-2 py-1 text-sm"
-                  />
-                )}
-              </div>
-            ))}
-          </dl>
+          job.details && registry ? (
+            // Phase 4c: structured edit — editable details + non-derived legacy
+            // fields (title/sale_date/approval_details/notes). system_details/
+            // install_details are derived from details, so they are not edited here.
+            <div className="flex flex-col gap-4">
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                {STRUCTURED_MODE_LEGACY_FIELDS.map(({ key, label, textarea }) => (
+                  <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
+                    <dt className="eyebrow text-faint">{label}</dt>
+                    {textarea ? (
+                      <textarea
+                        rows={2}
+                        value={form[key] ?? ''}
+                        onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                        className="input mt-1 px-2 py-1 text-sm"
+                      />
+                    ) : (
+                      <input
+                        type={key === 'sale_date' ? 'date' : 'text'}
+                        value={form[key] ?? ''}
+                        onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                        className="input mt-1 px-2 py-1 text-sm"
+                      />
+                    )}
+                  </div>
+                ))}
+              </dl>
+              <StructuredDetailsView
+                registry={registry}
+                details={job.details}
+                editable
+                edits={detailsEdits}
+                onChange={handleDetailsChange}
+              />
+            </div>
+          ) : (
+            // Legacy edit mode (details=NULL) — unchanged raw text fields.
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+              {DESCRIPTIVE_FIELDS.map(({ key, label, textarea }) => (
+                <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
+                  <dt className="eyebrow text-faint">{label}</dt>
+                  {textarea ? (
+                    <textarea
+                      rows={2}
+                      value={form[key] ?? ''}
+                      onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                      className="input mt-1 px-2 py-1 text-sm"
+                    />
+                  ) : (
+                    <input
+                      type={key === 'sale_date' ? 'date' : 'text'}
+                      value={form[key] ?? ''}
+                      onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                      className="input mt-1 px-2 py-1 text-sm"
+                    />
+                  )}
+                </div>
+              ))}
+            </dl>
+          )
         ) : job.details && registry ? (
           // Phase 4a: structured Job.details (registry-driven, read-only). Takes
           // priority over the legacy pipe-string view when details is present.
@@ -324,6 +421,12 @@ export function JobDetailPage() {
             <button
               onClick={() => {
                 setEditingDetails(false)
+                setDetailsEdits({})
+                setForm(
+                  Object.fromEntries(
+                    DESCRIPTIVE_FIELDS.map(({ key }) => [key, (job[key] as string | null) ?? '']),
+                  ),
+                )
                 setError(null)
               }}
               className="btn-secondary text-sm"
@@ -332,10 +435,10 @@ export function JobDetailPage() {
             </button>
             <button
               onClick={saveDetails}
-              disabled={updateMutation.isPending}
-              className="btn-primary text-sm"
+              disabled={updateMutation.isPending || !hasDetailChanges}
+              className="btn-primary text-sm disabled:opacity-50"
             >
-              {updateMutation.isPending ? 'Saving…' : 'Save changes'}
+              {updateMutation.isPending ? 'Saving…' : hasDetailChanges ? 'Save changes' : 'No changes'}
             </button>
           </div>
         )}

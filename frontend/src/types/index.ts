@@ -119,6 +119,9 @@ export interface JobInput {
   install_date?: string | null
   salesperson_id?: number | null
   assigned_user_id?: number | null
+  // Phase 4c: path-restricted structured details patch (nested section → key →
+  // value). The backend whitelists allowed job.details.* paths and deep-merges.
+  details?: Record<string, unknown> | null
 }
 
 export interface JobListResponse {

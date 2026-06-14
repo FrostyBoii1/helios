@@ -15,6 +15,7 @@ import { ReviewStatusBadge, RowClassBadge } from '@/components/imports/ReviewSta
 import { SeverityChip } from '@/components/imports/IssueBadges'
 import { CommitReverseSection } from '@/components/imports/CommitReverseSection'
 import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
+import { buildDetailsPatch } from '@/lib/detailsPatch'
 import {
   PARSED_TEXT_FIELDS,
   type FieldSpec,
@@ -42,34 +43,6 @@ const STRUCTURED_OWNED_FLAT_KEYS = new Set<string>([
   'installer_raw',
   'msb_state',
 ])
-
-// Coerce a string UI value to its stored type at save time (req. 11).
-function coerceDetail(raw: string, inputType: string | undefined): unknown {
-  const trimmed = raw.trim()
-  if (trimmed === '') return null
-  if (inputType === 'number') {
-    const n = parseInt(trimmed, 10)
-    return Number.isFinite(n) ? n : null
-  }
-  return trimmed
-}
-
-// Read a nested "<section>.<key>" value out of parsed.details.
-function detailValueAt(details: ParsedDetails | null, path: string): unknown {
-  if (!details) return undefined
-  let cur: unknown = details
-  for (const p of path.split('.')) {
-    if (cur == null || typeof cur !== 'object') return undefined
-    cur = (cur as Record<string, unknown>)[p]
-  }
-  return cur
-}
-
-function sameDetail(a: unknown, b: unknown): boolean {
-  if (a == null && b == null) return true
-  if (a == null || b == null) return false
-  return String(a) === String(b)
-}
 
 interface ImportRowDrawerProps {
   batchId: number
@@ -205,19 +178,10 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     if (reviewNotes.trim() !== (row.review_notes ?? '').trim()) {
       edit.review_notes = reviewNotes.trim() || null
     }
-    // Structured details patch — only touched-and-changed leaves, coerced (req. 10/11).
+    // Structured details patch — only touched-and-changed leaves, coerced.
     if (details) {
-      const patch: Record<string, Record<string, unknown>> = {}
-      for (const [path, raw] of Object.entries(detailsEdits)) {
-        const coerced = coerceDetail(raw, fieldByPath.get(path)?.input_type)
-        if (sameDetail(coerced, detailValueAt(details, path))) continue
-        const dot = path.indexOf('.')
-        if (dot < 0) continue
-        const section = path.slice(0, dot)
-        const key = path.slice(dot + 1)
-        ;(patch[section] ??= {})[key] = coerced
-      }
-      if (Object.keys(patch).length > 0) edit.details = patch
+      const patch = buildDetailsPatch(detailsEdits, details, fieldByPath)
+      if (patch) edit.details = patch
     }
     return edit
   }
