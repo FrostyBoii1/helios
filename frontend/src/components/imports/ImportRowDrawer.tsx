@@ -191,6 +191,15 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   // clickable Approve button (re-clicking is harmless but confusing).
   const approved = row.review_status === 'approved'
 
+  // Name-cell notes are rendered as a dedicated prominent block (below) rather
+  // than as one easily-missed input in the parsed grid; compute its edited state.
+  const nameNotesOriginal = row.original_parsed
+    ? asString(row.original_parsed['customer_name_notes'])
+    : null
+  const nameNotesEdited =
+    nameNotesOriginal != null &&
+    nameNotesOriginal !== asString(row.parsed?.['customer_name_notes'])
+
   return (
     <div className="flex flex-1 flex-col gap-5 p-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -323,8 +332,41 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
           Parsed candidate
         </h3>
+
+        {/* Name-cell notes — extra text preserved from the Customer Name cell.
+            Surfaced prominently (and editable) right by the customer fields,
+            because as one input among many it was easy to miss and otherwise
+            only showed under Raw Cells. */}
+        <div className="mb-3 rounded-md border border-line bg-elevated p-3">
+          <label className="block text-sm">
+            <span className="mb-1 flex items-center gap-2 font-medium text-fg">
+              Name-cell notes
+              {nameNotesEdited && (
+                <span
+                  className="rounded bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-300"
+                  title={`Original: ${nameNotesOriginal || '(empty)'}`}
+                >
+                  Edited
+                </span>
+              )}
+            </span>
+            <textarea
+              value={text['customer_name_notes'] ?? ''}
+              onChange={(e) =>
+                setText((prev) => ({ ...prev, customer_name_notes: e.target.value }))
+              }
+              rows={2}
+              placeholder="Extra text preserved from the Customer Name cell"
+              className="input"
+            />
+            <span className="mt-1 block text-xs text-faint">
+              Preserved from the Customer Name cell (approval status removed).
+            </span>
+          </label>
+        </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {PARSED_TEXT_FIELDS.map(({ key, label }) => {
+          {PARSED_TEXT_FIELDS.filter((f) => f.key !== 'customer_name_notes').map(({ key, label }) => {
             const original = row.original_parsed
               ? asString(row.original_parsed[key])
               : null
