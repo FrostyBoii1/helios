@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,6 +18,9 @@ class JobBase(BaseModel):
     install_details: str | None = None
     approval_details: str | None = None
     notes: str | None = None
+    # Structured import attributes (Phase 1). Optional free-form JSON for now; a
+    # later phase will validate it against the field registry.
+    details: dict[str, Any] | None = None
     sale_date: date | None = None
     install_date: date | None = None
     salesperson_id: int | None = None
@@ -60,6 +64,7 @@ class JobRead(BaseModel):
     install_details: str | None = None
     approval_details: str | None = None
     notes: str | None = None
+    details: dict[str, Any] | None = None
     sale_date: date | None = None
     install_date: date | None = None
     salesperson_id: int | None = None

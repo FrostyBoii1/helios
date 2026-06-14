@@ -12,6 +12,7 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Date, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
@@ -57,6 +58,12 @@ class Job(IntPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     install_details: Mapped[str | None] = mapped_column(Text, nullable=True)
     approval_details: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Structured, grouped import attributes (Phase 1 scaffolding). Shape is driven
+    # by app.services.import_field_registry; nullable and not yet populated by the
+    # import pipeline. The legacy *_details text fields above remain authoritative
+    # until the structured commit mapping lands in a later phase.
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # NAS folder for this job's files (relative to NAS_ROOT). See nas service.
     nas_folder_path: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -41,7 +41,7 @@ def _by_ref(rows: list[dict], ref: str) -> dict:
 def test_edit_snapshots_original_and_merges(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
     assert row["parsed"]["customer_name"] == "Alex Roe"
 
     resp = admin.patch(
@@ -59,7 +59,7 @@ def test_edit_snapshots_original_and_merges(client_for, users):
 def test_edit_address_merges_and_snapshots(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
     assert row["parsed"]["address"] == "1 Test St"  # parsed from the workbook
 
     resp = admin.patch(
@@ -75,7 +75,7 @@ def test_edit_address_merges_and_snapshots(client_for, users):
 def test_edit_rejects_unknown_field(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
     resp = admin.patch(
         f"/api/v1/imports/{bid}/rows/{row['id']}", json={"evil_field": "x"}
     )
@@ -88,8 +88,8 @@ def test_edit_rejects_unknown_field(client_for, users):
 def test_approve_blocked_until_error_resolved(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    # SCS0003 has an ambiguous_name (error-severity) issue.
-    row = _by_ref(_rows(admin, bid), "SCS0003")
+    # TESTIMP0003 has an ambiguous_name (error-severity) issue.
+    row = _by_ref(_rows(admin, bid), "TESTIMP0003")
     err = next(i for i in row["issues"] if i["kind"] == "ambiguous_name")
     assert err["severity"] == "error"
 
@@ -118,7 +118,7 @@ def test_blank_and_divider_not_approvable(client_for, users):
 def test_reject_skip_reopen(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
 
     r = admin.post(f"/api/v1/imports/{bid}/rows/{row['id']}/reject", json={"notes": "dupe"})
     assert r.status_code == 200 and r.json()["review_status"] == "rejected"
@@ -132,15 +132,15 @@ def test_reject_skip_reopen(client_for, users):
 def test_bulk_approve_clean(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    # 4 job rows; SCS0003 carries an error -> not clean. Expect 3 approved of 4 examined.
+    # 4 job rows; TESTIMP0003 carries an error -> not clean. Expect 3 approved of 4 examined.
     resp = admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")
     assert resp.status_code == 200
     body = resp.json()
     assert body["eligible_examined"] == 4
     assert body["approved"] == 3
 
-    # SCS0003 stays pending (had an error issue).
-    row3 = _by_ref(_rows(admin, bid), "SCS0003")
+    # TESTIMP0003 stays pending (had an error issue).
+    row3 = _by_ref(_rows(admin, bid), "TESTIMP0003")
     assert row3["review_status"] == "pending"
 
 
@@ -149,8 +149,8 @@ def test_summary(client_for, users):
     bid = _ingest(admin)
     s = admin.get(f"/api/v1/imports/{bid}/summary").json()
     assert s["by_row_class"].get("job") == 4
-    assert s["unresolved_error_rows"] == 1  # SCS0003
-    # 4 pending job rows minus SCS0003 (unresolved error) == 3 clean-eligible.
+    assert s["unresolved_error_rows"] == 1  # TESTIMP0003
+    # 4 pending job rows minus TESTIMP0003 (unresolved error) == 3 clean-eligible.
     assert s["eligible_clean_count"] == 3
 
 
@@ -163,24 +163,24 @@ def test_filter_unresolved_only(client_for, users):
     items = admin.get(
         f"/api/v1/imports/{bid}/rows", params={"unresolved_only": "true", "limit": 200}
     ).json()["items"]
-    # Only SCS0003 carries an unresolved error issue.
-    assert [r["legacy_reference"] for r in items] == ["SCS0003"]
+    # Only TESTIMP0003 carries an unresolved error issue.
+    assert [r["legacy_reference"] for r in items] == ["TESTIMP0003"]
 
 
 def test_search_by_reference_and_name(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    by_ref = admin.get(f"/api/v1/imports/{bid}/rows", params={"q": "SCS0002"}).json()["items"]
-    assert [r["legacy_reference"] for r in by_ref] == ["SCS0002"]
+    by_ref = admin.get(f"/api/v1/imports/{bid}/rows", params={"q": "TESTIMP0002"}).json()["items"]
+    assert [r["legacy_reference"] for r in by_ref] == ["TESTIMP0002"]
     # Search also matches the parsed customer name.
     by_name = admin.get(f"/api/v1/imports/{bid}/rows", params={"q": "Alex Roe"}).json()["items"]
-    assert any(r["legacy_reference"] == "SCS0001" for r in by_name)
+    assert any(r["legacy_reference"] == "TESTIMP0001" for r in by_name)
 
 
 def test_read_exposes_audit_fields(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
     # Before any edit: original_parsed is null, review fields empty.
     assert row["original_parsed"] is None
     assert row["review_notes"] is None
@@ -202,12 +202,12 @@ def test_read_exposes_audit_fields(client_for, users):
 def test_issue_read_exposes_resolution_audit(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0003")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0003")
     err = next(i for i in row["issues"] if i["kind"] == "ambiguous_name")
     admin.patch(
         f"/api/v1/imports/{bid}/issues/{err['id']}", json={"resolution_note": "checked"}
     )
-    fetched = _by_ref(_rows(admin, bid), "SCS0003")
+    fetched = _by_ref(_rows(admin, bid), "TESTIMP0003")
     resolved = next(i for i in fetched["issues"] if i["id"] == err["id"])
     assert resolved["resolved"] is True
     assert resolved["resolution_note"] == "checked"
@@ -221,7 +221,7 @@ def test_issue_read_exposes_resolution_audit(client_for, users):
 def test_non_admin_forbidden(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
     support = client_for(users["support"])
     assert support.patch(f"/api/v1/imports/{bid}/rows/{row['id']}", json={"customer_name": "x"}).status_code == 403
     assert support.post(f"/api/v1/imports/{bid}/rows/{row['id']}/approve").status_code == 403
@@ -234,7 +234,7 @@ def test_review_actions_make_no_live_records(client_for, users, db_session: Sess
 
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
     admin.patch(f"/api/v1/imports/{bid}/rows/{row['id']}", json={"customer_name": "Edited"})
     admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")
 

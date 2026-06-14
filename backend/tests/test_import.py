@@ -35,23 +35,23 @@ def _synthetic_bytes() -> bytes:
     ws.append(HEADERS)  # row 1 = headers
 
     # row 2 — clean job (known brands -> confident hardware; no Day -> no mismatch)
-    ws.append(["SCS0001", "Jane Smith 10/10/2025", "Alex Roe", "1 Test St", "0400000000",
+    ws.append(["TESTIMP0001", "Jane Smith 10/10/2025", "Alex Roe", "1 Test St", "0400000000",
                "", "Yes", "alex@example.test", "Essential", "Origin", "42041234567",
                "M1", "10", "Longi 440", "Goodwe 5kw", "1", "1", "Tin", "", "", "", "Installer One"])
     # row 3 — divider
     ws.append(["FORTNIGHT 1ST-14TH JULY"] + [""] * 21)
     # row 4 — job under divider: multi phone (labelled), multi email, pending approval,
     #         unmatched NMI, uncertain hardware
-    ws.append(["SCS0002", "Sales Rep - 30/06/2025", "Pat Lee - PENDING 19/08/2026", "2 Test Rd",
+    ws.append(["TESTIMP0002", "Sales Rep - 30/06/2025", "Pat Lee - PENDING 19/08/2026", "2 Test Rd",
                "0411111111/0422222222 Chris", "", "Yes?", "a@x.test/b@x.test", "Powercor", "AGL",
                "99999999999", "M2", "5", "Brand 415", "mystery unit", "1", "1", "Tile",
                "", "", "", "Installer Two"])
     # row 5 — clean ref but non-name customer cell -> ambiguous_name + approved
-    ws.append(["SCS0003", "Jane Smith", "ESSENTIAL APPROVED", "3 Test Ave", "0433333333",
+    ws.append(["TESTIMP0003", "Jane Smith", "ESSENTIAL APPROVED", "3 Test Ave", "0433333333",
                "", "", "c@x.test", "Essential", "Red Energy", "40011234567", "M3", "8",
                "Brand 415", "Inverter 5kw", "1", "1", "Tin", "", "", "", "Installer One"])
     # row 6 — date/day mismatch (2026-01-01 is Thursday, not Monday)
-    ws.append(["SCS0004", "Jane Smith", "Dana Fox", "4 Test Cl", "0444444444", "", "Yes",
+    ws.append(["TESTIMP0004", "Jane Smith", "Dana Fox", "4 Test Cl", "0444444444", "", "Yes",
                "d@x.test", "Essential", "Origin", "42049999999", "M4", "10", "Brand 440",
                "Inverter 5kw", "1", "1", "Tin", "01/01/2026", "Monday", "08:00", "Installer One"])
     # row 7 — blank
@@ -79,7 +79,7 @@ def test_parser_classifies_and_parses():
     assert len(by_class["divider"]) == 1
     assert len(by_class["blank"]) == 1
 
-    clean = next(r for r in rows if r.legacy_reference == "SCS0001")
+    clean = next(r for r in rows if r.legacy_reference == "TESTIMP0001")
     assert clean.parsed["customer_name"] == "Alex Roe"
     assert clean.parsed["address"] == "1 Test St"  # address now in parsed candidate
     assert clean.parsed["salesperson"] == "Jane Smith"
@@ -92,7 +92,7 @@ def test_parser_classifies_and_parses():
 def test_parser_flags_issues():
     rows = list(import_parser.parse_rows(_ws_from_bytes(_synthetic_bytes())))
 
-    r2 = next(r for r in rows if r.legacy_reference == "SCS0002")
+    r2 = next(r for r in rows if r.legacy_reference == "TESTIMP0002")
     kinds2 = {i["kind"] for i in r2.issues}
     assert {"multi_phone", "multi_email", "nmi_unmatched"} <= kinds2
     assert r2.parsed["customer_name"] == "Pat Lee"
@@ -102,11 +102,11 @@ def test_parser_flags_issues():
     # phone label kept only because it was explicit
     assert any(p["label"] == "Chris" for p in r2.parsed["phones"])
 
-    r3 = next(r for r in rows if r.legacy_reference == "SCS0003")
+    r3 = next(r for r in rows if r.legacy_reference == "TESTIMP0003")
     assert any(i["kind"] == "ambiguous_name" for i in r3.issues)
     assert r3.parsed["approval_state"] == "approved"
 
-    r4 = next(r for r in rows if r.legacy_reference == "SCS0004")
+    r4 = next(r for r in rows if r.legacy_reference == "TESTIMP0004")
     assert any(i["kind"] == "date_day_mismatch" for i in r4.issues)
 
 
@@ -197,7 +197,7 @@ def _one_job_row_bytes(*, name_cell: str, notes_cell: str = "") -> bytes:
     ws = wb.active
     ws.title = "COMPLETED"
     ws.append(HEADERS)
-    ws.append(["SCS0009", "Rep 10/10/2025", name_cell, "9 Test St", "0400000000",
+    ws.append(["TESTIMP0009", "Rep 10/10/2025", name_cell, "9 Test St", "0400000000",
                notes_cell, "Yes", "x@example.test", "Essential", "Origin", "42041234567",
                "M9", "10", "Longi 440", "Goodwe 5kw", "1", "1", "Tin", "", "", "", "Installer One"])
     buf = BytesIO()
@@ -209,7 +209,7 @@ def test_parse_rows_preserves_name_cell_notes():
     rows = list(import_parser.parse_rows(_ws_from_bytes(
         _one_job_row_bytes(name_cell="Pat Lee - includes hot water timer")
     )))
-    row = next(r for r in rows if r.legacy_reference == "SCS0009")
+    row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
     assert row.parsed["customer_name"] == "Pat Lee"
     assert row.parsed["customer_name_notes"] == "includes hot water timer"
     assert row.parsed["removes_old_system"] is False
@@ -221,7 +221,7 @@ def test_parse_rows_flags_decommission_from_name_or_notes():
     rows = list(import_parser.parse_rows(_ws_from_bytes(
         _one_job_row_bytes(name_cell="Sam Roe DECOM")
     )))
-    row = next(r for r in rows if r.legacy_reference == "SCS0009")
+    row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
     assert row.parsed["removes_old_system"] is True
     assert row.parsed["decommission_marker"].upper() == "DECOM"
 
@@ -229,7 +229,7 @@ def test_parse_rows_flags_decommission_from_name_or_notes():
     rows2 = list(import_parser.parse_rows(_ws_from_bytes(
         _one_job_row_bytes(name_cell="Dana Fox", notes_cell="REMOVE OLD SYSTEM before install")
     )))
-    row2 = next(r for r in rows2 if r.legacy_reference == "SCS0009")
+    row2 = next(r for r in rows2 if r.legacy_reference == "TESTIMP0009")
     assert row2.parsed["removes_old_system"] is True
     assert "remove old system" in row2.parsed["decommission_marker"].lower()
 

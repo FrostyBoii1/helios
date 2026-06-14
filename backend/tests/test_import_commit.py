@@ -90,7 +90,7 @@ def test_commit_creates_customer_and_job(client_for, users, db_session: Session)
 
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")  # approves SCS0001/0002/0004
+    admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")  # approves TESTIMP0001/0002/0004
     res = _commit(admin, bid)
 
     assert res["committed"] == 3 and res["attempted"] == 3 and res["failed"] == 0
@@ -126,9 +126,9 @@ def test_address_and_case_year_mapping(client_for, users, db_session: Session):
     _commit(admin, bid)
 
     rows = {r.legacy_reference: r for r in db_session.scalars(select(ImportRow).where(ImportRow.batch_id == bid)).all()}
-    j1 = db_session.get(Job, rows["SCS0001"].committed_job_id)
-    j4 = db_session.get(Job, rows["SCS0004"].committed_job_id)
-    cust1 = db_session.get(Customer, rows["SCS0001"].committed_customer_id)
+    j1 = db_session.get(Job, rows["TESTIMP0001"].committed_job_id)
+    j4 = db_session.get(Job, rows["TESTIMP0004"].committed_job_id)
+    cust1 = db_session.get(Customer, rows["TESTIMP0001"].committed_customer_id)
     assert cust1.address_line1 == "1 Test St"            # parsed address mapped
     assert j1.case_number.startswith("SCS-2025-")        # sale_date 10/10/2025
     assert j4.case_number.startswith("SCS-2026-")        # install_date 01/01/2026
@@ -140,13 +140,13 @@ def test_address_and_case_year_mapping(client_for, users, db_session: Session):
 def test_only_approved_eligible(client_for, users, db_session: Session):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    # Approve only SCS0001.
-    row1 = _by_ref(_rows(admin, bid), "SCS0001")
+    # Approve only TESTIMP0001.
+    row1 = _by_ref(_rows(admin, bid), "TESTIMP0001")
     admin.post(f"/api/v1/imports/{bid}/rows/{row1['id']}/approve")
     res = _commit(admin, bid)
     assert res["committed"] == 1
-    # The committed one is SCS0001; pending/error rows were not created.
-    assert res["results"][0]["legacy_reference"] == "SCS0001"
+    # The committed one is TESTIMP0001; pending/error rows were not created.
+    assert res["results"][0]["legacy_reference"] == "TESTIMP0001"
 
 
 def test_subset_row_ids(client_for, users, db_session: Session):
@@ -154,16 +154,16 @@ def test_subset_row_ids(client_for, users, db_session: Session):
     bid = _ingest(admin)
     admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")
     rows = _rows(admin, bid)
-    only = _by_ref(rows, "SCS0002")["id"]
-    # SCS0003 carries an unresolved error, so bulk-approve left it pending ->
+    only = _by_ref(rows, "TESTIMP0002")["id"]
+    # TESTIMP0003 carries an unresolved error, so bulk-approve left it pending ->
     # it is ineligible (caught as not_approved before the error check).
-    err = _by_ref(rows, "SCS0003")["id"]
+    err = _by_ref(rows, "TESTIMP0003")["id"]
     res = _commit(admin, bid, row_ids=[only, err])
     assert res["committed"] == 1
     statuses = {r["row_id"]: r for r in res["results"]}
     assert statuses[only]["status"] == "committed"
     assert statuses[err]["status"] == "skipped" and statuses[err]["reason"] == "not_approved"
-    assert res["remaining_eligible"] == 2  # SCS0001 + SCS0004 still eligible
+    assert res["remaining_eligible"] == 2  # TESTIMP0001 + TESTIMP0004 still eligible
 
 
 # --------------------------------------------------------------------------- #
@@ -189,7 +189,7 @@ def test_per_call_cap_25(users, db_session: Session):
 def test_invalid_case_year_not_committed(client_for, users, db_session: Session):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
     # Malformed sale date -> derived case-year 2002 -> must be blocked.
     admin.patch(f"/api/v1/imports/{bid}/rows/{row['id']}", json={"sale_date": "01/06/2002"})
     admin.post(f"/api/v1/imports/{bid}/rows/{row['id']}/approve")
@@ -226,7 +226,7 @@ def test_duplicate_legacy_reference_skipped(client_for, users, db_session: Sessi
     admin = client_for(users["admin"])
     bid1 = _ingest(admin)
     admin.post(f"/api/v1/imports/{bid1}/bulk-approve-clean")
-    _commit(admin, bid1)  # creates jobs with legacy_reference SCS0001/0002/0004
+    _commit(admin, bid1)  # creates jobs with legacy_reference TESTIMP0001/0002/0004
 
     # Re-ingest the same workbook; same legacy refs now exist live.
     bid2 = admin.post(

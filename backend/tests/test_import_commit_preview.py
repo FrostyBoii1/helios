@@ -48,7 +48,7 @@ def _preview(client, bid: int) -> dict:
 def test_eligibility_and_excluded_counts(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    # Approve the 3 clean job rows; SCS0003 (error) stays pending.
+    # Approve the 3 clean job rows; TESTIMP0003 (error) stays pending.
     admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")
 
     p = _preview(admin, bid)
@@ -57,7 +57,7 @@ def test_eligibility_and_excluded_counts(client_for, users):
     assert p["would_create"] == {"customers": 3, "jobs": 3}
     ex = p["excluded"]
     assert ex["blank_or_divider"] == 2          # 1 divider + 1 blank
-    assert ex["not_approved"] == 1              # SCS0003 still pending
+    assert ex["not_approved"] == 1              # TESTIMP0003 still pending
     assert ex["already_committed"] == 0
     assert ex["missing_customer_name"] == 0
     # Buckets + eligible sum to the total row count (disjoint partition).
@@ -82,10 +82,10 @@ def test_case_number_chronological_and_year(client_for, users, db_session: Sessi
     admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")
     p = _preview(admin, bid)
 
-    # Chronological order: SCS0002 (sale 30/06/2025) < SCS0001 (sale 10/10/2025)
-    # < SCS0004 (no sale; install 01/01/2026).
+    # Chronological order: TESTIMP0002 (sale 30/06/2025) < TESTIMP0001 (sale 10/10/2025)
+    # < TESTIMP0004 (no sale; install 01/01/2026).
     order = [s["legacy_reference"] for s in p["samples"]]
-    assert order == ["SCS0002", "SCS0001", "SCS0004"]
+    assert order == ["TESTIMP0002", "TESTIMP0001", "TESTIMP0004"]
 
     # Predicted numbers continue from the CURRENT live count per year (prediction,
     # not reservation) — compute the expected base so the test is DB-state robust.
@@ -96,9 +96,9 @@ def test_case_number_chronological_and_year(client_for, users, db_session: Sessi
 
     b2025, b2026 = base(2025), base(2026)
     predicted = {s["legacy_reference"]: s["predicted_case_number"] for s in p["samples"]}
-    assert predicted["SCS0002"] == f"SCS-2025-{b2025 + 1:05d}"   # earliest 2025 sale
-    assert predicted["SCS0001"] == f"SCS-2025-{b2025 + 2:05d}"   # next 2025 sale
-    assert predicted["SCS0004"] == f"SCS-2026-{b2026 + 1:05d}"   # year from install_date
+    assert predicted["TESTIMP0002"] == f"SCS-2025-{b2025 + 1:05d}"   # earliest 2025 sale
+    assert predicted["TESTIMP0001"] == f"SCS-2025-{b2025 + 2:05d}"   # next 2025 sale
+    assert predicted["TESTIMP0004"] == f"SCS-2026-{b2026 + 1:05d}"   # year from install_date
     assert p["predicted_case_numbers_by_year"] == {"2025": 2, "2026": 1}
 
 
@@ -111,12 +111,12 @@ def test_mapping_and_legacy_reference(client_for, users):
     admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")
     p = _preview(admin, bid)
 
-    s1 = next(s for s in p["samples"] if s["legacy_reference"] == "SCS0001")
+    s1 = next(s for s in p["samples"] if s["legacy_reference"] == "TESTIMP0001")
     # Customer mapping (synthetic data).
     assert s1["customer"]["full_name"] == "Alex Roe"
     assert s1["customer"]["address_line1"] == "1 Test St"
     # Job preview: legacy_reference carried through, status installed, case number.
-    assert s1["job"]["legacy_reference"] == "SCS0001"
+    assert s1["job"]["legacy_reference"] == "TESTIMP0001"
     assert s1["job"]["status"] == "installed"
     assert s1["job"]["predicted_case_number"].startswith("SCS-2025-")  # 2025 sale year
     assert s1["job"]["predicted_case_number"] == s1["predicted_case_number"]
@@ -139,17 +139,17 @@ def test_address_prefers_parsed_then_raw():
 def test_invalid_case_year_excluded(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
     # Malformed sale date -> derived case-year 2002 (outside the sane range).
     admin.patch(f"/api/v1/imports/{bid}/rows/{row['id']}", json={"sale_date": "01/06/2002"})
     admin.post(f"/api/v1/imports/{bid}/rows/{row['id']}/approve")
-    admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")  # approve the rest (SCS0002/0004)
+    admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")  # approve the rest (TESTIMP0002/0004)
 
     p = _preview(admin, bid)
     assert p["excluded"]["invalid_case_year"] == 1
     refs = [s["legacy_reference"] for s in p["samples"]]
-    assert "SCS0001" not in refs  # not previewed / no predicted case number
-    assert p["eligible_count"] == 2  # SCS0002 + SCS0004 still eligible
+    assert "TESTIMP0001" not in refs  # not previewed / no predicted case number
+    assert p["eligible_count"] == 2  # TESTIMP0002 + TESTIMP0004 still eligible
 
 
 def test_classify_row_invalid_case_year_unit():
@@ -172,7 +172,7 @@ def test_classify_row_invalid_case_year_unit():
 def test_missing_customer_name_excluded(client_for, users):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
-    row = _by_ref(_rows(admin, bid), "SCS0001")
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
     # Blank out the customer name, then approve -> must be excluded from commit.
     admin.patch(f"/api/v1/imports/{bid}/rows/{row['id']}", json={"customer_name": ""})
     admin.post(f"/api/v1/imports/{bid}/rows/{row['id']}/approve")
@@ -180,7 +180,7 @@ def test_missing_customer_name_excluded(client_for, users):
 
     p = _preview(admin, bid)
     refs = [s["legacy_reference"] for s in p["samples"]]
-    assert "SCS0001" not in refs
+    assert "TESTIMP0001" not in refs
     assert p["excluded"]["missing_customer_name"] == 1
 
 
