@@ -131,6 +131,46 @@ def test_clean_name_cell_notes_strips_approval_keeps_meaning():
     assert import_parser.clean_name_cell_notes("") == ""
 
 
+def test_clean_name_cell_notes_strips_network_approval_residue():
+    cn = import_parser.clean_name_cell_notes
+
+    # The three documented examples: approval phrase (incl. network label) gone,
+    # meaningful notes before/after preserved, no bare network residue.
+    r1 = cn("includes hot water timer - ESSENTIAL APPROVED - Report Ref # - 96004-Y")
+    assert "ESSENTIAL" not in r1.upper()
+    assert "includes hot water timer" in r1 and "Report Ref" in r1 and "96004-Y" in r1
+
+    r2 = cn("undersold Brighte fees, check after install - ESSENTIAL APPROVED")
+    assert "ESSENTIAL" not in r2.upper()
+    assert r2 == "undersold Brighte fees, check after install"
+
+    r3 = cn("ESSENTIAL APPROVED - prescreened wk24/2 - REMOVE OLD SYSTEM")
+    assert "ESSENTIAL" not in r3.upper()
+    assert "prescreened wk24/2" in r3 and "REMOVE OLD SYSTEM" in r3
+
+    # Other network labels are stripped as part of an APPROVED phrase.
+    for net in ("ENERGEX", "ERGON", "ENDEAVOUR", "AUSGRID", "AUSNET",
+                "POWERCOR", "UNITED", "JEMENA", "SAPN"):
+        out = cn(f"keep this - {net} APPROVED")
+        assert net not in out.upper(), net
+        assert out == "keep this"
+
+    # PENDING-with-date phrases (incl. a network label) are removed; note kept.
+    assert cn("JEMENA PENDING 19/08/2026 - call customer") == "call customer"
+    assert cn("ERGON PENDING 01/02/2025") == ""
+
+    # Case-insensitive.
+    assert "ESSENTIAL" not in cn("note - essential approved").upper()
+
+    # Decommission content is preserved.
+    assert "REMOVE OLD SYSTEM" in cn("ENDEAVOUR APPROVED - REMOVE OLD SYSTEM")
+
+    # A network word that is NOT part of an approval status is meaningful content
+    # and must be kept.
+    assert cn("ESSENTIAL repairs needed") == "ESSENTIAL repairs needed"
+    assert cn("needs ENERGEX meter upgrade") == "needs ENERGEX meter upgrade"
+
+
 def test_detect_decommission_variants():
     for text in (
         "REMOVE OLD SYSTEM",

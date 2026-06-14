@@ -46,10 +46,21 @@ DATE_RE = re.compile(r"([0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})")
 # raw cells. `decom\w*` covers DECOM, decommission, and the decommision /
 # decomission misspellings; plus the explicit "remove old system" phrase.
 DECOMMISSION_RE = re.compile(r"\b(?:remove\s+old\s+system|decom\w*)\b", re.IGNORECASE)
-# Pure approval tokens stripped from name-cell trailing text so the preserved
-# note is "meaningful non-name text", not just the approval status.
+# Network/distributor labels that commonly precede an approval-status word in the
+# name cell (e.g. "ESSENTIAL APPROVED", "ENERGEX PENDING 19/08/2026"). They are
+# removed ONLY as part of an approval phrase — a standalone label elsewhere in
+# the note stays as meaningful content.
+_NETWORK_LABELS = (
+    "ESSENTIAL", "ENERGEX", "ERGON", "ENDEAVOUR", "AUSGRID", "AUSNET",
+    "POWERCOR", "UNITED", "JEMENA", "SAPN",
+)
+# Approval-status phrases stripped from name-cell trailing text so the preserved
+# note is "meaningful non-name text". An optional immediately-preceding network
+# label is consumed as part of the phrase (so no bare "ESSENTIAL" residue).
 _APPROVAL_TOKEN_RE = re.compile(
-    r"\bAPPROVED\b|\bPENDING\b\s*(?:[0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})?", re.IGNORECASE
+    r"\b(?:(?:" + "|".join(_NETWORK_LABELS) + r")\s+)?"
+    r"(?:APPROVED|PENDING\b\s*(?:[0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})?)\b",
+    re.IGNORECASE,
 )
 NAME_STOP_MARKERS = [" - ", " DOB", " PENDING", " APPROVED", " Approved", " LOT", " Lot",
                      " lot", " #", " REF", " Ref", " DP ", " dp "]
@@ -179,8 +190,11 @@ def clean_name_cell_notes(extracted: str) -> str:
     if not extracted:
         return ""
     cleaned = _APPROVAL_TOKEN_RE.sub(" ", extracted)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -,;|")
-    return cleaned
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    # Collapse separators orphaned where an approval phrase was removed from the
+    # middle of the note ("timer - ESSENTIAL APPROVED - ref" -> "timer - ref").
+    cleaned = re.sub(r"(?:\s*[-,;|]\s*){2,}", " - ", cleaned)
+    return cleaned.strip(" -,;|")
 
 
 def detect_decommission(*texts: str) -> str | None:
