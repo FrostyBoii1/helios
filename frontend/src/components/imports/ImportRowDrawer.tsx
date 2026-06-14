@@ -27,7 +27,9 @@ import {
 
 // Flat parsed-grid keys that are now owned by the structured details editor.
 // Hidden from the flat grid when parsed.details is present (no duplicate editing).
+// salesperson maps to the structured Sales Consultant (job.details.sales.salesperson_text).
 const STRUCTURED_OWNED_FLAT_KEYS = new Set<string>([
+  'salesperson',
   'no_of_panels',
   'panel_raw',
   'inverter_raw',
