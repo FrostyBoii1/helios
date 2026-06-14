@@ -187,6 +187,9 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const committed = row.review_status === 'committed'
   const reversed = row.review_status === 'reversed'
   const locked = committed || reversed
+  // An already-approved row shows a neutral "Approved" state instead of a
+  // clickable Approve button (re-clicking is harmless but confusing).
+  const approved = row.review_status === 'approved'
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-5">
@@ -213,15 +216,21 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
         <CommitReverseSection batchId={batchId} row={row} />
       ) : (
         <>
-          <section className="flex flex-wrap gap-2">
-            <button
-              onClick={() => handleAction('approve')}
-              disabled={busy || approveDisabledReason != null}
-              title={approveDisabledReason ?? undefined}
-              className="btn-primary disabled:opacity-50"
-            >
-              Approve
-            </button>
+          <section className="flex flex-wrap items-center gap-2">
+            {approved ? (
+              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-300">
+                ✓ Approved
+              </span>
+            ) : (
+              <button
+                onClick={() => handleAction('approve')}
+                disabled={busy || approveDisabledReason != null}
+                title={approveDisabledReason ?? undefined}
+                className="btn-primary disabled:opacity-50"
+              >
+                Approve
+              </button>
+            )}
             <button
               onClick={() => handleAction('reject')}
               disabled={busy}
@@ -236,7 +245,7 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
               Reopen
             </button>
           </section>
-          {approveDisabledReason && (
+          {!approved && approveDisabledReason && (
             <p className="-mt-3 text-xs text-amber-300">{approveDisabledReason}</p>
           )}
         </>
