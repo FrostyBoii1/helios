@@ -32,6 +32,7 @@ from pathlib import Path
 # Make the backend root importable regardless of the current working directory.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import app.db.base  # noqa: E402, F401  (registers ALL ORM models so mappers resolve)
 from app.db.session import SessionLocal  # noqa: E402
 from app.models.activity import Activity  # noqa: E402
 from app.models.customer import Customer  # noqa: E402
