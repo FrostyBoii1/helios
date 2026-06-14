@@ -118,11 +118,41 @@ class ImportRowEdit(BaseModel):
     emails: list[str] | None = None
     phones: list[PhoneEntry] | None = None
 
+    # Phase 3a: partial, path-restricted patch into parsed["details"]. Only the
+    # registry's editable job.details.* leaf paths are accepted (validated in the
+    # review service); arbitrary keys/sections are rejected.
+    details: dict[str, Any] | None = None
+
     review_notes: str | None = None
 
 
-# Fields above that are merged into `parsed` (everything except review_notes).
-PARSED_EDIT_FIELDS = frozenset(ImportRowEdit.model_fields) - {"review_notes"}
+# Flat scalar fields merged directly into `parsed` (excludes review_notes and the
+# structured details patch, which are handled specially in the review service).
+PARSED_EDIT_FIELDS = frozenset(ImportRowEdit.model_fields) - {"review_notes", "details"}
+
+
+# --------------------------------------------------------------------------- #
+# Phase 3a — read-only field registry (drives the structured review UI)
+# --------------------------------------------------------------------------- #
+class FieldSpecRead(BaseModel):
+    key: str
+    label: str
+    section: str
+    entity: str
+    storage: str
+    input_type: str
+    visible_when_blank: bool
+    category: str
+    editable: bool
+    source_columns: list[str]
+    captured: str
+    validation: dict[str, Any]
+
+
+class FieldRegistryRead(BaseModel):
+    sections: list[dict[str, str]]
+    fields: list[FieldSpecRead]
+    editable_details_paths: list[str]
 
 
 class ReviewActionRequest(BaseModel):

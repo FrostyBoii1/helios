@@ -296,6 +296,53 @@ def legacy_fields() -> tuple[FieldSpec, ...]:
     return tuple(f for f in FIELDS if f.category == CATEGORY_LEGACY)
 
 
+# Details paths (``<section>.<key>``) that are parser-derived / read-only and must
+# never be writable via a reviewer details patch, even if the registry marks the
+# field editable. Structured editing of these is out of scope for Phase 3a.
+_READONLY_DETAILS_PREFIXES: tuple[str, ...] = ("flags.", "provenance", "notes.misfiled")
+
+_DETAILS_PREFIX = "job.details."
+
+
+def allowed_details_paths() -> frozenset[str]:
+    """Registry-derived whitelist of writable ``details`` leaf paths.
+
+    A path ``"<section>.<key>"`` is writable iff its field is ``editable`` and
+    stored under ``job.details.*`` and not a read-only/derived path (flags,
+    provenance, misfiled). This is the ONLY set a reviewer details patch may set.
+    """
+    out: set[str] = set()
+    for f in FIELDS:
+        if not f.editable or not f.storage.startswith(_DETAILS_PREFIX):
+            continue
+        path = f.storage[len(_DETAILS_PREFIX):]
+        if any(path == p or path.startswith(p) for p in _READONLY_DETAILS_PREFIXES):
+            continue
+        out.add(path)
+    return frozenset(out)
+
+
+def as_dicts() -> list[dict[str, Any]]:
+    """Serialise the registry for the read-only field-registry endpoint (no PII)."""
+    return [
+        {
+            "key": f.key,
+            "label": f.label,
+            "section": f.section,
+            "entity": f.entity,
+            "storage": f.storage,
+            "input_type": f.input_type,
+            "visible_when_blank": f.visible_when_blank,
+            "category": f.category,
+            "editable": f.editable,
+            "source_columns": list(f.source_columns),
+            "captured": f.captured,
+            "validation": dict(f.validation),
+        }
+        for f in FIELDS
+    ]
+
+
 def _assert_integrity() -> None:
     keys = [f.key for f in FIELDS]
     dupes = {k for k in keys if keys.count(k) > 1}

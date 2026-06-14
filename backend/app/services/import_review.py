@@ -8,7 +8,9 @@ import_* staging tables are touched. Committing to live tables is Phase C.
 
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
@@ -16,6 +18,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.enums import ImportBatchStatus, ImportRowClass, ImportRowReviewStatus
 from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.schemas.import_staging import PARSED_EDIT_FIELDS
+from app.services.import_field_registry import allowed_details_paths
 
 APPROVABLE_CLASSES = (ImportRowClass.JOB.value, ImportRowClass.AMBIGUOUS.value)
 
@@ -57,19 +60,67 @@ def has_unresolved_error(row: ImportRow) -> bool:
     return any(i.severity == "error" and not i.resolved for i in row.issues)
 
 
-def edit_row(db: Session, batch: ImportBatch, row: ImportRow, edits: dict, *, actor_id: int) -> ImportRow:
-    """Apply whitelisted parsed-field edits + optional review note (last-write-wins).
+def _flatten_leaves(patch: dict, prefix: str = "") -> dict[str, Any]:
+    """Flatten a nested patch to ``{"<section>.<key>...": value}`` leaf paths."""
+    out: dict[str, Any] = {}
+    for k, v in (patch or {}).items():
+        path = f"{prefix}{k}"
+        if isinstance(v, dict):
+            out.update(_flatten_leaves(v, path + "."))
+        else:
+            out[path] = v
+    return out
 
-    Snapshots the parser's output into `original_parsed` on the first edit so the
-    suggestion is preserved alongside the edited `parsed`.
+
+def apply_details_patch(parsed: dict, patch: dict) -> dict:
+    """Return a NEW parsed dict with the details patch deep-merged, path-restricted.
+
+    Only the registry's editable ``job.details.<section>.<key>`` leaf paths may be
+    written; any other path (unknown section/key, or a derived/read-only path such
+    as flags/provenance/notes.misfiled) raises ValueError (-> HTTP 422). Never
+    mutates the input in place.
+    """
+    leaves = _flatten_leaves(patch)
+    allowed = allowed_details_paths()
+    disallowed = sorted(p for p in leaves if p not in allowed)
+    if disallowed:
+        raise ValueError(f"Disallowed details path(s): {disallowed}")
+
+    parsed = copy.deepcopy(parsed or {})
+    details = parsed.get("details")
+    details = copy.deepcopy(details) if isinstance(details, dict) else {}
+    details.setdefault("_v", 2)
+    for path, value in leaves.items():
+        section, key = path.split(".", 1)
+        sect = details.get(section)
+        sect = dict(sect) if isinstance(sect, dict) else {}
+        sect[key] = value
+        details[section] = sect
+    parsed["details"] = details
+    return parsed
+
+
+def edit_row(db: Session, batch: ImportBatch, row: ImportRow, edits: dict, *, actor_id: int) -> ImportRow:
+    """Apply whitelisted flat edits and/or a structured details patch + optional
+    review note (last-write-wins).
+
+    Deep-snapshots the parser's output into `original_parsed` on the first edit so
+    nested details edits cannot mutate the preserved suggestion.
     """
     review_notes = edits.pop("review_notes", None)
+    details_patch = edits.pop("details", None)
     field_edits = {k: v for k, v in edits.items() if k in PARSED_EDIT_FIELDS}
 
-    if field_edits:
+    if field_edits or details_patch:
         if row.original_parsed is None:
-            row.original_parsed = dict(row.parsed or {})
-        merged = dict(row.parsed or {})
+            # Deep copy so subsequent nested details edits never touch the snapshot.
+            row.original_parsed = copy.deepcopy(row.parsed or {})
+        # Work on a deep copy (validate the details patch BEFORE assigning).
+        merged = (
+            apply_details_patch(row.parsed or {}, details_patch)
+            if details_patch
+            else copy.deepcopy(row.parsed or {})
+        )
         merged.update(field_edits)
         row.parsed = merged
 

@@ -22,6 +22,7 @@ from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.models.user import User
 from app.schemas.import_staging import (
     BulkApproveResult,
+    FieldRegistryRead,
     ImportBatchList,
     ImportBatchRead,
     ImportBatchSummary,
@@ -40,6 +41,7 @@ from app.schemas.import_staging import (
 from app.services import (
     import_commit,
     import_commit_preview,
+    import_field_registry,
     import_ingest,
     import_review,
     import_reverse,
@@ -59,6 +61,20 @@ def _get_batch(db: Session, batch_id: int) -> ImportBatch:
     if batch is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import batch not found")
     return batch
+
+
+@router.get("/field-registry", response_model=FieldRegistryRead)
+def get_field_registry(_: User = Depends(require_admin)) -> FieldRegistryRead:
+    """Read-only structured-field registry that drives the review UI (admin only).
+
+    Pure metadata (field labels/sections/input types/visibility); no PII, no DB.
+    Declared before the dynamic /{batch_id} routes so it is matched as a static path.
+    """
+    return FieldRegistryRead(
+        sections=[{"key": k, "label": label} for k, label in import_field_registry.SECTIONS],
+        fields=import_field_registry.as_dicts(),
+        editable_details_paths=sorted(import_field_registry.allowed_details_paths()),
+    )
 
 
 @router.post("", response_model=ImportBatchRead, status_code=status.HTTP_201_CREATED)
@@ -302,7 +318,11 @@ def edit_import_row(
     batch = _get_batch(db, batch_id)
     row = _row_or_404(db, batch_id, row_id)
     edits = payload.model_dump(exclude_unset=True)
-    import_review.edit_row(db, batch, row, edits, actor_id=admin.id)
+    try:
+        import_review.edit_row(db, batch, row, edits, actor_id=admin.id)
+    except ValueError as exc:  # disallowed details path
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     db.commit()
     db.refresh(row)
     return ImportRowRead.model_validate(row)
