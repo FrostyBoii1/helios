@@ -177,6 +177,8 @@ class CommitJobPreview(BaseModel):
     # Additive flags (default-safe): old-system removal + preserved name-cell text.
     removes_old_system: bool = False
     customer_name_notes: str | None = None
+    # Phase 2a: registry-shaped structured details (read-only in commit-preview).
+    details: dict[str, Any] | None = None
 
 
 class CommitRowPreview(BaseModel):

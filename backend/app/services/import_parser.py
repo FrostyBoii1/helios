@@ -101,6 +101,13 @@ WANTED_HEADERS = {
     "result of payment": "result_of_payment",
     "notes on payment": "notes_on_payment",
     "accreditation code": "accreditation_code",
+    # Phase 2a: columns confirmed present in the real workbook header row but not
+    # previously captured. Header strings match import_field_registry source_columns.
+    "stc amount": "stc_amount",
+    "solar vic payment": "solar_vic",
+    "date of post installation call/review request": "post_install_review",
+    "ces/ecoc/ccew to retailer email - all other distributors": "ces_ecoc_email",
+    "ces submission to distributor ausnet/powercor/united/jemena": "ces_submission",
 }
 
 
@@ -320,10 +327,24 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
 
     Raises ValueError if the COMPLETED-style header cannot be located.
     """
+    # Deferred import avoids a parser<->details import cycle.
+    from app.services.import_details import build_details
+
     header_row = find_header_row(ws)
     if header_row is None:
         raise ValueError("Could not locate a header row (expected 'Customer Name' + 'NMI').")
     cm = build_colmap(ws, header_row)
+
+    # Columns NOT mapped to a canonical key: preserved verbatim in raw['_unmapped']
+    # so no workbook column is ever silently dropped (Phase 2a full-capture).
+    mapped_cols = set(cm.values())
+    unmapped_cols: dict[str, int] = {}
+    for c in range(1, ws.max_column + 1):
+        if c in mapped_cols:
+            continue
+        header = norm_cell(ws.cell(header_row, c).value)
+        if header:
+            unmapped_cols[header] = c
 
     def get(row: int, key: str) -> str:
         c = cm.get(key)
@@ -332,6 +353,10 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
     current_context = ""
     for r in range(header_row + 1, ws.max_row + 1):
         raw = {key: get(r, key) for key in cm}
+        extra = {h: norm_cell(ws.cell(r, c).value) for h, c in unmapped_cols.items()}
+        extra = {h: v for h, v in extra.items() if v}
+        if extra:
+            raw["_unmapped"] = extra
         nonempty = sum(1 for c in range(1, min(ws.max_column, 40) + 1) if norm_cell(ws.cell(r, c).value))
         ref = raw.get("ref", "")
         name_info = parse_customer_name(get(r, "customer_name"))
@@ -434,5 +459,9 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
             if d_parsed.strftime("%A").lower() != parsed["install_day"].strip().lower():
                 add("date_day_mismatch", "warning", "install_date",
                     f"{parsed['install_date']} is {d_parsed.strftime('%A')}, day says {parsed['install_day']!r}")
+
+        # Phase 2a: registry-shaped structured candidate alongside the flat keys
+        # (the flat keys stay for back-compat; commit-to-live is unchanged).
+        parsed["details"] = build_details(parsed, raw)
 
         yield ParsedRow(r, klass, ref, raw, parsed, current_context or None, issues)

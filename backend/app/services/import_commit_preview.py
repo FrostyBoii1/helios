@@ -91,8 +91,19 @@ def map_customer_preview(parsed: dict, raw: dict) -> dict:
     }
 
 
-def map_job_preview(parsed: dict, *, predicted_case_number: str, legacy_reference: str | None) -> dict:
-    """Preview the Job fields a commit would set (D3/D9). No persistence."""
+def map_job_preview(
+    parsed: dict,
+    *,
+    predicted_case_number: str,
+    legacy_reference: str | None,
+    raw: dict | None = None,
+) -> dict:
+    """Preview the Job fields a commit would set (D3/D9). No persistence.
+
+    When ``raw`` is provided (the commit-preview path), the response also carries
+    the Phase 2a structured ``details`` object (read-only). Callers that omit
+    ``raw`` — e.g. the commit-to-live builder — get the unchanged legacy shape.
+    """
     sale = parse_date_maybe(_str(parsed.get("sale_date")))
     install = parse_date_maybe(_str(parsed.get("install_date")))
 
@@ -120,7 +131,7 @@ def map_job_preview(parsed: dict, *, predicted_case_number: str, legacy_referenc
         parts = [f"{label}: {_str(v).strip()}" for label, v in bits if _str(v).strip()]
         return " | ".join(parts) or None
 
-    return {
+    out = {
         "predicted_case_number": predicted_case_number,
         "legacy_reference": legacy_reference,
         "status": PREVIEW_JOB_STATUS,
@@ -135,6 +146,13 @@ def map_job_preview(parsed: dict, *, predicted_case_number: str, legacy_referenc
         "removes_old_system": bool(parsed.get("removes_old_system")),
         "customer_name_notes": _str(parsed.get("customer_name_notes")).strip() or None,
     }
+    if raw is not None:
+        # Read-only structured view: prefer a stored details object, else compute
+        # it on the fly (so existing batches preview structured data too).
+        from app.services.import_details import build_details
+
+        out["details"] = parsed.get("details") or build_details(parsed, raw)
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -244,6 +262,7 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
                         parsed,
                         predicted_case_number=predicted,
                         legacy_reference=row.legacy_reference,
+                        raw=raw,
                     ),
                 }
             )

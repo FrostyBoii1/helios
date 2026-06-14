@@ -121,6 +121,10 @@ def test_mapping_and_legacy_reference(client_for, users):
     assert s1["job"]["predicted_case_number"].startswith("SCS-2025-")  # 2025 sale year
     assert s1["job"]["predicted_case_number"] == s1["predicted_case_number"]
     assert s1["job"]["salesperson_text"] == "Jane Smith"  # text only, no user link
+    # Phase 2a: structured details exposed read-only in the preview.
+    details = s1["job"]["details"]
+    assert details is not None and details["_v"] == 2
+    assert "system" in details  # panels/inverter/nmi captured into the System section
 
 
 def test_address_prefers_parsed_then_raw():
