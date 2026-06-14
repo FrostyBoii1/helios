@@ -247,6 +247,14 @@ FIELDS: tuple[FieldSpec, ...] = (
        visible_when_blank=True, category=CATEGORY_CORE, editable=True,
        source_columns=("Date of Post Installation Call/Review Request",),
        captured=CAPTURED_REINGEST),
+    _f(key="warranty_rego_completed", label="Warranty Rego Completed", section="post_install",
+       entity=ENTITY_JOB, storage="job.details.post_install.warranty_rego_completed", input_type=INPUT_TEXT,
+       visible_when_blank=False, category=CATEGORY_CORE, editable=True,
+       source_columns=("Warranty Rego Completed",), captured=CAPTURED_REINGEST),
+    _f(key="post_install_email_sent", label="Post Installation Email Sent", section="post_install",
+       entity=ENTITY_JOB, storage="job.details.post_install.post_install_email_sent", input_type=INPUT_TEXT,
+       visible_when_blank=False, category=CATEGORY_CORE, editable=True,
+       source_columns=("Post Installation Email Sent",), captured=CAPTURED_REINGEST),
 
     # --- Legacy / import-only (hidden when blank) ---
     _f(key="solar_vic", label="Solar Vic Payment", section="legacy",

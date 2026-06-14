@@ -190,6 +190,10 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
                 status = pir
             if status:
                 d["post_install"]["review_status"] = status
+    # Post-install status columns — preserved verbatim as text (no date coercion);
+    # blanks are omitted by put_text.
+    put_text("post_install", "warranty_rego_completed", raw.get("warranty_rego_completed"))
+    put_text("post_install", "post_install_email_sent", raw.get("post_install_email_sent"))
 
     # --- Legacy / import-only (only when populated) ---
     put_text("legacy", "solar_vic", raw.get("solar_vic"))

@@ -42,6 +42,20 @@ def test_post_install_status_field_is_editable_text():
     assert "post_install.review_status" in reg.allowed_details_paths()
 
 
+def test_post_install_status_columns_editable_hidden_when_blank():
+    paths = reg.allowed_details_paths()
+    for key, path in (
+        ("warranty_rego_completed", "post_install.warranty_rego_completed"),
+        ("post_install_email_sent", "post_install.post_install_email_sent"),
+    ):
+        f = reg.field_spec(key)
+        assert f is not None, key
+        assert f.section == "post_install"
+        assert f.input_type == reg.INPUT_TEXT and f.editable is True
+        assert f.visible_when_blank is False  # hidden when blank; addable via the picker
+        assert path in paths  # writable via the path-restricted patch
+
+
 # --------------------------------------------------------------------------- #
 # Registry integrity
 # --------------------------------------------------------------------------- #

@@ -108,6 +108,10 @@ WANTED_HEADERS = {
     "date of post installation call/review request": "post_install_review",
     "ces/ecoc/ccew to retailer email - all other distributors": "ces_ecoc_email",
     "ces submission to distributor ausnet/powercor/united/jemena": "ces_submission",
+    # Post-install status columns (Phase 7 owner request): captured as structured
+    # post_install fields instead of falling through to raw['_unmapped'].
+    "warranty rego completed": "warranty_rego_completed",
+    "post installation email sent": "post_install_email_sent",
 }
 
 

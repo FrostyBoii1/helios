@@ -84,10 +84,26 @@ export function ImportRowDrawer({ batchId, rowId, onClose }: ImportRowDrawerProp
         className="flex h-full w-full max-w-xl flex-col overflow-y-auto border-l border-line bg-surface shadow-2xl shadow-black/40"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface px-5 py-3">
-          <h2 className="text-base font-semibold text-fg">
-            {row?.legacy_reference || `Row ${row?.source_row_index ?? ''}`}
-          </h2>
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-line bg-surface px-5 py-3">
+          {/* Customer/client name is the prominent title when known; the legacy
+              reference (e.g. "SC0242 - LL") stays visible as a subtitle. Falls
+              back to the reference as the title when the name is missing. */}
+          <div className="min-w-0">
+            {asString(row?.parsed?.customer_name).trim() ? (
+              <>
+                <h2 className="truncate text-base font-semibold text-fg">
+                  {asString(row?.parsed?.customer_name).trim()}
+                </h2>
+                <p className="truncate text-xs text-faint">
+                  {row?.legacy_reference || `Row ${row?.source_row_index ?? ''}`}
+                </p>
+              </>
+            ) : (
+              <h2 className="truncate text-base font-semibold text-fg">
+                {row?.legacy_reference || `Row ${row?.source_row_index ?? ''}`}
+              </h2>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="rounded-md px-2 py-1 text-muted hover:bg-elevated hover:text-fg"

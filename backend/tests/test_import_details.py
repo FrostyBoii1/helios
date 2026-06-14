@@ -89,6 +89,18 @@ def test_post_install_status_and_date_captured_not_misfiled():
     )
 
 
+def test_post_install_status_columns_captured_as_text_and_blank_omitted():
+    # Warranty Rego Completed + Post Installation Email Sent -> post_install (text).
+    d = build_details({}, {"warranty_rego_completed": "Yes", "post_install_email_sent": "Sent 10/2/2023"})
+    assert d["post_install"]["warranty_rego_completed"] == "Yes"
+    # Preserved verbatim — NOT coerced to a date.
+    assert d["post_install"]["post_install_email_sent"] == "Sent 10/2/2023"
+    # Blank values are omitted.
+    d2 = build_details({}, {"warranty_rego_completed": "", "post_install_email_sent": "  "})
+    assert "warranty_rego_completed" not in d2.get("post_install", {})
+    assert "post_install_email_sent" not in d2.get("post_install", {})
+
+
 def test_currency_and_int_coercion_with_divert():
     # Pure number coerces; trailing text is preserved as misfiled, value kept.
     d = build_details({"payment": {"total": "$12,345.67", "deposit": "5000 deposit paid"}}, {})
@@ -136,7 +148,8 @@ _HEADERS = [
     "Date of Post Installation Call/Review Request",
     "CES/ECOC/CCEW to Retailer Email - All other distributors",
     "CES Submission to Distributor Ausnet/Powercor/United/Jemena",
-    "Warranty Rego Completed",  # not in registry -> unmapped passthrough
+    "Warranty Rego Completed", "Post Installation Email Sent",  # now structured post_install
+    "Some Unknown Column",  # genuinely not in registry -> _unmapped passthrough
 ]
 
 
@@ -150,7 +163,7 @@ def _one_row_ws():
         "Yes", "a@example.test", "Essential", "Origin", "42041234567", "M1",
         "10", "Longi 440", "Goodwe 5kw", "1", "3", "Tin", "", "", "", "Installer One",
         "", "$5000", "1000", "4000", "paid", "", "ACC1", "$2000", "", "", "", "",
-        "Yes",
+        "Yes", "Done", "junk-extra",
     ])
     buf = BytesIO()
     wb.save(buf)
@@ -164,14 +177,22 @@ def test_parser_captures_widened_headers_and_unmapped_passthrough():
     assert "stc_amount" in row.raw and row.raw["stc_amount"] == "$2000"
     assert "solar_vic" in row.raw and "post_install_review" in row.raw
     assert "ces_ecoc_email" in row.raw and "ces_submission" in row.raw
-    # Unmapped column preserved verbatim, never dropped.
-    assert row.raw["_unmapped"]["Warranty Rego Completed"] == "Yes"
+    # Post-install status columns are now KNOWN headers (not _unmapped).
+    assert row.raw["warranty_rego_completed"] == "Yes"
+    assert row.raw["post_install_email_sent"] == "Done"
+    assert "Warranty Rego Completed" not in row.raw["_unmapped"]
+    assert "Post Installation Email Sent" not in row.raw["_unmapped"]
+    # A genuinely unmapped column is still preserved verbatim, never dropped.
+    assert row.raw["_unmapped"]["Some Unknown Column"] == "junk-extra"
     # Structured details stamped onto parsed.
     d = row.parsed["details"]
     assert d["_v"] == 2
     assert d["system"]["phase"] == "three" and d["system"]["storey"] == "1"
     assert d["payment"]["total"] == "5000" and d["payment"]["stc_amount"] == "2000"
     assert d["compliance"]["msb_status"] == "yes"
+    # Post-install status columns land in details.post_install as text.
+    assert d["post_install"]["warranty_rego_completed"] == "Yes"
+    assert d["post_install"]["post_install_email_sent"] == "Done"
     assert "legacy" not in d  # solar_vic / ces_submission blank in this row
     # Flat parsed keys still present (back-compat).
     assert row.parsed["customer_name"] == "Alex Roe"
