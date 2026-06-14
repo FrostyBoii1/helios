@@ -24,6 +24,8 @@ export interface ImportedJobView {
   compliance: DetailRow[]
   provenance: string[]
   otherNotes: DetailRow[]
+  // Old-system removal / decommission line, surfaced prominently (null if none).
+  decommission: string | null
 }
 
 function splitFields(text: string, separator: string): DetailRow[] {
@@ -60,6 +62,7 @@ export function parseImportedJobDetails(
     compliance: [],
     provenance: [],
     otherNotes: [],
+    decommission: null,
   }
 
   const lines = (job.notes ?? '')
@@ -70,6 +73,8 @@ export function parseImportedJobDetails(
   for (const line of lines) {
     if (/^Imported from legacy workbook/i.test(line)) {
       view.provenance.push(line)
+    } else if (/^REMOVE OLD SYSTEM\b/i.test(line)) {
+      view.decommission = line
     } else if (/^Payment\s*[—–-]\s*/.test(line)) {
       view.payment.push(...splitFields(line.replace(/^Payment\s*[—–-]\s*/, ''), ','))
     } else if (/^Compliance\s*[—–-]\s*/.test(line)) {

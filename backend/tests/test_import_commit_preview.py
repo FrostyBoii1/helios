@@ -210,6 +210,29 @@ def test_classify_row_unit():
 
 
 # --------------------------------------------------------------------------- #
+# Decommission + name-cell notes surfaced in the job preview
+# --------------------------------------------------------------------------- #
+def test_map_job_preview_surfaces_decommission_and_name_notes():
+    m = preview_svc.map_job_preview(
+        {
+            "removes_old_system": True,
+            "decommission_marker": "DECOM",
+            "customer_name_notes": "includes hot water timer",
+        },
+        predicted_case_number="SCS-2025-00001",
+        legacy_reference="REF1",
+    )
+    assert m["removes_old_system"] is True
+    assert m["customer_name_notes"] == "includes hot water timer"
+
+    plain = preview_svc.map_job_preview(
+        {"customer_name": "Dana Fox"}, predicted_case_number="SCS-2025-00002", legacy_reference=None
+    )
+    assert plain["removes_old_system"] is False
+    assert plain["customer_name_notes"] is None
+
+
+# --------------------------------------------------------------------------- #
 # Permissions
 # --------------------------------------------------------------------------- #
 def test_commit_preview_admin_only(client_for, users):

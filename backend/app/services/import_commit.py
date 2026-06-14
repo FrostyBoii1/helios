@@ -58,7 +58,10 @@ def build_customer_data(parsed: dict, raw: dict, *, batch_id: int, source_row_in
         note_lines.append("Other emails: " + ", ".join(pv["extra_emails"]))
     if pv["extra_phones"]:
         note_lines.append("Other phones: " + ", ".join(pv["extra_phones"]))
-    extracted = _str(parsed.get("name_extracted_notes")).strip()
+    # Prefer the cleaned, reviewer-editable note; fall back to the raw extract.
+    extracted = _str(parsed.get("customer_name_notes")).strip() or _str(
+        parsed.get("name_extracted_notes")
+    ).strip()
     if extracted:
         note_lines.append("From name cell: " + extracted)
     note_lines.append(f"Imported from legacy workbook (batch {batch_id}, row {source_row_index}).")
@@ -78,6 +81,19 @@ def build_job_data(parsed: dict, *, legacy_reference: str | None, batch_id: int,
     pv = map_job_preview(parsed, predicted_case_number="", legacy_reference=legacy_reference)
 
     note_lines: list[str] = []
+    # Old-system removal is operationally critical — put it first so staff see it
+    # at the top of the Job notes, not buried below payment/compliance detail.
+    if parsed.get("removes_old_system"):
+        marker = _str(parsed.get("decommission_marker")).strip()
+        note_lines.append(
+            "REMOVE OLD SYSTEM - decommission the existing system"
+            + (f" (flagged: {marker})" if marker else "")
+            + "."
+        )
+    # Preserved meaningful text from the Customer Name cell (approval removed).
+    name_cell_notes = _str(parsed.get("customer_name_notes")).strip()
+    if name_cell_notes:
+        note_lines.append("From name cell: " + name_cell_notes)
     if pv["salesperson_text"]:
         note_lines.append("Salesperson: " + pv["salesperson_text"])
     payment = parsed.get("payment") or {}

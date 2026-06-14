@@ -131,6 +131,9 @@ def map_job_preview(parsed: dict, *, predicted_case_number: str, legacy_referenc
         "install_details": join(install_bits),
         "approval_details": join(approval_bits),
         "notes": _str(parsed.get("notes_raw")).strip() or None,
+        # Surfaced so the preview UI can flag an old-system removal before commit.
+        "removes_old_system": bool(parsed.get("removes_old_system")),
+        "customer_name_notes": _str(parsed.get("customer_name_notes")).strip() or None,
     }
 
 

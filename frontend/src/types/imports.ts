@@ -64,6 +64,11 @@ export interface PhoneEntry {
 // (the whitelisted ImportRowEdit schema). Other keys may exist read-only.
 export interface ParsedCandidate {
   customer_name?: string | null
+  // Preserved meaningful non-name text from the Customer Name cell (editable).
+  customer_name_notes?: string | null
+  // Old-system removal / decommission signal (display-only flag + matched text).
+  removes_old_system?: boolean | null
+  decommission_marker?: string | null
   address?: string | null
   salesperson?: string | null
   sale_date?: string | null
@@ -114,6 +119,7 @@ export interface ImportRowList {
 // Whitelisted, typed edits. Mirrors backend ImportRowEdit (extra="forbid").
 export interface ImportRowEdit {
   customer_name?: string | null
+  customer_name_notes?: string | null
   address?: string | null
   salesperson?: string | null
   sale_date?: string | null
@@ -140,6 +146,7 @@ export interface ImportRowEdit {
 // review_notes are handled with dedicated controls.
 export const PARSED_TEXT_FIELDS: { key: keyof ImportRowEdit; label: string }[] = [
   { key: 'customer_name', label: 'Customer name' },
+  { key: 'customer_name_notes', label: 'Name-cell notes' },
   { key: 'address', label: 'Address' },
   { key: 'salesperson', label: 'Salesperson' },
   { key: 'sale_date', label: 'Sale date' },
@@ -204,6 +211,8 @@ export interface CommitJobPreview {
   install_details: string | null
   approval_details: string | null
   notes: string | null
+  removes_old_system?: boolean
+  customer_name_notes?: string | null
 }
 
 export interface CommitRowPreview {

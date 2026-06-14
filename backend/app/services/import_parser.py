@@ -41,6 +41,16 @@ NMI_ALNUM_RULES: list[tuple[str, str]] = [("QB", "QLD Energex")]
 APPROVAL_APPROVED_RE = re.compile(r"\bAPPROVED\b", re.IGNORECASE)
 APPROVAL_PENDING_RE = re.compile(r"\bPENDING\b\s*([0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})?", re.IGNORECASE)
 DATE_RE = re.compile(r"([0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})")
+# Old-system removal / decommission markers. Operationally important: surfaced
+# as a parsed flag so staff see it after import instead of it being buried in
+# raw cells. `decom\w*` covers DECOM, decommission, and the decommision /
+# decomission misspellings; plus the explicit "remove old system" phrase.
+DECOMMISSION_RE = re.compile(r"\b(?:remove\s+old\s+system|decom\w*)\b", re.IGNORECASE)
+# Pure approval tokens stripped from name-cell trailing text so the preserved
+# note is "meaningful non-name text", not just the approval status.
+_APPROVAL_TOKEN_RE = re.compile(
+    r"\bAPPROVED\b|\bPENDING\b\s*(?:[0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})?", re.IGNORECASE
+)
 NAME_STOP_MARKERS = [" - ", " DOB", " PENDING", " APPROVED", " Approved", " LOT", " Lot",
                      " lot", " #", " REF", " Ref", " DP ", " dp "]
 DIVIDER_HINTS = ("FORTNIGHT", "WEEK ", "BELOW", "ABOVE", "MONTH", "TBC")
@@ -159,6 +169,31 @@ def parse_customer_name(raw: str) -> dict[str, Any]:
         r"(?i)^(ref|essential|ergon|energex|approved|pending|lot)\b", name
     )
     return {"name": name, "extracted": extracted, "looks_like_name": looks_like_name}
+
+
+def clean_name_cell_notes(extracted: str) -> str:
+    """Strip pure approval tokens (APPROVED / PENDING[date]) from the name-cell
+    trailing text, leaving the meaningful remainder (e.g. 'includes hot water
+    timer', 'undersold Brighte fees, check after install'). Returns '' when
+    nothing meaningful remains."""
+    if not extracted:
+        return ""
+    cleaned = _APPROVAL_TOKEN_RE.sub(" ", extracted)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -,;|")
+    return cleaned
+
+
+def detect_decommission(*texts: str) -> str | None:
+    """Return the matched old-system removal / decommission marker text found in
+    any of the given cell texts (for reviewer visibility), else None. Purely
+    additive signal — it never blocks a commit."""
+    for t in texts:
+        if not t:
+            continue
+        m = DECOMMISSION_RE.search(t)
+        if m:
+            return m.group(0)
+    return None
 
 
 def parse_approval(*texts: str) -> dict[str, Any]:
@@ -303,6 +338,14 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
         dist_inferred, _prefix = infer_distributor(nmi_raw)
         dist_raw = get(r, "distributor")
         approval = parse_approval(name_info["extracted"], get(r, "notes"))
+        # Meaningful non-name trailing text from the Customer Name cell, with pure
+        # approval status removed (the approval is captured separately above).
+        name_cell_notes = clean_name_cell_notes(name_info["extracted"])
+        # Old-system removal / decommission: scan the whole name cell + the notes
+        # column so it is caught whether or not it followed a name stop-marker.
+        decommission_marker = detect_decommission(
+            get(r, "customer_name"), name_info["extracted"], get(r, "notes")
+        )
         msb_raw = get(r, "msb")
         panel_raw = get(r, "panel_brand")
         inverter_raw = get(r, "inverter")
@@ -313,6 +356,11 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
             "sale_date": sales["sale_date"],
             "customer_name": name_info["name"],
             "name_extracted_notes": name_info["extracted"] or None,
+            # Reviewer-visible/editable preserved note (approval status removed).
+            "customer_name_notes": name_cell_notes or None,
+            # Operationally important old-system removal flag + the matched text.
+            "removes_old_system": decommission_marker is not None,
+            "decommission_marker": decommission_marker,
             "address": get(r, "address") or None,
             "approval_state": approval["state"],
             "approval_pending_date": approval["pending_date"],

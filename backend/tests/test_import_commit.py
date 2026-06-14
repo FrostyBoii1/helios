@@ -297,3 +297,55 @@ def test_commit_admin_only(client_for, users):
     admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")
     support = client_for(users["support"])
     assert support.post(f"/api/v1/imports/{bid}/commit", json={}).status_code == 403
+
+
+# --------------------------------------------------------------------------- #
+# Name-cell notes + decommission carried into the committed Job notes
+# --------------------------------------------------------------------------- #
+def _seed_one(db: Session, parsed: dict, *, ref: str) -> ImportBatch:
+    b = ImportBatch(source_filename="syn.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db.add(b)
+    db.flush()
+    db.add(ImportRow(
+        batch_id=b.id, source_row_index=2, row_class=ImportRowClass.JOB.value,
+        legacy_reference=ref, raw={"address": "1 Test St"}, parsed=parsed,
+        review_status=ImportRowReviewStatus.APPROVED.value,
+    ))
+    db.flush()
+    return b
+
+
+def test_decommission_and_name_notes_in_job_notes(users, db_session: Session):
+    parsed = {
+        "customer_name": "Pat Lee",
+        "customer_name_notes": "includes hot water timer",
+        "removes_old_system": True,
+        "decommission_marker": "REMOVE OLD SYSTEM",
+        "sale_date": "01/06/2025",
+        "address": "1 Test St",
+    }
+    b = _seed_one(db_session, parsed, ref="DECOM01")
+    res = import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    assert res["committed"] == 1
+
+    row = db_session.scalars(select(ImportRow).where(ImportRow.batch_id == b.id)).one()
+    job = db_session.get(Job, row.committed_job_id)
+    notes = job.notes or ""
+    # Decommission is surfaced prominently (first line) in the Job notes.
+    assert notes.splitlines()[0].startswith("REMOVE OLD SYSTEM")
+    assert "REMOVE OLD SYSTEM" in notes
+    # Preserved name-cell text reaches the Job notes where staff will see it.
+    assert "From name cell: includes hot water timer" in notes
+    # And the meaningful note also reaches the Customer notes.
+    cust = db_session.get(Customer, row.committed_customer_id)
+    assert "includes hot water timer" in (cust.notes or "")
+
+
+def test_no_decommission_means_no_marker_line(users, db_session: Session):
+    parsed = {"customer_name": "Dana Fox", "sale_date": "01/06/2025", "address": "2 Test St"}
+    b = _seed_one(db_session, parsed, ref="PLAIN01")
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    row = db_session.scalars(select(ImportRow).where(ImportRow.batch_id == b.id)).one()
+    job = db_session.get(Job, row.committed_job_id)
+    assert "REMOVE OLD SYSTEM" not in (job.notes or "")

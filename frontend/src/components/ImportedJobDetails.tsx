@@ -25,6 +25,12 @@ export function ImportedJobDetails({ view }: { view: ImportedJobView }) {
   const provenanceRows: DetailRow[] = view.provenance.map((v) => ({ label: null, value: v }))
   return (
     <div className="flex flex-col gap-4">
+      {view.decommission && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+          <h3 className="text-sm font-semibold text-amber-300">⚠ Remove old system</h3>
+          <p className="mt-0.5 text-sm text-amber-200/90">{view.decommission}</p>
+        </div>
+      )}
       <Section title="System" rows={view.system} />
       <Section title="Install" rows={view.install} />
       <Section title="Approval" rows={view.approval} />

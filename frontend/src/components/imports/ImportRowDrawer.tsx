@@ -199,6 +199,20 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
         <span className="text-xs text-faint">Source row #{row.source_row_index}</span>
       </div>
 
+      {/* Operationally important: old-system removal / decommission flag. */}
+      {row.parsed?.removes_old_system && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+          <p className="text-sm font-semibold text-amber-300">⚠ Remove old system / decommission</p>
+          <p className="mt-0.5 text-xs text-amber-200/80">
+            Detected in the import
+            {asString(row.parsed?.decommission_marker)
+              ? ` (matched: “${asString(row.parsed?.decommission_marker)}”)`
+              : ''}
+            . Confirm and plan the old-system removal.
+          </p>
+        </div>
+      )}
+
       {message && (
         <div
           className={`rounded-md border px-3 py-2 text-sm ${

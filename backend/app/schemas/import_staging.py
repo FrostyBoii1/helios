@@ -97,6 +97,7 @@ class ImportRowEdit(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     customer_name: str | None = None
+    customer_name_notes: str | None = None
     address: str | None = None
     salesperson: str | None = None
     sale_date: str | None = None
@@ -173,6 +174,9 @@ class CommitJobPreview(BaseModel):
     install_details: str | None = None
     approval_details: str | None = None
     notes: str | None = None
+    # Additive flags (default-safe): old-system removal + preserved name-cell text.
+    removes_old_system: bool = False
+    customer_name_notes: str | None = None
 
 
 class CommitRowPreview(BaseModel):

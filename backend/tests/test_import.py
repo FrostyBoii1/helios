@@ -111,6 +111,90 @@ def test_parser_flags_issues():
 
 
 # --------------------------------------------------------------------------- #
+# Name-cell trailing notes + decommission detection (pure helpers)
+# --------------------------------------------------------------------------- #
+def test_clean_name_cell_notes_strips_approval_keeps_meaning():
+    # Meaningful operational text is preserved verbatim.
+    assert import_parser.clean_name_cell_notes("includes hot water timer") == "includes hot water timer"
+    assert (
+        import_parser.clean_name_cell_notes("undersold Brighte fees, check after install")
+        == "undersold Brighte fees, check after install"
+    )
+    # Pure approval status leaves nothing meaningful behind.
+    assert import_parser.clean_name_cell_notes("APPROVED") == ""
+    assert import_parser.clean_name_cell_notes("PENDING 19/08/2026") == ""
+    # Approval mixed with a real note keeps only the real note.
+    assert (
+        import_parser.clean_name_cell_notes("APPROVED includes hot water timer")
+        == "includes hot water timer"
+    )
+    assert import_parser.clean_name_cell_notes("") == ""
+
+
+def test_detect_decommission_variants():
+    for text in (
+        "REMOVE OLD SYSTEM",
+        "remove old system",
+        "DECOM",
+        "decommission",
+        "decommision",   # missing one 's'
+        "decomission",   # missing one 'm'
+        "needs DECOM before install",
+        "Customer wants to remove old system first",
+    ):
+        assert import_parser.detect_decommission(text) is not None, text
+    # No false positives on ordinary text.
+    assert import_parser.detect_decommission("Alex Roe", "includes hot water timer") is None
+    assert import_parser.detect_decommission("") is None
+    # Returns the matched marker text for reviewer visibility.
+    assert import_parser.detect_decommission("Jane DECOM").upper() == "DECOM"
+
+
+def _one_job_row_bytes(*, name_cell: str, notes_cell: str = "") -> bytes:
+    """A minimal COMPLETED sheet: header + one clean job row, with the Customer
+    Name + Notes cells controllable. Fabricated data only."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "COMPLETED"
+    ws.append(HEADERS)
+    ws.append(["SCS0009", "Rep 10/10/2025", name_cell, "9 Test St", "0400000000",
+               notes_cell, "Yes", "x@example.test", "Essential", "Origin", "42041234567",
+               "M9", "10", "Longi 440", "Goodwe 5kw", "1", "1", "Tin", "", "", "", "Installer One"])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_parse_rows_preserves_name_cell_notes():
+    rows = list(import_parser.parse_rows(_ws_from_bytes(
+        _one_job_row_bytes(name_cell="Pat Lee - includes hot water timer")
+    )))
+    row = next(r for r in rows if r.legacy_reference == "SCS0009")
+    assert row.parsed["customer_name"] == "Pat Lee"
+    assert row.parsed["customer_name_notes"] == "includes hot water timer"
+    assert row.parsed["removes_old_system"] is False
+    assert row.parsed["decommission_marker"] is None
+
+
+def test_parse_rows_flags_decommission_from_name_or_notes():
+    # Marker in the name cell (no stop-marker preceding it).
+    rows = list(import_parser.parse_rows(_ws_from_bytes(
+        _one_job_row_bytes(name_cell="Sam Roe DECOM")
+    )))
+    row = next(r for r in rows if r.legacy_reference == "SCS0009")
+    assert row.parsed["removes_old_system"] is True
+    assert row.parsed["decommission_marker"].upper() == "DECOM"
+
+    # Marker in the Notes column.
+    rows2 = list(import_parser.parse_rows(_ws_from_bytes(
+        _one_job_row_bytes(name_cell="Dana Fox", notes_cell="REMOVE OLD SYSTEM before install")
+    )))
+    row2 = next(r for r in rows2 if r.legacy_reference == "SCS0009")
+    assert row2.parsed["removes_old_system"] is True
+    assert "remove old system" in row2.parsed["decommission_marker"].lower()
+
+
+# --------------------------------------------------------------------------- #
 # Ingest tests (staging writes only — NO live Customer/Job writes)
 # --------------------------------------------------------------------------- #
 def test_ingest_creates_staging_and_no_live_records(db_session: Session, users):
