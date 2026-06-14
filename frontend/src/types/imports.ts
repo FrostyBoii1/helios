@@ -187,6 +187,9 @@ export interface ImportRowEdit {
   emails?: string[] | null
   phones?: PhoneEntry[] | null
   review_notes?: string | null
+  // Phase 3b-2: path-restricted structured patch (nested section → key → value).
+  // The backend whitelists allowed job.details.* paths and deep-merges a copy.
+  details?: Record<string, unknown> | null
 }
 
 // The scalar (string) editable fields, in display order. emails/phones/

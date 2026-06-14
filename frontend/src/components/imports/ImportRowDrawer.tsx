@@ -14,14 +14,60 @@ import type { RowAction } from '@/lib/imports'
 import { ReviewStatusBadge, RowClassBadge } from '@/components/imports/ReviewStatusBadge'
 import { SeverityChip } from '@/components/imports/IssueBadges'
 import { CommitReverseSection } from '@/components/imports/CommitReverseSection'
-import { StructuredDetailsView } from '@/components/imports/StructuredDetailsView'
+import { StructuredDetailsView, detailsPath } from '@/components/imports/StructuredDetailsView'
 import {
   PARSED_TEXT_FIELDS,
+  type FieldSpec,
   type ImportRow,
   type ImportRowEdit,
   type ParsedCandidate,
+  type ParsedDetails,
   type PhoneEntry,
 } from '@/types/imports'
+
+// Flat parsed-grid keys that are now owned by the structured details editor.
+// Hidden from the flat grid when parsed.details is present (no duplicate editing).
+const STRUCTURED_OWNED_FLAT_KEYS = new Set<string>([
+  'no_of_panels',
+  'panel_raw',
+  'inverter_raw',
+  'nmi_raw',
+  'meter_no',
+  'distributor_inferred',
+  'retailer_raw',
+  'install_day',
+  'install_time',
+  'installer_raw',
+  'msb_state',
+])
+
+// Coerce a string UI value to its stored type at save time (req. 11).
+function coerceDetail(raw: string, inputType: string | undefined): unknown {
+  const trimmed = raw.trim()
+  if (trimmed === '') return null
+  if (inputType === 'number') {
+    const n = parseInt(trimmed, 10)
+    return Number.isFinite(n) ? n : null
+  }
+  return trimmed
+}
+
+// Read a nested "<section>.<key>" value out of parsed.details.
+function detailValueAt(details: ParsedDetails | null, path: string): unknown {
+  if (!details) return undefined
+  let cur: unknown = details
+  for (const p of path.split('.')) {
+    if (cur == null || typeof cur !== 'object') return undefined
+    cur = (cur as Record<string, unknown>)[p]
+  }
+  return cur
+}
+
+function sameDetail(a: unknown, b: unknown): boolean {
+  if (a == null && b == null) return true
+  if (a == null || b == null) return false
+  return String(a) === String(b)
+}
 
 interface ImportRowDrawerProps {
   batchId: number
@@ -98,8 +144,17 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const [emails, setEmails] = useState<string[]>([])
   const [phones, setPhones] = useState<PhoneEntry[]>([])
   const [reviewNotes, setReviewNotes] = useState('')
+  // Phase 3b-2: string UI state for structured fields, keyed by "<section>.<key>".
+  const [detailsEdits, setDetailsEdits] = useState<Record<string, string>>({})
   const [message, setMessage] = useState<{ kind: 'error' | 'success'; text: string } | null>(null)
   const [issueNotes, setIssueNotes] = useState<Record<number, string>>({})
+
+  // path ("<section>.<key>") → field spec, for input_type-aware coercion.
+  const fieldByPath = useMemo(() => {
+    const m = new Map<string, FieldSpec>()
+    if (registry) for (const f of registry.fields) m.set(detailsPath(f.storage), f)
+    return m
+  }, [registry])
 
   // (Re)initialise the form whenever the row data changes (e.g. after a save).
   useEffect(() => {
@@ -109,8 +164,13 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     setEmails(asEmails(row.parsed))
     setPhones(asPhones(row.parsed))
     setReviewNotes(row.review_notes ?? '')
+    setDetailsEdits({})
     setMessage(null)
   }, [row])
+
+  function handleDetailsChange(path: string, value: string) {
+    setDetailsEdits((prev) => ({ ...prev, [path]: value }))
+  }
 
   const isApprovable = row.row_class === 'job' || row.row_class === 'ambiguous'
   const hasUnresolvedError = row.issues.some((i) => i.severity === 'error' && !i.resolved)
@@ -143,10 +203,24 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     if (reviewNotes.trim() !== (row.review_notes ?? '').trim()) {
       edit.review_notes = reviewNotes.trim() || null
     }
+    // Structured details patch — only touched-and-changed leaves, coerced (req. 10/11).
+    if (details) {
+      const patch: Record<string, Record<string, unknown>> = {}
+      for (const [path, raw] of Object.entries(detailsEdits)) {
+        const coerced = coerceDetail(raw, fieldByPath.get(path)?.input_type)
+        if (sameDetail(coerced, detailValueAt(details, path))) continue
+        const dot = path.indexOf('.')
+        if (dot < 0) continue
+        const section = path.slice(0, dot)
+        const key = path.slice(dot + 1)
+        ;(patch[section] ??= {})[key] = coerced
+      }
+      if (Object.keys(patch).length > 0) edit.details = patch
+    }
     return edit
   }
 
-  const pendingEdit = useMemo(buildEdit, [text, emails, phones, reviewNotes, row])
+  const pendingEdit = useMemo(buildEdit, [text, emails, phones, reviewNotes, detailsEdits, fieldByPath, details, row])
   const hasChanges = Object.keys(pendingEdit).length > 0
 
   async function handleSave() {
@@ -230,7 +304,14 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
       {/* Phase 3b-1: registry-driven structured read-only view. Falls back to the
           flat fields below (with a hint) for rows staged before structured parsing. */}
       {details && registry ? (
-        <StructuredDetailsView registry={registry} details={details} />
+        <StructuredDetailsView
+          registry={registry}
+          details={details}
+          editable={!locked}
+          edits={detailsEdits}
+          onChange={handleDetailsChange}
+          originalDetails={(row.original_parsed?.details as ParsedDetails | null) ?? null}
+        />
       ) : (
         <div className="rounded-md border border-dashed border-line-strong bg-surface px-3 py-2">
           <p className="text-xs text-faint">
@@ -383,7 +464,11 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {PARSED_TEXT_FIELDS.filter((f) => f.key !== 'customer_name_notes').map(({ key, label }) => {
+          {PARSED_TEXT_FIELDS.filter(
+            (f) =>
+              f.key !== 'customer_name_notes' &&
+              !(details && STRUCTURED_OWNED_FLAT_KEYS.has(f.key)),
+          ).map(({ key, label }) => {
             const original = row.original_parsed
               ? asString(row.original_parsed[key])
               : null
@@ -521,6 +606,11 @@ function describeError(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
     if (err.status === 403) return 'You do not have permission to do that.'
     if (err.status === 409 && typeof err.detail === 'string') return err.detail
+    if (err.status === 422) {
+      return typeof err.detail === 'string'
+        ? err.detail
+        : 'Some structured fields could not be saved (disallowed path or invalid value).'
+    }
     if (typeof err.detail === 'string') return err.detail
   }
   return fallback
