@@ -254,6 +254,33 @@ def test_parse_rows_flags_decommission_from_name_or_notes():
     assert "remove old system" in row2.parsed["decommission_marker"].lower()
 
 
+def test_parse_customer_name_strips_decommission_marker():
+    cn = import_parser.parse_customer_name
+    # Marker glued to the name (no " - " stop) is stripped from the name.
+    assert cn("Jane Roe -remove old system")["name"] == "Jane Roe"
+    assert cn("Sam Roe DECOM")["name"] == "Sam Roe"
+    # Marker after a " - " stop: the name is already clean.
+    assert cn("Customer Name - remove old system")["name"] == "Customer Name"
+    # Marker-only cell -> empty name, not treated as a name.
+    only = cn("remove old system")
+    assert only["name"] == "" and only["looks_like_name"] is False
+    # Non-decommission names are unchanged.
+    assert cn("Pat Lee")["name"] == "Pat Lee"
+
+
+def test_parse_rows_strips_decommission_marker_from_name_keeps_flag():
+    # End-to-end: marker glued to the name must NOT remain in customer_name, while
+    # the remove-old-system flag + marker are still detected.
+    rows = list(import_parser.parse_rows(_ws_from_bytes(
+        _one_job_row_bytes(name_cell="Jane Roe -remove old system")
+    )))
+    row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
+    assert row.parsed["customer_name"] == "Jane Roe"
+    assert row.parsed["removes_old_system"] is True
+    assert "remove old system" in row.parsed["decommission_marker"].lower()
+    assert "remove old system" not in (row.parsed.get("customer_name_notes") or "").lower()
+
+
 # --------------------------------------------------------------------------- #
 # Ingest tests (staging writes only — NO live Customer/Job writes)
 # --------------------------------------------------------------------------- #

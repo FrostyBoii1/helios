@@ -187,6 +187,13 @@ def parse_customer_name(raw: str) -> dict[str, Any]:
     cut = min(idxs) if idxs else len(raw)
     name = raw[:cut].strip()
     extracted = raw[cut:].strip(" -")
+    # The remove-old-system / decommission marker is detected separately (and the
+    # flag/banner set) — it must never remain in the customer name. It can be glued
+    # to the name without a stop-marker (e.g. "Jane Roe -remove old system"), which
+    # the NAME_STOP_MARKERS split does not catch, so strip it here + any orphaned
+    # separator. Non-marker name text and standalone dates are preserved.
+    if DECOMMISSION_RE.search(name):
+        name = re.sub(r"\s+", " ", DECOMMISSION_RE.sub(" ", name)).strip(" -,;|")
     looks_like_name = bool(name) and name[0].isalpha() and not re.match(
         r"(?i)^(ref|essential|ergon|energex|approved|pending|lot)\b", name
     )
