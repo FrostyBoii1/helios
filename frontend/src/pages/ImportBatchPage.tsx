@@ -7,7 +7,7 @@ import {
   useImportSummary,
 } from '@/hooks/useImports'
 import { ImportRowTable } from '@/components/imports/ImportRowTable'
-import { ImportRowDrawer } from '@/components/imports/ImportRowDrawer'
+import { ImportRowModal } from '@/components/imports/ImportRowModal'
 import { BulkApproveCleanModal } from '@/components/imports/BulkApproveCleanModal'
 import { CommitModal } from '@/components/imports/CommitModal'
 import {
@@ -238,7 +238,7 @@ export function ImportBatchPage() {
       </div>
 
       {openRowId != null && (
-        <ImportRowDrawer
+        <ImportRowModal
           batchId={batchId}
           rowId={openRowId}
           onClose={() => setOpenRowId(null)}

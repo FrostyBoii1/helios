@@ -1,8 +1,11 @@
-// Row detail drawer: raw cells (read-only), editable parsed candidate with
-// original-vs-edited indication, issues list with resolve, and review actions.
+// Row detail modal (centered, two-column): structured details, raw cells, issues,
+// and editable parsed candidate on the left; the "On commit" internal-notes preview
+// + approval and the review actions on the (sticky) right. Converted from the prior
+// side drawer.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError } from '@/lib/api'
+import { previewInternalNotes } from '@/lib/internalNotesPreview'
 import {
   useEditRow,
   useFieldRegistry,
@@ -44,7 +47,7 @@ const STRUCTURED_OWNED_FLAT_KEYS = new Set<string>([
   'msb_state',
 ])
 
-interface ImportRowDrawerProps {
+interface ImportRowModalProps {
   batchId: number
   rowId: number
   onClose: () => void
@@ -70,21 +73,40 @@ function asPhones(parsed: ParsedCandidate | null): PhoneEntry[] {
   }))
 }
 
-export function ImportRowDrawer({ batchId, rowId, onClose }: ImportRowDrawerProps) {
+export function ImportRowModal({ batchId, rowId, onClose }: ImportRowModalProps) {
   const { data: row, isLoading, isError } = useImportRow(batchId, rowId)
+  const panelRef = useRef<HTMLDivElement>(null)
 
+  // Accessibility: Escape closes; move focus into the modal on open. (No focus
+  // trap — the app has no shared modal primitive for it; this is sane behavior.)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    panelRef.current?.focus()
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  // Centered modal: backdrop click closes (matching the previous drawer behavior);
+  // the panel stops propagation. Large but not full-screen on desktop (max-w-5xl ≈
+  // 1024px, max-h 90vh); near-fullscreen on small screens; content scrolls INSIDE
+  // while the page behind stays fixed.
   return (
     <div
-      className="fixed inset-0 z-20 flex justify-end bg-black/60"
+      className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
+      aria-label="Import row review"
       onClick={onClose}
     >
       <div
-        className="flex h-full w-full max-w-xl flex-col overflow-y-auto border-l border-line bg-surface shadow-2xl shadow-black/40"
+        ref={panelRef}
+        tabIndex={-1}
+        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-2xl shadow-black/40 outline-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-line bg-surface px-5 py-3">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-line bg-surface px-5 py-3">
           {/* Customer/client name is the prominent title when known; the legacy
               reference (e.g. "SC0242 - LL") stays visible as a subtitle. Falls
               back to the reference as the title when the name is missing. */}
@@ -113,17 +135,19 @@ export function ImportRowDrawer({ batchId, rowId, onClose }: ImportRowDrawerProp
           </button>
         </header>
 
-        {isLoading && <div className="p-5 text-sm text-muted">Loading row…</div>}
-        {isError && (
-          <div className="p-5 text-sm text-red-300">Could not load this row. Please try again.</div>
-        )}
-        {row && <DrawerBody batchId={batchId} row={row} />}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {isLoading && <div className="p-5 text-sm text-muted">Loading row…</div>}
+          {isError && (
+            <div className="p-5 text-sm text-red-300">Could not load this row. Please try again.</div>
+          )}
+          {row && <ModalBody batchId={batchId} row={row} />}
+        </div>
       </div>
     </div>
   )
 }
 
-function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
+function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const editMutation = useEditRow(batchId)
   const actionMutation = useRowAction(batchId)
   const resolveMutation = useResolveIssue(batchId)
@@ -139,6 +163,12 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const customerNameMisfiled = (details?.notes?.misfiled ?? []).filter(
     (m) => m.source_column === 'Customer Name',
   )
+  // Exactly what import commit will seed into Job.internal_notes (read-only preview;
+  // pre-commit editing of internal_notes is not supported yet — see the P5 report).
+  const internalNotesPreview = previewInternalNotes(details)
+  // Approval signal recorded by the parser (none/pending/approved). The "Needs
+  // approval" auto-label is derived on the backend at commit, not projected here.
+  const importApprovalState = asString(row.parsed?.approval_state).trim().toLowerCase() || 'none'
 
   const [text, setText] = useState<Record<string, string>>({})
   const [emails, setEmails] = useState<string[]>([])
@@ -261,8 +291,8 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   // clickable Approve button (re-clicking is harmless but confusing).
   const approved = row.review_status === 'approved'
 
-  // Name-cell notes are rendered as a dedicated prominent block (below) rather
-  // than as one easily-missed input in the parsed grid; compute its edited state.
+  // Name-cell notes get a dedicated (de-emphasized) edit field below — the primary
+  // read-only display is the "On commit" internal-notes preview; compute edited state.
   const nameNotesOriginal = row.original_parsed
     ? asString(row.original_parsed['customer_name_notes'])
     : null
@@ -271,7 +301,7 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     nameNotesOriginal !== asString(row.parsed?.['customer_name_notes'])
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-5">
+    <div className="flex flex-col gap-4 p-5">
       <div className="flex flex-wrap items-center gap-2">
         <RowClassBadge rowClass={row.row_class} />
         <ReviewStatusBadge status={row.review_status} />
@@ -292,6 +322,12 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
         </div>
       )}
 
+      {/* Two-column review layout: main review content (structured details, issues,
+          parsed fields, raw cells) on the left; the commit outcome — internal-notes
+          preview + approval — and the review actions on the right, like the Job
+          detail page. Stacks vertically on small screens. */}
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-1">
       {/* Phase 3b-1: registry-driven structured read-only view. Falls back to the
           flat fields below (with a hint) for rows staged before structured parsing. */}
       {details && registry ? (
@@ -309,6 +345,37 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
             Structured view available after re-ingest — showing the legacy fields below.
           </p>
         </div>
+      )}
+        </div>
+
+        <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-0 lg:col-start-3 lg:row-span-2 lg:row-start-1 lg:self-start">
+      {/* What this row will become on commit: the approval signal recorded by the
+          import, and the EXACT text that will be seeded into Job.internal_notes.
+          Read-only preview (direct internal_notes editing isn't supported yet —
+          adjust "Name-cell notes" / structured fields below to change it). */}
+      {(row.row_class === 'job' || row.row_class === 'ambiguous') && (
+        <section className="rounded-md border border-line bg-elevated p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">On commit</h3>
+            <span className="inline-flex items-center gap-1.5 text-xs text-faint">
+              Approval (from import):
+              <span className="font-medium capitalize text-fg">{importApprovalState}</span>
+            </span>
+          </div>
+          <p className="mb-1 text-xs text-faint">Will be saved as Job internal notes:</p>
+          {internalNotesPreview ? (
+            <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded border border-line bg-surface px-3 py-2 text-sm text-fg/90">
+              {internalNotesPreview}
+            </div>
+          ) : (
+            <p className="rounded border border-dashed border-line-strong bg-surface px-3 py-2 text-sm text-faint">
+              No internal notes — nothing extra was preserved for this row.
+            </p>
+          )}
+          <p className="mt-1.5 text-xs text-faint">
+            Read-only preview. Editing internal notes before commit isn’t supported yet.
+          </p>
+        </section>
       )}
 
       {message && (
@@ -362,7 +429,9 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           )}
         </>
       )}
+        </aside>
 
+        <div className="flex min-w-0 flex-col gap-5 lg:col-span-2 lg:col-start-1 lg:row-start-2">
       {/* Editable region — disabled wholesale once the row is committed. */}
       <fieldset disabled={locked} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
       {/* Issues */}
@@ -422,37 +491,36 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           Parsed candidate
         </h3>
 
-        {/* Name-cell notes — extra text preserved from the Customer Name cell.
-            Surfaced prominently (and editable) right by the customer fields,
-            because as one input among many it was easy to miss and otherwise
-            only showed under Raw Cells. */}
-        <div className="mb-3 rounded-md border border-line bg-elevated p-3">
-          <label className="block text-sm">
-            <span className="mb-1 flex items-center gap-2 font-medium text-fg">
-              Name-cell notes
-              {nameNotesEdited && (
-                <span
-                  className="rounded bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-300"
-                  title={`Original: ${nameNotesOriginal || '(empty)'}`}
-                >
-                  Edited
-                </span>
-              )}
-            </span>
-            <textarea
-              value={text['customer_name_notes'] ?? ''}
-              onChange={(e) =>
-                setText((prev) => ({ ...prev, customer_name_notes: e.target.value }))
-              }
-              rows={2}
-              placeholder="Extra text preserved from the Customer Name cell"
-              className="input"
-            />
-            <span className="mt-1 block text-xs text-faint">
-              Preserved from the Customer Name cell (approval status removed).
-            </span>
-          </label>
-        </div>
+        {/* Name-cell notes — the EDITABLE source for preserved Customer Name text.
+            De-emphasized (no longer a prominent card): the read-only "On commit"
+            internal-notes preview on the right is the primary display. Kept editable
+            because it is currently the only way to change what import commit seeds
+            into Job.internal_notes. */}
+        <label className="mb-3 block text-sm">
+          <span className="mb-1 flex items-center gap-2 font-medium text-fg">
+            Name-cell notes
+            {nameNotesEdited && (
+              <span
+                className="rounded bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-300"
+                title={`Original: ${nameNotesOriginal || '(empty)'}`}
+              >
+                Edited
+              </span>
+            )}
+          </span>
+          <textarea
+            value={text['customer_name_notes'] ?? ''}
+            onChange={(e) =>
+              setText((prev) => ({ ...prev, customer_name_notes: e.target.value }))
+            }
+            rows={2}
+            placeholder="Extra text preserved from the Customer Name cell"
+            className="input"
+          />
+          <span className="mt-1 block text-xs text-faint">
+            Editable — feeds the “On commit” internal-notes preview.
+          </span>
+        </label>
 
         {/* Land/legal parcel text stripped off the Customer Name cell, surfaced
             read-only right by the name — the same entries also appear in the
@@ -611,6 +679,8 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           <p className="text-sm text-faint">No raw cells.</p>
         )}
       </section>
+        </div>
+      </div>
     </div>
   )
 }
