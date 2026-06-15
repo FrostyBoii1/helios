@@ -14,7 +14,7 @@ import openpyxl
 from app.services import import_parser
 from app.services.import_details import (
     build_details,
-    build_imported_review_notes,
+    build_imported_notes,
     render_legacy_blobs,
 )
 
@@ -172,26 +172,34 @@ def test_approval_pending_date_in_structured_details():
     assert "approval" not in build_details({"approval_state": "pending"}, {})
 
 
-def test_build_imported_review_notes_from_review_bucket_only():
+def test_build_imported_notes_gathers_all_preserved_context():
+    # Safety net: name-cell notes + review notes + misfiled are ALL gathered.
     details = {
         "_v": 2,
         "notes": {
+            "customer_name_notes": "includes hot water timer",
             "review_notes": [
                 {"source_column": "Customer Name", "text": "Jemena Approval # 000413493"},
                 {"source_column": "Sales Consultant", "text": "dob 23/11/55"},
             ],
-            # misfiled source notes are deliberately excluded from internal notes
-            "misfiled": [{"source_column": "Phase", "text": "ask sparky"}],
+            "misfiled": [{"source_column": "Customer Name", "text": "Lot 4 DP 588479"}],
         },
     }
-    block = build_imported_review_notes(details)
-    assert block.startswith("Imported review notes:")
-    assert "Jemena Approval # 000413493" in block
-    assert "dob 23/11/55" in block
-    assert "ask sparky" not in block  # misfiled stays out of internal notes
-    # No review notes -> None (so internal_notes is left blank, not an empty block).
-    assert build_imported_review_notes({"_v": 2, "notes": {}}) is None
-    assert build_imported_review_notes(None) is None
+    block = build_imported_notes(details)
+    assert block.startswith("Imported notes:")
+    assert "Name cell: includes hot water timer" in block      # name-cell notes
+    assert "Jemena Approval # 000413493" in block              # stripped approval reference
+    assert "dob 23/11/55" in block                             # sales-cell DOB remainder
+    assert "Lot 4 DP 588479" in block                          # misfiled Lot/DP now INCLUDED
+    # Identical lines are de-duplicated.
+    dupe = {"_v": 2, "notes": {
+        "review_notes": [{"source_column": "X", "text": "same"}],
+        "misfiled": [{"source_column": "X", "text": "same"}],
+    }}
+    assert build_imported_notes(dupe).count("- X: same") == 1
+    # Nothing preserved -> None (internal_notes left blank, not an empty block).
+    assert build_imported_notes({"_v": 2, "notes": {}}) is None
+    assert build_imported_notes(None) is None
 
 
 def test_legacy_present_only_when_populated():

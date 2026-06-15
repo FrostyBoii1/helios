@@ -42,7 +42,7 @@ from app.services.import_commit_preview import (
 )
 from app.services.import_details import (
     build_details,
-    build_imported_review_notes,
+    build_imported_notes,
     render_legacy_blobs,
 )
 from app.services.import_parser import parse_date_maybe
@@ -141,6 +141,17 @@ def _eligible_uncommitted_count(db: Session, batch_id: int) -> int:
     return sum(1 for r in rows if classify_row(r) is None)
 
 
+def seed_internal_notes(job: Job) -> None:
+    """Seed ``Job.internal_notes`` from the preserved-imported-context safety net
+    ONLY when it is blank — never overwrites a manual note. No-op when there is
+    nothing preserved (internal_notes stays as-is)."""
+    if _str(job.internal_notes).strip():
+        return
+    imported = build_imported_notes(job.details)
+    if imported:
+        job.internal_notes = imported
+
+
 def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, current_year: int) -> dict:
     """Create Customer+Job for one eligible row and link it. Per-row durable.
 
@@ -172,14 +183,9 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
         row.committed_customer_id = customer.id
         row.committed_job_id = job.id
         row.review_status = ImportRowReviewStatus.COMMITTED.value
-        # Seed manual internal notes from the imported review context (approval
-        # references, DOB/free-note remainders, panel notes) — ONLY when blank, so
-        # a manual note is never overwritten. A freshly created job has no manual
-        # note, so this initializes it; recommits/edits keep whatever is there.
-        if not _str(job.internal_notes).strip():
-            imported_notes = build_imported_review_notes(job.details)
-            if imported_notes:
-                job.internal_notes = imported_notes
+        # Safety net: seed internal notes from ALL preserved imported context —
+        # ONLY when blank, so a manual note is never overwritten.
+        seed_internal_notes(job)
         log_activity(
             db,
             activity_type=ActivityType.RECORD_IMPORTED,

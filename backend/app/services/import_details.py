@@ -287,26 +287,47 @@ def _join_bits(bits: list[tuple[str, Any]]) -> str | None:
     return " | ".join(parts) or None
 
 
-def build_imported_review_notes(details: dict | None) -> str | None:
-    """Format ``details.notes.review_notes`` into a readable block for seeding
-    ``Job.internal_notes`` on commit. Returns None when there are no review notes.
+def build_imported_notes(details: dict | None) -> str | None:
+    """Readable SAFETY-NET summary of ALL preserved imported context, for seeding
+    ``Job.internal_notes`` on commit when it is blank. Returns None when there is
+    nothing preserved.
 
-    Review notes are the neutral, recognized import context staff should see
-    operationally — approval reference phrases ("Jemena Approval # …"), a
-    sales-cell DOB / free-note remainder, non-numeric panel text. The misfiled
-    "source notes" are deliberately NOT included (they remain in the structured
-    notes display, not the manual internal-notes field).
+    The principle: if source text was stripped / diverted / preserved from the
+    workbook, staff should be able to see it in internal notes — better duplicated
+    in a readable place than effectively lost in a hidden panel. So this gathers,
+    in order:
+      * the name-cell notes (extra text kept off the Customer Name cell),
+      * the neutral review notes (approval references, a DOB / free-note
+        remainder, non-numeric panel remarks),
+      * the misfiled source notes (Lot/DP / legal descriptors and other diverted
+        column text).
+    Exact source text is preserved; identical lines are de-duplicated. Structured
+    field values, generated approval-state text, and provenance noise are NOT
+    included — those have dedicated fields / are not in details.notes. This is a
+    safety net, not the authoritative state (labels/fields remain authoritative).
     """
     notes = (details or {}).get("notes", {}) or {}
     lines: list[str] = []
+    seen: set[str] = set()
+
+    def add(label: str, text: Any) -> None:
+        t = _s(text).strip()
+        if not t:
+            return
+        line = f"- {label}: {t}" if label else f"- {t}"
+        if line not in seen:
+            seen.add(line)
+            lines.append(line)
+
+    add("Name cell", notes.get("customer_name_notes"))
     for m in notes.get("review_notes") or []:
-        col = _s(m.get("source_column")).strip()
-        txt = _s(m.get("text")).strip()
-        if txt:
-            lines.append(f"- {col}: {txt}" if col else f"- {txt}")
+        add(_s(m.get("source_column")).strip(), m.get("text"))
+    for m in notes.get("misfiled") or []:
+        add(_s(m.get("source_column")).strip(), m.get("text"))
+
     if not lines:
         return None
-    return "Imported review notes:\n" + "\n".join(lines)
+    return "Imported notes:\n" + "\n".join(lines)
 
 
 def render_structured_blobs(details: dict | None) -> dict[str, str | None]:

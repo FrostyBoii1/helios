@@ -546,24 +546,49 @@ def test_commit_assigns_no_labels_when_no_states(users, db_session: Session):
     assert job_labels_service.list_job_labels(db_session, job.id) == []
 
 
-def test_commit_initializes_internal_notes_from_review_notes(users, db_session: Session):
+def test_commit_seeds_internal_notes_from_all_preserved_context(users, db_session: Session):
+    # Safety net: name-cell notes, stripped Customer Name approval reference, AND a
+    # stripped Lot/DP descriptor all seed Job.internal_notes on commit.
     parsed = _details_parsed()
     parsed["details"] = dict(parsed["details"])
-    parsed["details"]["notes"] = dict(parsed["details"]["notes"])
-    parsed["details"]["notes"]["review_notes"] = [
-        {"source_column": "Customer Name", "text": "Jemena Approval # 000413493"},
-    ]
-    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPL2N1")
-    assert job.internal_notes is not None
-    assert job.internal_notes.startswith("Imported review notes:")
-    assert "Jemena Approval # 000413493" in job.internal_notes  # reference preserved
+    parsed["details"]["notes"] = {
+        "customer_name_notes": "includes hot water timer",
+        "review_notes": [{"source_column": "Customer Name", "text": "Jemena Approval # 000413493"}],
+        "misfiled": [{"source_column": "Customer Name", "text": "Lot 4 DP 588479"}],
+    }
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPSN1")
+    assert job.internal_notes.startswith("Imported notes:")
+    assert "Name cell: includes hot water timer" in job.internal_notes
+    assert "Jemena Approval # 000413493" in job.internal_notes   # stripped approval reference
+    assert "Lot 4 DP 588479" in job.internal_notes               # stripped Lot/DP descriptor
 
 
-def test_commit_leaves_internal_notes_blank_when_no_review_notes(users, db_session: Session):
-    # _details_parsed has no review_notes -> nothing to seed -> internal_notes stays None
-    # (commit never writes an empty "Imported review notes:" block).
-    _b, _row, job = _commit_one_seeded(db_session, users, _details_parsed(), "TESTIMPL2N2")
+def test_commit_leaves_internal_notes_blank_when_no_preserved_context(users, db_session: Session):
+    parsed = _details_parsed()
+    parsed["details"] = dict(parsed["details"])
+    parsed["details"]["notes"] = {}  # nothing stripped/diverted -> nothing to seed
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPSN2")
     assert not (job.internal_notes or "").strip()
+
+
+def test_seed_internal_notes_only_when_blank_never_overwrites_manual(db_session: Session):
+    from types import SimpleNamespace
+
+    details = {"_v": 2, "notes": {
+        "review_notes": [{"source_column": "Customer Name", "text": "Jemena Approval # 000413493"}],
+    }}
+    # blank -> seeded
+    j = SimpleNamespace(internal_notes=None, details=details)
+    import_commit.seed_internal_notes(j)
+    assert j.internal_notes and "Jemena Approval # 000413493" in j.internal_notes
+    # a manual note is NEVER overwritten
+    j2 = SimpleNamespace(internal_notes="MANUAL: call before 9am", details=details)
+    import_commit.seed_internal_notes(j2)
+    assert j2.internal_notes == "MANUAL: call before 9am"
+    # blank but nothing preserved -> stays None
+    j3 = SimpleNamespace(internal_notes=None, details={"_v": 2, "notes": {}})
+    import_commit.seed_internal_notes(j3)
+    assert j3.internal_notes is None
 
 
 def test_commit_auto_label_idempotent(users, db_session: Session):
