@@ -4,6 +4,7 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { canReviewImports } from '@/auth/permissions'
+import { ContourBackground } from '@/components/ContourBackground'
 
 interface NavItem {
   to: string
@@ -29,6 +30,11 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen">
+      {/* Restrained ambient variant of the /login contour system — one shared
+          visual language across the app. Fixed + z-index:-1, so it sits behind
+          all content. Mounted once at the shell so it persists across in-app
+          navigation (no per-page re-init). */}
+      <ContourBackground variant="ambient" />
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">

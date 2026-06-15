@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
+import { ContourBackground } from '@/components/ContourBackground'
 import { ApiError } from '@/lib/api'
 
 interface LocationState {
@@ -38,10 +39,11 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="relative isolate flex min-h-screen items-center justify-center px-4">
+      <ContourBackground />
       <form
         onSubmit={handleSubmit}
-        className="card w-full max-w-sm p-6 shadow-xl shadow-black/30"
+        className="relative z-10 w-full max-w-sm rounded-lg border border-white/10 bg-surface/70 p-6 shadow-2xl shadow-black/50 ring-1 ring-white/5 backdrop-blur-xl"
       >
         <div className="mb-1 flex items-center gap-2">
           <span className="h-5 w-5 rounded-sm bg-brand-500" aria-hidden />
