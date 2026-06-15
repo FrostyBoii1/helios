@@ -37,6 +37,22 @@ export function canDeleteJobs(role: RoleName | undefined): boolean {
   return role === 'admin'
 }
 
+// Manual add/remove of operational/custom job labels (mirrors the backend guard).
+// System labels (approval/decommission) are never manually editable regardless.
+export function canManageJobLabels(role: RoleName | undefined): boolean {
+  return (
+    role === 'admin' ||
+    role === 'sales_admin' ||
+    role === 'scheduling' ||
+    role === 'support'
+  )
+}
+
+// Set a job's approval state via the dedicated control (mirrors the backend guard).
+export function canSetJobApproval(role: RoleName | undefined): boolean {
+  return role === 'admin' || role === 'sales_admin' || role === 'approvals'
+}
+
 // ---- Imports (review of staged workbooks — admin only, mirrors backend) ----
 export function canReviewImports(role: RoleName | undefined): boolean {
   return role === 'admin'

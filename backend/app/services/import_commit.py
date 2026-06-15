@@ -40,7 +40,11 @@ from app.services.import_commit_preview import (
     classify_row,
     map_customer_preview,
 )
-from app.services.import_details import build_details, render_legacy_blobs
+from app.services.import_details import (
+    build_details,
+    build_imported_review_notes,
+    render_legacy_blobs,
+)
 from app.services.import_parser import parse_date_maybe
 
 # Conservative cap for this first live-write release (owner decision D3).
@@ -168,6 +172,14 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
         row.committed_customer_id = customer.id
         row.committed_job_id = job.id
         row.review_status = ImportRowReviewStatus.COMMITTED.value
+        # Seed manual internal notes from the imported review context (approval
+        # references, DOB/free-note remainders, panel notes) — ONLY when blank, so
+        # a manual note is never overwritten. A freshly created job has no manual
+        # note, so this initializes it; recommits/edits keep whatever is there.
+        if not _str(job.internal_notes).strip():
+            imported_notes = build_imported_review_notes(job.details)
+            if imported_notes:
+                job.internal_notes = imported_notes
         log_activity(
             db,
             activity_type=ActivityType.RECORD_IMPORTED,

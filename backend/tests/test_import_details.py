@@ -12,7 +12,11 @@ from io import BytesIO
 import openpyxl
 
 from app.services import import_parser
-from app.services.import_details import build_details, render_legacy_blobs
+from app.services.import_details import (
+    build_details,
+    build_imported_review_notes,
+    render_legacy_blobs,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -155,6 +159,39 @@ def test_nonnumeric_panel_text_routes_to_review_notes_and_does_not_misfile():
     d2 = build_details({"no_of_panels": "16"}, {})
     assert d2["system"]["panel_count"] == 16
     assert "notes" not in d2
+
+
+def test_approval_pending_date_in_structured_details():
+    # Pending approval -> structured approval.pending_date (the live control reads it).
+    d = build_details({"approval_state": "pending", "approval_pending_date": "19/08/2026"}, {})
+    assert d["approval"]["pending_date"] == "19/08/2026"
+    # Approved / none -> no approval section (state lives on the label, not here).
+    assert "approval" not in build_details({"approval_state": "approved"}, {})
+    assert "approval" not in build_details({"approval_state": "none"}, {})
+    # Pending with no parsed date -> no section (nothing to store).
+    assert "approval" not in build_details({"approval_state": "pending"}, {})
+
+
+def test_build_imported_review_notes_from_review_bucket_only():
+    details = {
+        "_v": 2,
+        "notes": {
+            "review_notes": [
+                {"source_column": "Customer Name", "text": "Jemena Approval # 000413493"},
+                {"source_column": "Sales Consultant", "text": "dob 23/11/55"},
+            ],
+            # misfiled source notes are deliberately excluded from internal notes
+            "misfiled": [{"source_column": "Phase", "text": "ask sparky"}],
+        },
+    }
+    block = build_imported_review_notes(details)
+    assert block.startswith("Imported review notes:")
+    assert "Jemena Approval # 000413493" in block
+    assert "dob 23/11/55" in block
+    assert "ask sparky" not in block  # misfiled stays out of internal notes
+    # No review notes -> None (so internal_notes is left blank, not an empty block).
+    assert build_imported_review_notes({"_v": 2, "notes": {}}) is None
+    assert build_imported_review_notes(None) is None
 
 
 def test_legacy_present_only_when_populated():

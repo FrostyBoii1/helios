@@ -29,7 +29,7 @@ DETAILS_VERSION = 2
 # customer/contact + FC fields are mapped elsewhere, not inside details).
 _SECTIONS = (
     "sales", "system", "electrical", "install", "payment",
-    "compliance", "post_install", "legacy", "flags", "contacts", "notes",
+    "compliance", "approval", "post_install", "legacy", "flags", "contacts", "notes",
 )
 
 
@@ -194,6 +194,16 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
     put_text("compliance", "accreditation", comp.get("accreditation_code"))
     put_text("compliance", "ces_ecoc_email", raw.get("ces_ecoc_email"))
 
+    # --- Approval (structured) ---
+    # The approval STATE is represented by a label on commit (approval_approved /
+    # approval_pending), and any reference phrase ("Jemena Approval # …") is kept
+    # as a review note. The only structured approval datum is the pending date,
+    # stored here so the live Approval control can read/write it.
+    if str(parsed.get("approval_state") or "").lower() == "pending":
+        pending_date = _s(parsed.get("approval_pending_date")).strip()
+        if pending_date:
+            d["approval"]["pending_date"] = pending_date
+
     # --- Post-install ---
     # The Post-Install Call/Review column holds a date, a completion status
     # ("DONE"), or a status + date ("Done 8/3/2023"). A pure date -> review_date;
@@ -275,6 +285,28 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
 def _join_bits(bits: list[tuple[str, Any]]) -> str | None:
     parts = [f"{label}: {_s(v).strip()}" for label, v in bits if _s(v).strip()]
     return " | ".join(parts) or None
+
+
+def build_imported_review_notes(details: dict | None) -> str | None:
+    """Format ``details.notes.review_notes`` into a readable block for seeding
+    ``Job.internal_notes`` on commit. Returns None when there are no review notes.
+
+    Review notes are the neutral, recognized import context staff should see
+    operationally — approval reference phrases ("Jemena Approval # …"), a
+    sales-cell DOB / free-note remainder, non-numeric panel text. The misfiled
+    "source notes" are deliberately NOT included (they remain in the structured
+    notes display, not the manual internal-notes field).
+    """
+    notes = (details or {}).get("notes", {}) or {}
+    lines: list[str] = []
+    for m in notes.get("review_notes") or []:
+        col = _s(m.get("source_column")).strip()
+        txt = _s(m.get("text")).strip()
+        if txt:
+            lines.append(f"- {col}: {txt}" if col else f"- {txt}")
+    if not lines:
+        return None
+    return "Imported review notes:\n" + "\n".join(lines)
 
 
 def render_structured_blobs(details: dict | None) -> dict[str, str | None]:

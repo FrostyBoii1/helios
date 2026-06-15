@@ -40,6 +40,15 @@ NMI_ALNUM_RULES: list[tuple[str, str]] = [("QB", "QLD Energex")]
 
 APPROVAL_APPROVED_RE = re.compile(r"\bAPPROVED\b", re.IGNORECASE)
 APPROVAL_PENDING_RE = re.compile(r"\bPENDING\b\s*([0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})?", re.IGNORECASE)
+# A distributor approval REFERENCE means the connection was approved, e.g.
+# "Jemena Approval # 000413493", "ENERGEX APPROVAL No 12345", "Approval Ref 678901".
+# Match "approv…" near either a #/No/Ref/Number marker + 3+ digits, OR a standalone
+# 6+ digit reference number (long enough not to be a year). Checked AFTER the
+# pending rule, so "pending approval 12/3/26" stays pending.
+APPROVAL_REFERENCE_RE = re.compile(
+    r"\bapprov\w*\b.{0,12}?(?:(?:#|\bno\b\.?|\bref(?:erence)?\b\.?|\bnumber\b)\s*\.?\s*\d{3,}|\d{6,})",
+    re.IGNORECASE,
+)
 DATE_RE = re.compile(r"([0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})")
 # Old-system removal / decommission markers. Operationally important: surfaced
 # as a parsed flag so staff see it after import instead of it being buried in
@@ -332,12 +341,22 @@ def detect_decommission(*texts: str) -> str | None:
 
 
 def parse_approval(*texts: str) -> dict[str, Any]:
+    """Approval state from any of the given texts (name-cell approval phrase,
+    name-cell trailing notes, the Notes column).
+
+    Order matters: an explicit APPROVED word wins; then a PENDING word (with an
+    optional date); then a distributor approval REFERENCE number (e.g. "Jemena
+    Approval # 000413493") which also means approved. No evidence -> "none" (the
+    caller assigns no approval label). DOB/other digit runs do not trip the
+    reference rule — it needs a #/No/Ref marker or a long (6+ digit) number."""
     blob = " ".join(t for t in texts if t)
     if APPROVAL_APPROVED_RE.search(blob):
         return {"state": "approved", "pending_date": None}
     pend = APPROVAL_PENDING_RE.search(blob)
     if pend:
         return {"state": "pending", "pending_date": pend.group(1)}
+    if APPROVAL_REFERENCE_RE.search(blob):
+        return {"state": "approved", "pending_date": None}
     return {"state": "none", "pending_date": None}
 
 

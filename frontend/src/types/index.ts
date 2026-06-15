@@ -227,3 +227,37 @@ export interface SelectableUser {
   full_name: string
   role: RoleName
 }
+
+// ---- Job labels (operational flags) ----
+export type JobLabelCategory = 'approval' | 'operational' | 'system' | 'custom'
+export type JobLabelSource = 'import_auto' | 'manual' | 'system'
+
+export interface JobLabelDefinition {
+  id: number
+  key: string
+  name: string
+  category: JobLabelCategory
+  color: string
+  description: string | null
+  is_system: boolean
+  is_auto: boolean
+  sort_order: number
+}
+
+export interface JobLabelAssignment {
+  id: number
+  job_id: number
+  label_id: number
+  source: JobLabelSource
+  assigned_by_id: number | null
+  note: string | null
+  created_at: string
+  label: JobLabelDefinition
+}
+
+export type JobApprovalState = 'none' | 'pending' | 'approved'
+
+export interface JobApprovalRead {
+  state: JobApprovalState
+  pending_date: string | null
+}

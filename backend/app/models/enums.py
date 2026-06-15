@@ -64,6 +64,8 @@ class ActivityType(str, enum.Enum):
     JOB_UPDATED = "job_updated"
     JOB_STATUS_CHANGED = "job_status_changed"
     JOB_DELETED = "job_deleted"
+    JOB_LABEL_ADDED = "job_label_added"
+    JOB_LABEL_REMOVED = "job_label_removed"
     INSTALL_RESCHEDULED = "install_rescheduled"
     CUSTOMER_CREATED = "customer_created"
     CUSTOMER_UPDATED = "customer_updated"

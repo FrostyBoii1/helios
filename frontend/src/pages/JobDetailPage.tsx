@@ -11,6 +11,8 @@ import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
 import { ImportedJobDetails } from '@/components/ImportedJobDetails'
+import { JobApprovalControl } from '@/components/JobApprovalControl'
+import { JobLabelChips } from '@/components/JobLabelChips'
 import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
@@ -33,11 +35,16 @@ const DESCRIPTIVE_FIELDS: { key: keyof JobInput; label: string; textarea?: boole
 
 // In structured edit mode the derived blobs (system_details/install_details) are
 // re-rendered by the backend from Job.details, so they are NOT edited directly.
-// `notes` is also excluded here: it is the read-only IMPORTED source blob —
-// manual notes now live in the dedicated internal-notes panel (Phase A), so the
-// two never mix.
+// `notes` is also excluded: it is the read-only IMPORTED source blob — manual
+// notes now live in the dedicated internal-notes panel (Phase A). `approval_details`
+// is excluded too: approval is structured state edited via the dedicated Approval
+// control (label-is-law), never a free-text textarea.
 const STRUCTURED_MODE_LEGACY_FIELDS = DESCRIPTIVE_FIELDS.filter(
-  (f) => f.key !== 'system_details' && f.key !== 'install_details' && f.key !== 'notes',
+  (f) =>
+    f.key !== 'system_details' &&
+    f.key !== 'install_details' &&
+    f.key !== 'notes' &&
+    f.key !== 'approval_details',
 )
 
 function describeError(err: unknown, fallback: string): string {
@@ -305,6 +312,9 @@ export function JobDetailPage() {
         </div>
       </div>
 
+      {/* Operational labels (Phase L2) — shown near the lifecycle status. */}
+      <JobLabelChips jobId={job.id} />
+
       {/* Descriptive details */}
       <div className="card p-5">
         <div className="mb-3 flex items-center justify-between">
@@ -347,6 +357,8 @@ export function JobDetailPage() {
                   </div>
                 ))}
               </dl>
+              {/* Approval is structured state, not a textarea — dedicated control. */}
+              <JobApprovalControl job={job} />
               <StructuredDetailsView
                 registry={registry}
                 details={job.details}
@@ -395,12 +407,9 @@ export function JobDetailPage() {
               </div>
             </dl>
             <StructuredDetailsView registry={registry} details={job.details} />
-            {job.approval_details && (
-              <div>
-                <dt className="eyebrow text-faint">Approval details</dt>
-                <dd className="mt-0.5 whitespace-pre-wrap text-fg">{job.approval_details}</dd>
-              </div>
-            )}
+            {/* Approval is shown as a chip near the status (JobLabelChips) — the old
+                "Approval details: Approval approved" blob is intentionally gone for
+                structured jobs; the reference text lives in internal/imported notes. */}
           </div>
         ) : importedView ? (
           // Imported job (legacy blobs): title/sale-date + structured detail sections.

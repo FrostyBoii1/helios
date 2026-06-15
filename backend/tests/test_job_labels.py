@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.main import app
-from app.models.enums import JobLabelCategory, JobLabelSource, JobStatus
+from app.models.activity import Activity
+from app.models.enums import ActivityType, JobLabelCategory, JobLabelSource, JobStatus
 from app.models.job import Job
 from app.models.job_label import JobLabelAssignment, JobLabelDefinition
 from app.services import job_labels as svc
@@ -154,3 +155,161 @@ def test_read_requires_authentication(db_session: Session):
         assert client.get("/api/v1/job-labels").status_code == 401
     finally:
         app.dependency_overrides.clear()
+
+
+# --------------------------------------------------------------------------- #
+# Phase L2: add / remove (write endpoints, permissions, system-lock, activity)
+# --------------------------------------------------------------------------- #
+def _add(client, job_id: int, key: str):
+    return client.post(f"/api/v1/jobs/{job_id}/labels", json={"key": key})
+
+
+def _label_count(db, job_id, kind):
+    return (
+        db.query(Activity)
+        .filter(Activity.job_id == job_id, Activity.activity_type == kind.value)
+        .count()
+    )
+
+
+def test_add_operational_label(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    resp = _add(client_for(users["admin"]), job.id, "needs_maintenance")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["label"]["key"] == "needs_maintenance"
+    assert body["source"] == "manual" and body["assigned_by_id"] == users["admin"].id
+    assert [a.label.key for a in svc.list_job_labels(db_session, job.id)] == ["needs_maintenance"]
+    assert _label_count(db_session, job.id, ActivityType.JOB_LABEL_ADDED) == 1
+
+
+def test_add_label_idempotent_no_duplicate(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    admin = client_for(users["admin"])
+    assert _add(admin, job.id, "warranty_issue").status_code == 200
+    assert _add(admin, job.id, "warranty_issue").status_code == 200  # no-op
+    assert [a.label.key for a in svc.list_job_labels(db_session, job.id)] == ["warranty_issue"]
+    # the idempotent re-add logs no second activity
+    assert _label_count(db_session, job.id, ActivityType.JOB_LABEL_ADDED) == 1
+
+
+def test_remove_operational_label(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    admin = client_for(users["admin"])
+    _add(admin, job.id, "battery_only")
+    resp = admin.delete(f"/api/v1/jobs/{job.id}/labels/battery_only")
+    assert resp.status_code == 204
+    assert svc.list_job_labels(db_session, job.id) == []
+    assert _label_count(db_session, job.id, ActivityType.JOB_LABEL_REMOVED) == 1
+
+
+def test_remove_unassigned_label_404(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    resp = client_for(users["admin"]).delete(f"/api/v1/jobs/{job.id}/labels/battery_only")
+    assert resp.status_code == 404
+
+
+def test_add_system_label_blocked(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    resp = _add(client_for(users["admin"]), job.id, "approval_approved")
+    assert resp.status_code == 403
+    assert svc.list_job_labels(db_session, job.id) == []
+
+
+def test_remove_system_label_blocked(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    # simulate an import auto-assigned system label
+    svc.assign_label_by_key(
+        db_session, job_id=job.id, key="decommission_pre_existing", source=JobLabelSource.IMPORT_AUTO
+    )
+    db_session.flush()
+    resp = client_for(users["admin"]).delete(f"/api/v1/jobs/{job.id}/labels/decommission_pre_existing")
+    assert resp.status_code == 403
+    assert "decommission_pre_existing" in [a.label.key for a in svc.list_job_labels(db_session, job.id)]
+
+
+def test_label_manage_permission_enforced(db_session, client_for, users, customer):
+    # support is in the manage set -> may add operational labels.
+    job = _make_job(db_session, customer.id)
+    assert _add(client_for(users["support"]), job.id, "awaiting_documents").status_code == 200
+    # approvals is NOT in the manage set -> 403.
+    job2 = _make_job(db_session, customer.id)
+    assert _add(client_for(users["approvals"]), job2.id, "needs_maintenance").status_code == 403
+
+
+# --------------------------------------------------------------------------- #
+# Slice 2: dedicated approval control (PUT /jobs/{id}/approval) — label-is-law
+# --------------------------------------------------------------------------- #
+def _approval(client, job_id: int, state: str, pending_date=None):
+    body: dict = {"state": state}
+    if pending_date is not None:
+        body["pending_date"] = pending_date
+    return client.put(f"/api/v1/jobs/{job_id}/approval", json=body)
+
+
+def _approval_keys(db, job_id: int) -> list[str]:
+    return [a.label.key for a in svc.list_job_labels(db, job_id) if a.label.key.startswith("approval_")]
+
+
+def test_approval_control_approved(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    resp = _approval(client_for(users["approvals"]), job.id, "approved")
+    assert resp.status_code == 200
+    assert resp.json() == {"state": "approved", "pending_date": None}
+    assert _approval_keys(db_session, job.id) == ["approval_approved"]
+
+
+def test_approval_control_pending_with_date(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    resp = _approval(client_for(users["admin"]), job.id, "pending", "19/08/2026")
+    assert resp.status_code == 200
+    assert resp.json() == {"state": "pending", "pending_date": "19/08/2026"}
+    assert _approval_keys(db_session, job.id) == ["approval_pending"]
+    fresh = db_session.get(Job, job.id)
+    assert (fresh.details or {}).get("approval", {}).get("pending_date") == "19/08/2026"
+
+
+def test_approval_control_none_clears_labels_and_date(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    admin = client_for(users["admin"])
+    _approval(admin, job.id, "pending", "01/01/2026")
+    resp = _approval(admin, job.id, "none")
+    assert resp.status_code == 200 and resp.json() == {"state": "none", "pending_date": None}
+    assert _approval_keys(db_session, job.id) == []
+    assert "approval" not in (db_session.get(Job, job.id).details or {})
+
+
+def test_approval_control_switch_replaces_label_exactly_one(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    admin = client_for(users["admin"])
+    _approval(admin, job.id, "pending", "01/01/2026")
+    assert _approval_keys(db_session, job.id) == ["approval_pending"]
+    _approval(admin, job.id, "approved")
+    # exactly one approval label (the new one); pending date cleared on approve.
+    assert _approval_keys(db_session, job.id) == ["approval_approved"]
+    assert "approval" not in (db_session.get(Job, job.id).details or {})
+
+
+def test_approval_control_idempotent(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    admin = client_for(users["admin"])
+    _approval(admin, job.id, "approved")
+    _approval(admin, job.id, "approved")  # no-op, still exactly one
+    assert _approval_keys(db_session, job.id) == ["approval_approved"]
+
+
+def test_approval_control_permission(db_session, client_for, users, customer):
+    job = _make_job(db_session, customer.id)
+    assert _approval(client_for(users["scheduling"]), job.id, "approved").status_code == 403
+    assert _approval(client_for(users["support"]), job.id, "approved").status_code == 403
+    assert _approval(client_for(users["sales"]), job.id, "approved").status_code == 200
+
+
+def test_approval_label_not_casually_removable(db_session, client_for, users, customer):
+    # The approval label is set via the control, and the casual chip DELETE refuses
+    # it (system lock) — so a job's approval state can't be silently dropped.
+    job = _make_job(db_session, customer.id)
+    _approval(client_for(users["admin"]), job.id, "approved")
+    resp = client_for(users["admin"]).delete(f"/api/v1/jobs/{job.id}/labels/approval_approved")
+    assert resp.status_code == 403
+    assert _approval_keys(db_session, job.id) == ["approval_approved"]

@@ -108,6 +108,7 @@ export interface ParsedDetails {
     review_notes?: MisfiledNote[]
   } & Record<string, unknown>
   flags?: { removes_old_system?: boolean; decommission_marker?: string | null } & Record<string, unknown>
+  approval?: { pending_date?: string | null } & Record<string, unknown>
   [section: string]: unknown
 }
 

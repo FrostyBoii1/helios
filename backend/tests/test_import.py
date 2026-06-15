@@ -371,6 +371,41 @@ def test_parse_customer_name_separates_distributor_approval_phrase():
     assert r3["name"] == "Bob Lee"
 
 
+def test_parse_approval_reference_means_approved():
+    pa = import_parser.parse_approval
+    # A distributor approval REFERENCE number means the connection was approved.
+    assert pa("Jemena Approval # 000413493")["state"] == "approved"
+    assert pa("ENERGEX APPROVAL No 12345")["state"] == "approved"
+    assert pa("Approval Ref 678901")["state"] == "approved"
+    # An explicit APPROVED word still wins.
+    assert pa("ESSENTIAL APPROVED")["state"] == "approved"
+    # PENDING wins over a trailing reference -> pending (not approved), date kept.
+    p = pa("ENERGEX PENDING 19/08/2026 ref 123456")
+    assert p["state"] == "pending" and p["pending_date"] == "19/08/2026"
+    # No evidence -> none (no approval label). Digit runs that are NOT approval
+    # references (a DOB date, a 4-digit year with no #/No/Ref marker) do not flip.
+    assert pa("")["state"] == "none"
+    assert pa("Robert W dob 23/11/1955")["state"] == "none"
+    assert pa("install expected 2025")["state"] == "none"
+    assert pa("approval expected 2025")["state"] == "none"
+
+
+def test_parse_rows_jemena_reference_is_approved_and_preserved():
+    # End-to-end: a name-cell "Jemena Approval # …" -> approval_state approved AND
+    # the exact reference is kept as a neutral review note (never lost).
+    rows = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
+        name_cell="Jane Roe - Jemena Approval # 000413493",
+    ))))
+    row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
+    assert row.parsed["approval_state"] == "approved"
+    assert row.parsed["customer_name"] == "Jane Roe"
+    review = [
+        m["text"] for m in row.parsed["details"]["notes"].get("review_notes", [])
+        if m["source_column"] == "Customer Name"
+    ]
+    assert any("000413493" in t for t in review)
+
+
 def test_parse_rows_routes_suffixes_to_correct_notes_buckets():
     # End-to-end through parse_rows -> build_details. A land/legal parcel descriptor
     # stays a (neutral) misfiled SOURCE note; a sales-cell free-note and a

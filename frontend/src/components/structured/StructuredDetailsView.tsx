@@ -95,14 +95,20 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
 }) {
   const rows = fields.map((f) => ({ f, v: valueAtStorage(details, f.storage), path: detailsPath(f.storage) }))
   const populated = rows.filter((r) => !isBlank(r.v))
-  // Blank CORE fields are revealable via the per-section show-empty toggle.
-  const blankCore = rows.filter((r) => isBlank(r.v) && r.f.category === 'core')
+  // Fields the registry marks visible_when_blank (e.g. Phase, MSB status) always
+  // show — even with no value — because they are operationally important.
+  const alwaysVisibleBlank = rows.filter((r) => isBlank(r.v) && r.f.visible_when_blank)
+  // Remaining blank CORE fields are revealable via the per-section show-empty toggle.
+  const blankCore = rows.filter(
+    (r) => isBlank(r.v) && r.f.category === 'core' && !r.f.visible_when_blank,
+  )
   // Blank fields explicitly added via the picker (any category, incl. legacy).
   const addedRows = rows.filter((r) => isBlank(r.v) && addedPaths.has(r.path))
 
   // A field can qualify under more than one bucket — dedupe by key, preserve order.
   const visibleMap = new Map<string, (typeof rows)[number]>()
   for (const r of populated) visibleMap.set(r.f.key, r)
+  for (const r of alwaysVisibleBlank) visibleMap.set(r.f.key, r)
   if (expanded) for (const r of blankCore) visibleMap.set(r.f.key, r)
   for (const r of addedRows) visibleMap.set(r.f.key, r)
   const visible = [...visibleMap.values()]

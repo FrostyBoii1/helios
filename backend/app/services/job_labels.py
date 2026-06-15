@@ -98,6 +98,93 @@ def assign_label_by_key(
     return assignment
 
 
+def remove_label_by_key(db: Session, *, job_id: int, key: str) -> bool:
+    """Remove a job's assignment of the label ``key``.
+
+    Hard-deletes the assignment row ONLY — the definition is never touched.
+    Returns True if an assignment was removed, False if the label was unknown or
+    not assigned to this job. Caller commits.
+    """
+    label = get_label_by_key(db, key)
+    if label is None:
+        return False
+    assignment = db.scalar(
+        select(JobLabelAssignment).where(
+            JobLabelAssignment.job_id == job_id,
+            JobLabelAssignment.label_id == label.id,
+        )
+    )
+    if assignment is None:
+        return False
+    db.delete(assignment)
+    db.flush()
+    return True
+
+
+# --------------------------------------------------------------------------- #
+# Approval state — the authoritative structured control (Phase L2 / Slice 2).
+# The approval STATE is "law": it is represented by at most one approval label,
+# plus a pending date in details.approval.pending_date when pending.
+# --------------------------------------------------------------------------- #
+_APPROVAL_LABEL_BY_STATE = {"approved": "approval_approved", "pending": "approval_pending"}
+_ALL_APPROVAL_KEYS = ("approval_approved", "approval_pending")
+
+
+def _set_job_pending_date(job: Any, value: str | None) -> None:
+    """Write/clear details.approval.pending_date on a job (reassigns the JSONB so
+    SQLAlchemy detects the change). Prunes an empty approval section."""
+    details = dict(job.details or {})
+    approval = dict(details.get("approval") or {})
+    if value:
+        approval["pending_date"] = value
+    else:
+        approval.pop("pending_date", None)
+    if approval:
+        details["approval"] = approval
+    else:
+        details.pop("approval", None)
+    job.details = details
+
+
+def get_job_approval(db: Session, job: Any) -> dict[str, Any]:
+    """Derive a job's approval state from its labels (+ pending date)."""
+    keys = {a.label.key for a in list_job_labels(db, job.id)}
+    if "approval_approved" in keys:
+        state = "approved"
+    elif "approval_pending" in keys:
+        state = "pending"
+    else:
+        state = "none"
+    pending = ((job.details or {}).get("approval") or {}).get("pending_date")
+    return {"state": state, "pending_date": pending if state == "pending" else None}
+
+
+def set_job_approval(
+    db: Session, *, job: Any, state: str, pending_date: str | None, assigned_by_id: int | None
+) -> dict[str, Any]:
+    """Authoritative approval-state edit. Syncs the (at most one) approval label
+    and details.approval.pending_date; idempotent. Bypasses the casual system-lock
+    because THIS is the structured control. Returns the resulting state plus the
+    label changes (so the caller can log them). Caller commits."""
+    target = _APPROVAL_LABEL_BY_STATE.get(state)  # None for "none"
+    current = {a.label.key for a in list_job_labels(db, job.id)}
+    added: list[str] = []
+    removed: list[str] = []
+    for key in _ALL_APPROVAL_KEYS:
+        if key == target and key not in current:
+            assign_label_by_key(
+                db, job_id=job.id, key=key, source=JobLabelSource.SYSTEM, assigned_by_id=assigned_by_id
+            )
+            added.append(key)
+        elif key != target and key in current:
+            remove_label_by_key(db, job_id=job.id, key=key)
+            removed.append(key)
+    _set_job_pending_date(job, pending_date if state == "pending" else None)
+    result = get_job_approval(db, job)
+    result["changes"] = {"added": added, "removed": removed}
+    return result
+
+
 def auto_label_keys(
     parsed: dict[str, Any] | None, details: dict[str, Any] | None
 ) -> list[tuple[str, str | None]]:

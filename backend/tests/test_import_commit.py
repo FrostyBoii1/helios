@@ -546,6 +546,26 @@ def test_commit_assigns_no_labels_when_no_states(users, db_session: Session):
     assert job_labels_service.list_job_labels(db_session, job.id) == []
 
 
+def test_commit_initializes_internal_notes_from_review_notes(users, db_session: Session):
+    parsed = _details_parsed()
+    parsed["details"] = dict(parsed["details"])
+    parsed["details"]["notes"] = dict(parsed["details"]["notes"])
+    parsed["details"]["notes"]["review_notes"] = [
+        {"source_column": "Customer Name", "text": "Jemena Approval # 000413493"},
+    ]
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPL2N1")
+    assert job.internal_notes is not None
+    assert job.internal_notes.startswith("Imported review notes:")
+    assert "Jemena Approval # 000413493" in job.internal_notes  # reference preserved
+
+
+def test_commit_leaves_internal_notes_blank_when_no_review_notes(users, db_session: Session):
+    # _details_parsed has no review_notes -> nothing to seed -> internal_notes stays None
+    # (commit never writes an empty "Imported review notes:" block).
+    _b, _row, job = _commit_one_seeded(db_session, users, _details_parsed(), "TESTIMPL2N2")
+    assert not (job.internal_notes or "").strip()
+
+
 def test_commit_auto_label_idempotent(users, db_session: Session):
     # The default row yields approval_approved + decommission_pre_existing, each once.
     _b, _row, job = _commit_one_seeded(db_session, users, _details_parsed(), "TESTIMPL3E")

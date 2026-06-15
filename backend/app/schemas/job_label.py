@@ -7,10 +7,31 @@ deferred to L2/L3.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import JobLabelCategory, JobLabelSource
+
+
+class JobLabelAssignRequest(BaseModel):
+    """Body for adding a label to a job (Phase L2): the label definition's key."""
+
+    key: str = Field(..., min_length=1, max_length=60)
+
+
+class JobApprovalRequest(BaseModel):
+    """Set a job's approval state via the dedicated structured control."""
+
+    state: Literal["none", "pending", "approved"]
+    pending_date: str | None = Field(default=None, max_length=40)
+
+
+class JobApprovalRead(BaseModel):
+    """A job's current approval state (derived from its approval label)."""
+
+    state: Literal["none", "pending", "approved"]
+    pending_date: str | None = None
 
 
 class JobLabelDefinitionRead(BaseModel):
