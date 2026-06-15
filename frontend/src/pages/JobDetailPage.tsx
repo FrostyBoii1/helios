@@ -16,6 +16,7 @@ import { JobLabelChips } from '@/components/JobLabelChips'
 import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
+import { useCustomer } from '@/hooks/useCustomers'
 import { useChangeJobStatus, useDeleteJob, useJob, useUpdateJob } from '@/hooks/useJobs'
 import { useFieldRegistry } from '@/hooks/useImports'
 import { ApiError } from '@/lib/api'
@@ -69,6 +70,7 @@ export function JobDetailPage() {
   const { user } = useAuth()
 
   const { data: job, isLoading, isError } = useJob(jobId)
+  const { data: customer } = useCustomer(job?.customer_id ?? 0)
   const updateMutation = useUpdateJob(jobId)
   const statusMutation = useChangeJobStatus(jobId)
   const deleteMutation = useDeleteJob()
@@ -203,6 +205,17 @@ export function JobDetailPage() {
 
   // Structured view for imported jobs (null for native jobs -> plain rendering).
   const importedView = parseImportedJobDetails(job)
+
+  // Job/property address (from the committed customer) — important for customers
+  // with multiple jobs/properties. Shown as one line in the structured details.
+  const propertyAddress = customer
+    ? [
+        customer.address_line1,
+        [customer.suburb, customer.state, customer.postcode].filter(Boolean).join(' '),
+      ]
+        .filter((part) => part && String(part).trim())
+        .join(', ')
+    : ''
 
   return (
     <div>
@@ -357,15 +370,22 @@ export function JobDetailPage() {
                   </div>
                 ))}
               </dl>
-              {/* Approval is structured state, not a textarea — dedicated control. */}
-              <JobApprovalControl job={job} />
+              {propertyAddress && (
+                <div>
+                  <span className="eyebrow text-faint">Property address</span>
+                  <p className="mt-0.5 text-fg">{propertyAddress}</p>
+                </div>
+              )}
               <StructuredDetailsView
                 registry={registry}
                 details={job.details}
                 editable
                 edits={detailsEdits}
                 onChange={handleDetailsChange}
+                hideImportedNotes
               />
+              {/* Network approval: structured state, under the Electrical/network details. */}
+              <JobApprovalControl job={job} editing />
             </div>
           ) : (
             // Legacy edit mode (details=NULL) — unchanged raw text fields.
@@ -406,10 +426,17 @@ export function JobDetailPage() {
                 <dd className="mt-0.5 text-fg">{job.sale_date || '—'}</dd>
               </div>
             </dl>
-            <StructuredDetailsView registry={registry} details={job.details} />
-            {/* Approval is shown as a chip near the status (JobLabelChips) — the old
-                "Approval details: Approval approved" blob is intentionally gone for
-                structured jobs; the reference text lives in internal/imported notes. */}
+            {propertyAddress && (
+              <div>
+                <span className="eyebrow text-faint">Property address</span>
+                <p className="mt-0.5 text-fg">{propertyAddress}</p>
+              </div>
+            )}
+            {/* Imported review/source notes are hidden here — the same preserved
+                context is shown in Job internal notes. */}
+            <StructuredDetailsView registry={registry} details={job.details} hideImportedNotes />
+            {/* Network approval state is visible in read mode (before pressing Edit). */}
+            <JobApprovalControl job={job} editing={false} />
           </div>
         ) : importedView ? (
           // Imported job (legacy blobs): title/sale-date + structured detail sections.

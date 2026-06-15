@@ -178,13 +178,17 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
   )
 }
 
-export function StructuredDetailsView({ registry, details, editable, edits, onChange, originalDetails }: {
+export function StructuredDetailsView({ registry, details, editable, edits, onChange, originalDetails, hideImportedNotes }: {
   registry: FieldRegistry
   details: ParsedDetails
   editable?: boolean
   edits?: Record<string, string>
   onChange?: (path: string, value: string) => void
   originalDetails?: ParsedDetails | null
+  // When true (the live Job page), the imported review/source-note boxes are
+  // hidden because the same preserved context is shown via Job.internal_notes.
+  // The import review UI leaves it false so reviewers still see the raw buckets.
+  hideImportedNotes?: boolean
 }) {
   const edit: EditCtx | null =
     editable && edits && onChange ? { edits, onChange, originalDetails: originalDetails ?? null } : null
@@ -296,7 +300,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
           phrases, a sales-cell DOB/panel remainder) preserved with its source
           column. Neutral, NOT a warning: the data is fine, it just couldn't be
           auto-structured. Genuine problems surface as ImportIssues, not here. */}
-      {reviewNotes.length > 0 && (
+      {!hideImportedNotes && reviewNotes.length > 0 && (
         <div className="rounded-md border border-line bg-elevated p-3">
           <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
             Imported review notes
@@ -317,7 +321,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
       {/* Imported source notes — other leftover column text preserved with its
           source column (read-only). Neutral: preserved source text is not an
           error. */}
-      {misfiled.length > 0 && (
+      {!hideImportedNotes && misfiled.length > 0 && (
         <div className="rounded-md border border-line bg-elevated p-3">
           <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
             Imported source notes
