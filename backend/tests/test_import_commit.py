@@ -546,6 +546,81 @@ def test_commit_assigns_no_labels_when_no_states(users, db_session: Session):
     assert job_labels_service.list_job_labels(db_session, job.id) == []
 
 
+# --------------------------------------------------------------------------- #
+# Phase L4: "Needs approval" auto-label (numeric panels + inverter + no approval)
+# --------------------------------------------------------------------------- #
+def test_auto_label_keys_approval_required_rule():
+    # Pure unit contract for the new rule + its exclusions.
+    from app.services.job_labels import auto_label_keys
+    none = {"approval_state": "none"}
+    sysd = lambda **s: {"_v": 2, "system": s}
+    # numeric panels > 0 AND inverter present -> approval_required.
+    assert ("approval_required", None) in auto_label_keys(none, sysd(panel_count=10, inverter="Goodwe 5kw"))
+    # no inverter -> NOT required.
+    assert auto_label_keys(none, sysd(panel_count=10)) == []
+    # battery-only / inverter-only (no numeric panel_count) + inverter -> NOT required.
+    assert auto_label_keys(none, sysd(inverter="Goodwe 5kw")) == []
+    # zero / non-numeric panels -> NOT required.
+    assert auto_label_keys(none, sysd(panel_count=0, inverter="Goodwe 5kw")) == []
+    assert auto_label_keys(none, sysd(panel_count="existing", inverter="Goodwe 5kw")) == []
+    # already approved / pending WIN — never downgraded to required.
+    assert auto_label_keys({"approval_state": "approved"}, sysd(panel_count=10, inverter="x")) == [("approval_approved", None)]
+    assert auto_label_keys({"approval_state": "pending"}, sysd(panel_count=10, inverter="x")) == [("approval_pending", None)]
+
+
+def _system_only_parsed(*, panel_count, inverter, approval_state="none"):
+    """A committable row isolated to the approval-required rule: no decommission
+    flag, no approval evidence, only the system fields under test."""
+    p = _details_parsed(approval_state=approval_state)
+    system: dict = {}
+    if panel_count is not None:
+        system["panel_count"] = panel_count
+    if inverter is not None:
+        system["inverter"] = inverter
+    p["details"] = {**p["details"], "system": system, "flags": {}}
+    return p
+
+
+def test_commit_auto_assigns_approval_required(users, db_session: Session):
+    # numeric panels > 0 + inverter present + no approval -> approval_required.
+    parsed = _system_only_parsed(panel_count=16, inverter="Goodwe 5kw")
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPL4A")
+    keys = _label_keys(db_session, job)
+    assert keys == ["approval_required"]
+    appr = next(a for a in job_labels_service.list_job_labels(db_session, job.id) if a.label.key == "approval_required")
+    assert appr.source == JobLabelSource.IMPORT_AUTO
+
+
+def test_commit_no_required_without_inverter(users, db_session: Session):
+    parsed = _system_only_parsed(panel_count=16, inverter=None)
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPL4B")
+    assert _label_keys(db_session, job) == []
+
+
+def test_commit_no_required_battery_or_inverter_only(users, db_session: Session):
+    # No numeric panel_count (battery-only / inverter-only) -> never required.
+    parsed = _system_only_parsed(panel_count=None, inverter="Goodwe 5kw")
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPL4C")
+    assert _label_keys(db_session, job) == []
+
+
+def test_commit_no_required_zero_panels(users, db_session: Session):
+    parsed = _system_only_parsed(panel_count=0, inverter="Goodwe 5kw")
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPL4D")
+    assert _label_keys(db_session, job) == []
+
+
+def test_commit_approved_pending_win_over_required(users, db_session: Session):
+    # An already approved / pending job keeps that state, never approval_required.
+    p_app = _system_only_parsed(panel_count=16, inverter="Goodwe 5kw", approval_state="approved")
+    _b, _r, job = _commit_one_seeded(db_session, users, p_app, "TESTIMPL4E")
+    assert _label_keys(db_session, job) == ["approval_approved"]
+    p_pend = _system_only_parsed(panel_count=16, inverter="Goodwe 5kw", approval_state="pending")
+    p_pend["approval_pending_date"] = "01/07/2025"
+    _b2, _r2, job2 = _commit_one_seeded(db_session, users, p_pend, "TESTIMPL4F")
+    assert _label_keys(db_session, job2) == ["approval_pending"]
+
+
 def test_commit_seeds_internal_notes_from_all_preserved_context(users, db_session: Session):
     # P2 safety net: USEFUL preserved context (name-cell note + stripped Lot/DP
     # descriptor) seeds Job.internal_notes on commit under the new heading and with

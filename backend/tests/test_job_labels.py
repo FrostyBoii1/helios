@@ -21,11 +21,12 @@ from app.models.job_label import JobLabelAssignment, JobLabelDefinition
 from app.services import job_labels as svc
 
 EXPECTED_KEYS = [
+    "approval_required",
     "approval_approved",
     "approval_pending",
     "decommission_pre_existing",
     "needs_maintenance",
-    "warranty_issue",
+    "admin_work_required",
     "battery_only",
     "existing_solar",
     "awaiting_documents",
@@ -53,15 +54,21 @@ def test_migration_seeded_default_labels_exist(db_session: Session):
     by_key = {d.key: d for d in defs}
     for k in EXPECTED_KEYS:
         assert k in by_key, k
-    # approval + decommission presets are system (locked) AND auto-assignable.
-    for k in ("approval_approved", "approval_pending", "decommission_pre_existing"):
+    # approval (incl. the new "Needs approval") + decommission presets are system
+    # (locked) AND auto-assignable.
+    for k in ("approval_required", "approval_approved", "approval_pending", "decommission_pre_existing"):
         assert by_key[k].is_system is True and by_key[k].is_auto is True, k
+    assert by_key["approval_required"].name == "Needs approval"
+    assert by_key["approval_required"].category == JobLabelCategory.APPROVAL
     assert by_key["approval_approved"].category == JobLabelCategory.APPROVAL
     assert by_key["decommission_pre_existing"].category == JobLabelCategory.SYSTEM
-    # operational presets are user-manageable (not system / not auto).
-    for k in ("needs_maintenance", "warranty_issue", "battery_only", "existing_solar", "awaiting_documents"):
+    # operational presets are user-manageable (not system / not auto). warranty_issue
+    # was rekeyed to admin_work_required ("Admin work required").
+    for k in ("needs_maintenance", "admin_work_required", "battery_only", "existing_solar", "awaiting_documents"):
         assert by_key[k].is_system is False and by_key[k].is_auto is False, k
         assert by_key[k].category == JobLabelCategory.OPERATIONAL, k
+    assert by_key["admin_work_required"].name == "Admin work required"
+    assert "warranty_issue" not in by_key  # rekeyed, not duplicated
 
 
 def test_label_keys_unique(db_session: Session):
@@ -76,10 +83,13 @@ def test_get_definitions_returns_seeded_in_stable_order(client_for, users):
     keys = [d["key"] for d in data]
     for k in EXPECTED_KEYS:
         assert k in keys
-    # stable order: non-decreasing sort_order, and the three system presets first.
+    # stable order: non-decreasing sort_order, and the approval + decommission
+    # system presets first (Needs approval leads the approval lifecycle).
     sort_orders = [d["sort_order"] for d in data]
     assert sort_orders == sorted(sort_orders)
-    assert keys[:3] == ["approval_approved", "approval_pending", "decommission_pre_existing"]
+    assert keys[:4] == [
+        "approval_required", "approval_approved", "approval_pending", "decommission_pre_existing",
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -186,9 +196,9 @@ def test_add_operational_label(db_session, client_for, users, customer):
 def test_add_label_idempotent_no_duplicate(db_session, client_for, users, customer):
     job = _make_job(db_session, customer.id)
     admin = client_for(users["admin"])
-    assert _add(admin, job.id, "warranty_issue").status_code == 200
-    assert _add(admin, job.id, "warranty_issue").status_code == 200  # no-op
-    assert [a.label.key for a in svc.list_job_labels(db_session, job.id)] == ["warranty_issue"]
+    assert _add(admin, job.id, "admin_work_required").status_code == 200
+    assert _add(admin, job.id, "admin_work_required").status_code == 200  # no-op
+    assert [a.label.key for a in svc.list_job_labels(db_session, job.id)] == ["admin_work_required"]
     # the idempotent re-add logs no second activity
     assert _label_count(db_session, job.id, ActivityType.JOB_LABEL_ADDED) == 1
 
@@ -296,6 +306,49 @@ def test_approval_control_idempotent(db_session, client_for, users, customer):
     _approval(admin, job.id, "approved")
     _approval(admin, job.id, "approved")  # no-op, still exactly one
     assert _approval_keys(db_session, job.id) == ["approval_approved"]
+
+
+def test_approval_control_required(db_session, client_for, users, customer):
+    # "required" -> exactly one approval label (approval_required), no pending date.
+    job = _make_job(db_session, customer.id)
+    resp = _approval(client_for(users["approvals"]), job.id, "required")
+    assert resp.status_code == 200
+    assert resp.json() == {"state": "required", "pending_date": None}
+    assert _approval_keys(db_session, job.id) == ["approval_required"]
+    assert "approval" not in (db_session.get(Job, job.id).details or {})  # no date stored
+
+
+def test_approval_control_full_lifecycle_exactly_one(db_session, client_for, users, customer):
+    # required -> pending -> approved -> none: ALWAYS exactly one approval label
+    # (or zero), stale labels removed at each step; pending date only while pending.
+    job = _make_job(db_session, customer.id)
+    admin = client_for(users["admin"])
+    _approval(admin, job.id, "required")
+    assert _approval_keys(db_session, job.id) == ["approval_required"]
+    _approval(admin, job.id, "pending", "19/08/2026")
+    assert _approval_keys(db_session, job.id) == ["approval_pending"]  # required removed
+    assert (db_session.get(Job, job.id).details or {}).get("approval", {}).get("pending_date") == "19/08/2026"
+    _approval(admin, job.id, "approved")
+    assert _approval_keys(db_session, job.id) == ["approval_approved"]  # pending removed + date cleared
+    assert "approval" not in (db_session.get(Job, job.id).details or {})
+    _approval(admin, job.id, "none")
+    assert _approval_keys(db_session, job.id) == []
+
+
+def test_get_job_approval_returns_required(db_session, customer):
+    # The service derives "required" from the approval_required label.
+    job = _make_job(db_session, customer.id)
+    svc.set_job_approval(db_session, job=job, state="required", pending_date=None, assigned_by_id=None)
+    assert svc.get_job_approval(db_session, job)["state"] == "required"
+
+
+def test_approval_required_not_casually_removable(db_session, client_for, users, customer):
+    # approval_required is system-locked: the casual chip DELETE refuses it.
+    job = _make_job(db_session, customer.id)
+    _approval(client_for(users["admin"]), job.id, "required")
+    resp = client_for(users["admin"]).delete(f"/api/v1/jobs/{job.id}/labels/approval_required")
+    assert resp.status_code == 403
+    assert _approval_keys(db_session, job.id) == ["approval_required"]
 
 
 def test_approval_control_permission(db_session, client_for, users, customer):

@@ -126,8 +126,12 @@ def remove_label_by_key(db: Session, *, job_id: int, key: str) -> bool:
 # The approval STATE is "law": it is represented by at most one approval label,
 # plus a pending date in details.approval.pending_date when pending.
 # --------------------------------------------------------------------------- #
-_APPROVAL_LABEL_BY_STATE = {"approved": "approval_approved", "pending": "approval_pending"}
-_ALL_APPROVAL_KEYS = ("approval_approved", "approval_pending")
+_APPROVAL_LABEL_BY_STATE = {
+    "approved": "approval_approved",
+    "pending": "approval_pending",
+    "required": "approval_required",
+}
+_ALL_APPROVAL_KEYS = ("approval_approved", "approval_pending", "approval_required")
 
 
 def _set_job_pending_date(job: Any, value: str | None) -> None:
@@ -153,6 +157,8 @@ def get_job_approval(db: Session, job: Any) -> dict[str, Any]:
         state = "approved"
     elif "approval_pending" in keys:
         state = "pending"
+    elif "approval_required" in keys:
+        state = "required"
     else:
         state = "none"
     pending = ((job.details or {}).get("approval") or {}).get("pending_date")
@@ -191,9 +197,15 @@ def auto_label_keys(
     """Pure: the (label_key, note) pairs to auto-assign to a committed job from its
     parsed candidate + structured details.
 
-    Conservative rules (Phase L3 — no battery/solar inference yet):
+    Rules:
       * approval_state == "approved" -> approval_approved
       * approval_state == "pending"  -> approval_pending (note carries pending date)
+      * else (no approval evidence) AND a NUMERIC panel count > 0 AND an inverter is
+        present -> approval_required ("Needs approval"). A real solar+inverter job
+        with no recorded approval still needs network approval. Deliberately
+        conservative: battery-only / no-panel / non-numeric-panel / inverter-only
+        jobs have no numeric panel_count in details.system, so they never qualify;
+        an already approved/pending job keeps that state and is never downgraded.
       * details.flags.removes_old_system -> decommission_pre_existing
         (note carries the decommission marker text)
 
@@ -210,6 +222,16 @@ def auto_label_keys(
     elif state == "pending":
         pending = str(parsed.get("approval_pending_date") or "").strip()
         out.append(("approval_pending", f"pending {pending}" if pending else None))
+    else:
+        # No approval evidence: a solar (numeric panels > 0) + inverter job still
+        # needs network approval. panel_count is set in details.system ONLY when the
+        # parser coerced a numeric count, so battery-only / inverter-only / no-panel
+        # / non-numeric-panel jobs are excluded without any extra check.
+        system = details.get("system") or {}
+        panel_count = system.get("panel_count")
+        inverter = str(system.get("inverter") or "").strip()
+        if isinstance(panel_count, int) and panel_count > 0 and inverter:
+            out.append(("approval_required", None))
 
     flags = details.get("flags") or {}
     if flags.get("removes_old_system"):

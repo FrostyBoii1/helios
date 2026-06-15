@@ -255,7 +255,7 @@ export interface JobLabelAssignment {
   label: JobLabelDefinition
 }
 
-export type JobApprovalState = 'none' | 'pending' | 'approved'
+export type JobApprovalState = 'none' | 'required' | 'pending' | 'approved'
 
 export interface JobApprovalRead {
   state: JobApprovalState

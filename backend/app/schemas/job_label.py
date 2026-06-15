@@ -23,14 +23,14 @@ class JobLabelAssignRequest(BaseModel):
 class JobApprovalRequest(BaseModel):
     """Set a job's approval state via the dedicated structured control."""
 
-    state: Literal["none", "pending", "approved"]
+    state: Literal["none", "required", "pending", "approved"]
     pending_date: str | None = Field(default=None, max_length=40)
 
 
 class JobApprovalRead(BaseModel):
     """A job's current approval state (derived from its approval label)."""
 
-    state: Literal["none", "pending", "approved"]
+    state: Literal["none", "required", "pending", "approved"]
     pending_date: str | None = None
 
 

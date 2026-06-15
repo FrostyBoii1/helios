@@ -14,11 +14,13 @@ import type { Job, JobApprovalState } from '@/types'
 function currentState(keys: Set<string>): JobApprovalState {
   if (keys.has('approval_approved')) return 'approved'
   if (keys.has('approval_pending')) return 'pending'
+  if (keys.has('approval_required')) return 'required'
   return 'none'
 }
 
 const READ_LABEL: Record<JobApprovalState, string> = {
   none: 'Not applicable',
+  required: 'Needs approval',
   pending: 'Pending approval',
   approved: 'Approved',
 }
@@ -57,6 +59,7 @@ export function JobApprovalControl({ job, editing }: { job: Job; editing: boolea
               className="input mt-1 text-sm"
             >
               <option value="none">No approval / not applicable</option>
+              <option value="required">Needs approval</option>
               <option value="pending">Pending approval</option>
               <option value="approved">Approved</option>
             </select>
