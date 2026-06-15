@@ -102,7 +102,11 @@ export interface MisfiledNote {
 }
 export interface ParsedDetails {
   _v?: number
-  notes?: { customer_name_notes?: string | null; misfiled?: MisfiledNote[] } & Record<string, unknown>
+  notes?: {
+    customer_name_notes?: string | null
+    misfiled?: MisfiledNote[]
+    review_notes?: MisfiledNote[]
+  } & Record<string, unknown>
   flags?: { removes_old_system?: boolean; decommission_marker?: string | null } & Record<string, unknown>
   [section: string]: unknown
 }

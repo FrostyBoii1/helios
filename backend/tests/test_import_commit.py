@@ -464,8 +464,18 @@ def test_commit_blobs_match_renderer(users, db_session: Session):
 
 def test_commit_misfiled_and_legacy_in_notes(users, db_session: Session):
     parsed = _details_parsed()
+    # A neutral imported review note rides alongside the misfiled source note; both
+    # must commit through to Job.details (structured) AND the legacy notes blob.
+    parsed["details"]["notes"]["review_notes"] = [
+        {"source_column": "Customer Name", "text": "Jemena Approval # 000413493"}
+    ]
     _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMP2B03")
-    assert "Misfiled — MSB/SB PICS IN FILE?: DONT CALL PLEASE" in job.notes
+    # Neutral, non-scary labels in the notes blob (no "Misfiled" wording).
+    assert "Imported source note — MSB/SB PICS IN FILE?: DONT CALL PLEASE" in job.notes
+    assert "Imported review note — Customer Name: Jemena Approval # 000413493" in job.notes
+    assert "Misfiled" not in job.notes
+    # Review notes carried through to structured Job.details verbatim.
+    assert job.details["notes"]["review_notes"][0]["text"] == "Jemena Approval # 000413493"
     assert "Legacy — solar_vic: 100" in job.notes
     # Without a populated legacy section, no Legacy line appears.
     p2 = _details_parsed()

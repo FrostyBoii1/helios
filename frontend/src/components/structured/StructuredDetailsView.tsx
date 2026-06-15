@@ -228,6 +228,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
     .filter((g) => g.fields.length > 0)
 
   const misfiled = details.notes?.misfiled ?? []
+  const reviewNotes = details.notes?.review_notes ?? []
   const provenance = registry.fields.find((f) => f.key === 'provenance')
   const provText = provenance ? valueAtStorage(details, provenance.storage) : undefined
 
@@ -285,17 +286,41 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
         </div>
       )}
 
-      {/* Misfiled notes — diverted text preserved with its source column (read-only). */}
+      {/* Imported review notes — recognized context (distributor approval/reference
+          phrases, a sales-cell DOB/panel remainder) preserved with its source
+          column. Neutral, NOT a warning: the data is fine, it just couldn't be
+          auto-structured. Genuine problems surface as ImportIssues, not here. */}
+      {reviewNotes.length > 0 && (
+        <div className="rounded-md border border-line bg-elevated p-3">
+          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+            Imported review notes
+          </h4>
+          <ul className="flex flex-col gap-1">
+            {reviewNotes.map((m, i) => (
+              <li key={i} className="text-sm text-fg/90">
+                {m.source_column ? (
+                  <span className="text-faint">from {m.source_column}: </span>
+                ) : null}
+                <span className="break-words">{m.text ?? ''}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Imported source notes — other leftover column text preserved with its
+          source column (read-only). Neutral: preserved source text is not an
+          error. */}
       {misfiled.length > 0 && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-amber-300">
-            Imported source notes (misfiled)
+        <div className="rounded-md border border-line bg-elevated p-3">
+          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+            Imported source notes
           </h4>
           <ul className="flex flex-col gap-1">
             {misfiled.map((m, i) => (
-              <li key={i} className="text-sm text-amber-100/90">
+              <li key={i} className="text-sm text-fg/90">
                 {m.source_column ? (
-                  <span className="text-amber-300/80">from {m.source_column}: </span>
+                  <span className="text-faint">from {m.source_column}: </span>
                 ) : null}
                 <span className="break-words">{m.text ?? ''}</span>
               </li>

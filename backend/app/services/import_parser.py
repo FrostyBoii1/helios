@@ -213,25 +213,36 @@ def parse_sales_consultant(raw: str) -> dict[str, Any]:
     it is returned as ``misfiled`` so the caller preserves it verbatim under
     source_column 'Sales Consultant'.
 
-    A suffix that is ONLY a date (e.g. 'Jane - 3/2/23') is still taken as the sale
-    date, preserving prior behaviour. A date that is part of a labelled/mixed
-    suffix (e.g. 'dob 14/05/1980') is NOT extracted — there is no DOB concept in
-    this model, so it stays verbatim note text and never becomes a sale_date."""
+    A suffix that is ONLY a date (e.g. 'Jane - 3/2/23') is taken as the sale date.
+    A MIXED suffix that LEADS with a plain date (e.g. '4/4/2023 - dob 23/11/55') has
+    that leading date extracted as the sale date and the remainder ('dob 23/11/55')
+    preserved verbatim as ``misfiled``. A labelled / non-leading date (e.g.
+    'dob 14/05/1980') is NEVER a sale date — there is no DOB concept in this model —
+    so the whole suffix is preserved verbatim and no date is pulled out of it."""
     if not raw:
         return {"name": "", "sale_date": None, "misfiled": None}
     misfiled: str | None = None
+    suffix_sale_date: str | None = None
     head = raw
     sep = raw.find(" - ")
     if sep != -1:
         suffix = raw[sep + 3:].strip()
         # Pure-date suffix -> leave it on `head` so the date extraction below takes
-        # it as the sale date. Anything else -> divert the whole suffix verbatim
-        # and pull NO date out of it.
+        # it as the sale date. A MIXED suffix is diverted verbatim — but first a
+        # LEADING plain date is pulled out as the sale date (e.g.
+        # "4/4/2023 - dob 23/11/55" -> sale_date 4/4/2023, note "dob 23/11/55"). A
+        # non-leading / labelled date ("dob 14/05/1980") is preserved whole and
+        # never becomes a sale_date.
         if suffix and DATE_RE.sub("", suffix).strip(" -,;|"):
-            misfiled = suffix
             head = raw[:sep]
+            lead = re.match(r"\s*" + DATE_RE.pattern + r"\s*[-,;|]?\s*(.*)$", suffix, re.DOTALL)
+            if lead:
+                suffix_sale_date = lead.group(1)
+                misfiled = lead.group(2).strip() or None
+            else:
+                misfiled = suffix
     date_m = DATE_RE.search(head)
-    sale_date = date_m.group(1) if date_m else None
+    sale_date = date_m.group(1) if date_m else suffix_sale_date
     name = head
     if date_m:
         name = head[: date_m.start()] + head[date_m.end():]

@@ -95,39 +95,61 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
     raw = raw or {}
     d: dict[str, dict] = {s: {} for s in _SECTIONS}
     misfiled: list[dict[str, str]] = []
+    review_notes: list[dict[str, str]] = []
 
     def divert(col: str, text: Any) -> None:
         t = _s(text).strip()
         if t:
             misfiled.append({"source_column": col, "text": t})
 
+    def review_note(col: str, text: Any) -> None:
+        """Preserve recognized-but-unstructured context — a distributor approval
+        phrase, a sales-cell DOB / free-note remainder, or non-numeric panel text —
+        verbatim in a NEUTRAL bucket. Shown calmly as "imported review notes", never
+        as a scary "misfiled" warning. Same {source_column, text} shape as misfiled;
+        like misfiled it rides in details.notes, so it commits into Job.details."""
+        t = _s(text).strip()
+        if t:
+            review_notes.append({"source_column": col, "text": t})
+
     def put_text(section: str, key: str, value: Any) -> None:
         v = _s(value).strip()
         if v:
             d[section][key] = v
 
-    def put_number(section: str, key: str, col: str, raw_value: Any, *, currency: bool) -> None:
+    def put_number(
+        section: str, key: str, col: str, raw_value: Any, *, currency: bool, review: bool = False
+    ) -> None:
         rv = _s(raw_value)
         if not rv.strip():
             return
+        # `review=True` routes leftover / non-numeric text to the neutral review-note
+        # bucket instead of the misfiled warning bucket (used for panel counts so a
+        # battery/inverter-only job's "existing system" text reads as context, not
+        # an error).
+        sink = review_note if review else divert
         value, leftover = (_coerce_currency(rv) if currency else _coerce_int(rv))
         if value is not None:
             d[section][key] = value
             if leftover:
-                divert(col, leftover)
+                sink(col, leftover)
         else:
-            divert(col, rv)
+            sink(col, rv)
 
     # --- Sales ---
     put_text("sales", "salesperson_text", parsed.get("salesperson"))
-    # Non-name suffix lifted off the Sales Consultant cell (payment/system/free
-    # note text) — preserved verbatim, never coerced into the salesperson field.
-    divert("Sales Consultant", parsed.get("sales_consultant_misfiled"))
+    # Non-name suffix lifted off the Sales Consultant cell (a DOB / payment / system
+    # / free-note remainder after any leading sale date was extracted) — preserved
+    # verbatim as neutral review context, never coerced into the salesperson field.
+    review_note("Sales Consultant", parsed.get("sales_consultant_misfiled"))
 
     # --- System ---
     put_text("system", "panel", parsed.get("panel_raw"))
     put_text("system", "inverter", parsed.get("inverter_raw"))
-    put_number("system", "panel_count", "No of Panels", parsed.get("no_of_panels"), currency=False)
+    # Non-numeric panel text (battery/inverter-only jobs: "existing system", "-",
+    # …) is NEVER an error — route it to neutral review notes, not a warning.
+    put_number("system", "panel_count", "No of Panels", parsed.get("no_of_panels"),
+               currency=False, review=True)
     put_text("system", "storey", raw.get("storey"))
     phase_rv = _s(raw.get("phase"))
     if phase_rv.strip():
@@ -222,13 +244,20 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
     # source column: a land/legal parcel descriptor ("Lot 7 DP 123") and/or a
     # distributor approval/reference phrase ("Jemena Approval # 000…"). Neither is
     # part of the person's name; both are kept here instead of polluting it.
+    # Land/legal parcel descriptor ("Lot 7 DP 123") stays a misfiled source note
+    # (it genuinely didn't belong in the name). A distributor approval/reference
+    # phrase ("Jemena Approval # 000…", "ERGON APPROVED") is recognized review
+    # context, not junk — it goes to the neutral review-note bucket. The approval
+    # STATUS it implies is still captured separately in parsed.approval_state.
     divert("Customer Name", parsed.get("name_cell_land_descriptor"))
-    divert("Customer Name", parsed.get("name_cell_approval_phrase"))
+    review_note("Customer Name", parsed.get("name_cell_approval_phrase"))
     cnn = _s(parsed.get("customer_name_notes")).strip()
     if cnn:
         d["notes"]["customer_name_notes"] = cnn
     if misfiled:
         d["notes"]["misfiled"] = misfiled
+    if review_notes:
+        d["notes"]["review_notes"] = review_notes
 
     # Prune empty sections; legacy/flags/etc. are omitted when blank.
     out: dict[str, Any] = {"_v": DETAILS_VERSION}
@@ -349,12 +378,20 @@ def render_legacy_blobs(
     raw_notes = _s(parsed.get("notes_raw")).strip()
     if raw_notes:
         lines.append("Notes: " + raw_notes)
-    # 7. Misfiled notes — diverted text, labelled with its source column.
+    # 7. Imported source/review notes — preserved text, labelled with its source
+    #    column. Both are benign preserved context (not errors); review notes are
+    #    recognized context (approval phrases, DOB/panel remainders), source notes
+    #    are other leftover column text.
+    for m in notes_sec.get("review_notes") or []:
+        col = _s(m.get("source_column")).strip()
+        txt = _s(m.get("text")).strip()
+        if txt:
+            lines.append(f"Imported review note — {col}: {txt}" if col else "Imported review note: " + txt)
     for m in notes_sec.get("misfiled") or []:
         col = _s(m.get("source_column")).strip()
         txt = _s(m.get("text")).strip()
         if txt:
-            lines.append(f"Misfiled — {col}: {txt}" if col else "Misfiled: " + txt)
+            lines.append(f"Imported source note — {col}: {txt}" if col else "Imported source note: " + txt)
     # 8. Legacy / import-only — only when populated.
     leg_bits = [
         f"{k}: {_s(legacy.get(k)).strip()}"

@@ -130,11 +130,12 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const { data: registry } = useFieldRegistry()
   // Phase 3b-1: structured read-only view when the row carries parsed.details.
   const details = row.parsed?.details ?? null
-  // Suffix text stripped out of the Customer Name cell (Lot/DP/legal descriptors,
-  // approval phrases) is preserved in details.notes.misfiled. Surface those
-  // entries right by the name fields so they are findable, not buried at the
-  // bottom under "Imported source notes". Display-only; the canonical data still
-  // lives in details.notes.misfiled.
+  // Land/legal parcel text stripped out of the Customer Name cell ("Lot 4 DP 588479")
+  // is preserved in details.notes.misfiled under source_column "Customer Name".
+  // Surface it right by the name fields so it is findable, not buried at the bottom.
+  // (Distributor approval/reference phrases now live in details.notes.review_notes
+  // and render in the neutral "Imported review notes" section, not here.)
+  // Display-only; the canonical data still lives in details.notes.misfiled.
   const customerNameMisfiled = (details?.notes?.misfiled ?? []).filter(
     (m) => m.source_column === 'Customer Name',
   )
@@ -453,21 +454,21 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           </label>
         </div>
 
-        {/* Stripped Customer Name suffixes (Lot/DP/legal descriptors, approval
-            phrases) surfaced read-only right by the name — the same entries also
-            appear in the full "Imported source notes" list below. Never written
-            back into customer_name. */}
+        {/* Land/legal parcel text stripped off the Customer Name cell, surfaced
+            read-only right by the name — the same entries also appear in the
+            "Imported source notes" list below. Neutral (preserved source text, not
+            an error). Never written back into customer_name. */}
         {customerNameMisfiled.length > 0 && (
-          <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
+          <div className="mb-3 rounded-md border border-line bg-elevated p-3">
+            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
               Removed from customer name
             </h4>
-            <p className="mb-1.5 text-xs text-amber-200/70">
+            <p className="mb-1.5 text-xs text-faint">
               Stripped from the Customer Name cell and preserved as imported source text (read-only).
             </p>
             <ul className="flex flex-col gap-1">
               {customerNameMisfiled.map((m, i) => (
-                <li key={i} className="break-words text-sm text-amber-100/90">
+                <li key={i} className="break-words text-sm text-fg/90">
                   {m.text ?? ''}
                 </li>
               ))}

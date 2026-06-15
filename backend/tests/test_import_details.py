@@ -115,6 +115,48 @@ def test_currency_and_int_coercion_with_divert():
     assert build_details({"no_of_panels": "16"}, {})["system"]["panel_count"] == 16
 
 
+def test_approval_phrase_routes_to_review_notes_not_misfiled():
+    # A distributor approval / reference phrase lifted off the name cell is NEUTRAL
+    # review context, not a misfiled warning. (The status it implies is captured
+    # separately in parsed.approval_state by the parser — unchanged.)
+    d = build_details({"name_cell_approval_phrase": "Jemena Approval # 000413493"}, {})
+    review = [m["text"] for m in d["notes"]["review_notes"]]
+    assert "Jemena Approval # 000413493" in review
+    assert not any(m["source_column"] == "Customer Name" for m in d["notes"].get("misfiled", []))
+    # A land/legal descriptor still goes to the misfiled SOURCE-note bucket.
+    d2 = build_details({"name_cell_land_descriptor": "Lot 7 DP 123"}, {})
+    assert any(m["text"] == "Lot 7 DP 123" for m in d2["notes"]["misfiled"])
+    assert "review_notes" not in d2.get("notes", {})
+
+
+def test_sales_consultant_remainder_is_review_note_not_misfiled():
+    # The leftover after a sales-cell sale date (a DOB / free-note) is neutral
+    # review context, never a misfiled warning, never coerced into the salesperson.
+    d = build_details({"salesperson": "Robert W", "sales_consultant_misfiled": "dob 23/11/55"}, {})
+    assert any(
+        m["source_column"] == "Sales Consultant" and m["text"] == "dob 23/11/55"
+        for m in d["notes"]["review_notes"]
+    )
+    assert not any(m["source_column"] == "Sales Consultant" for m in d["notes"].get("misfiled", []))
+
+
+def test_nonnumeric_panel_text_routes_to_review_notes_and_does_not_misfile():
+    # Battery / inverter-only jobs have non-numeric panel cells — neutral review
+    # note, never a misfiled warning, and never an error (the parser raises no panel
+    # issue at all, so a non-numeric panel count cannot block a commit).
+    d = build_details({"no_of_panels": "existing system - battery only"}, {})
+    assert "panel_count" not in d.get("system", {})
+    assert any(
+        m["source_column"] == "No of Panels" and "battery only" in m["text"]
+        for m in d["notes"]["review_notes"]
+    )
+    assert not any(m["source_column"] == "No of Panels" for m in d["notes"].get("misfiled", []))
+    # A clean numeric count still coerces with no note at all.
+    d2 = build_details({"no_of_panels": "16"}, {})
+    assert d2["system"]["panel_count"] == 16
+    assert "notes" not in d2
+
+
 def test_legacy_present_only_when_populated():
     d = build_details({}, {"solar_vic": "100", "ces_submission": "done"})
     assert d["legacy"]["solar_vic"] == "100"
@@ -216,6 +258,7 @@ def _full_details():
         "notes": {
             "customer_name_notes": "includes hot water timer",
             "misfiled": [{"source_column": "Phase", "text": "ask sparky"}],
+            "review_notes": [{"source_column": "Customer Name", "text": "Jemena Approval # 000413"}],
         },
     }
 
@@ -236,7 +279,10 @@ def test_render_blobs_from_details():
     assert "Salesperson: Rep" in notes
     assert "Payment — " in notes and "stc_amount: 2000" in notes
     assert "Notes: call first" in notes
-    assert "Misfiled — Phase: ask sparky" in notes
+    # Source/review notes use neutral, non-scary labels (no "Misfiled").
+    assert "Imported review note — Customer Name: Jemena Approval # 000413" in notes
+    assert "Imported source note — Phase: ask sparky" in notes
+    assert "Misfiled" not in notes
     assert "Legacy — solar_vic: 100" in notes
     assert notes.splitlines()[-1] == "Imported from legacy workbook (batch 9, row 42, ref R1)."
 

@@ -211,17 +211,19 @@ def test_detect_decommission_variants():
 
 
 def _one_job_row_bytes(
-    *, name_cell: str, notes_cell: str = "", sales_cell: str = "Rep 10/10/2025"
+    *, name_cell: str, notes_cell: str = "", sales_cell: str = "Rep 10/10/2025",
+    panels: str = "10",
 ) -> bytes:
     """A minimal COMPLETED sheet: header + one clean job row, with the Customer
-    Name + Notes + Sales Consultant cells controllable. Fabricated data only."""
+    Name + Notes + Sales Consultant + No-of-Panels cells controllable. Fabricated
+    data only."""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "COMPLETED"
     ws.append(HEADERS)
     ws.append(["TESTIMP0009", sales_cell, name_cell, "9 Test St", "0400000000",
                notes_cell, "Yes", "x@example.test", "Essential", "Origin", "42041234567",
-               "M9", "10", "Longi 440", "Goodwe 5kw", "1", "1", "Tin", "", "", "", "Installer One"])
+               "M9", panels, "Longi 440", "Goodwe 5kw", "1", "1", "Tin", "", "", "", "Installer One"])
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -318,6 +320,21 @@ def test_parse_sales_consultant_keeps_clean_names_and_bare_dates():
     assert r3 == {"name": "Jane Smith", "sale_date": None, "misfiled": None}
 
 
+def test_parse_sales_consultant_extracts_leading_suffix_date():
+    # A MIXED suffix that LEADS with a plain date: the date becomes the sale date,
+    # the remainder (a labelled DOB note) is preserved verbatim. No DOB is inferred.
+    psc = import_parser.parse_sales_consultant
+    r = psc("Robert W - 4/4/2023 - dob 23/11/55")
+    assert r["name"] == "Robert W"
+    assert r["sale_date"] == "4/4/2023"
+    assert r["misfiled"] == "dob 23/11/55"
+    # downstream this resolves to the expected ISO sale date.
+    assert import_parser.parse_date_maybe(r["sale_date"]).isoformat() == "2023-04-04"
+    # A labelled date with NO leading plain date stays whole, never a sale date.
+    r2 = psc("Robert W - dob 23/11/55")
+    assert r2["sale_date"] is None and r2["misfiled"] == "dob 23/11/55"
+
+
 def test_parse_customer_name_splits_land_descriptor():
     cn = import_parser.parse_customer_name
     # hyphen-glued Lot/DP (the src-88 shape) -> name clean, descriptor preserved
@@ -354,9 +371,10 @@ def test_parse_customer_name_separates_distributor_approval_phrase():
     assert r3["name"] == "Bob Lee"
 
 
-def test_parse_rows_diverts_name_and_sales_suffixes_to_misfiled():
-    # End-to-end through parse_rows -> build_details: each lifted suffix lands in
-    # details.notes.misfiled tagged with its source column; the structured name /
+def test_parse_rows_routes_suffixes_to_correct_notes_buckets():
+    # End-to-end through parse_rows -> build_details. A land/legal parcel descriptor
+    # stays a (neutral) misfiled SOURCE note; a sales-cell free-note and a
+    # distributor approval phrase are neutral REVIEW notes. Structured name /
     # salesperson stay clean.
     rows = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
         name_cell="Jane Roe -Lot 4 DP 588479",
@@ -365,26 +383,41 @@ def test_parse_rows_diverts_name_and_sales_suffixes_to_misfiled():
     row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
     assert row.parsed["customer_name"] == "Jane Roe"
     assert row.parsed["salesperson"] == "Jason Gowans"
-    misfiled = row.parsed["details"]["notes"]["misfiled"]
-    by_col = {(m["source_column"], m["text"]) for m in misfiled}
-    assert ("Customer Name", "Lot 4 DP 588479") in by_col
-    assert ("Sales Consultant", "cash") in by_col
+    notes = row.parsed["details"]["notes"]
+    misfiled = {(m["source_column"], m["text"]) for m in notes.get("misfiled", [])}
+    review = {(m["source_column"], m["text"]) for m in notes.get("review_notes", [])}
+    # Land descriptor -> misfiled "Customer Name"; sales free-note -> review_notes.
+    assert ("Customer Name", "Lot 4 DP 588479") in misfiled
+    assert ("Sales Consultant", "cash") in review
+    assert ("Sales Consultant", "cash") not in misfiled
 
-    # Name-cell distributor approval phrase (src-61 shape): out of the name,
-    # preserved under 'Customer Name'.
+    # Name-cell distributor approval REFERENCE phrase (src-61 shape): out of the
+    # name, preserved as a neutral REVIEW note, NOT a misfiled warning.
     rows2 = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
         name_cell="Jane Roe - Jemena Approval # 000413493",
     ))))
     row2 = next(r for r in rows2 if r.legacy_reference == "TESTIMP0009")
     assert row2.parsed["customer_name"] == "Jane Roe"
     assert "jemena" not in row2.parsed["customer_name"].lower()
-    cn_misfiled = [
-        m["text"] for m in row2.parsed["details"]["notes"]["misfiled"]
-        if m["source_column"] == "Customer Name"
-    ]
-    assert any("Approval" in t for t in cn_misfiled)
+    n2 = row2.parsed["details"]["notes"]
+    cn_review = [m["text"] for m in n2.get("review_notes", []) if m["source_column"] == "Customer Name"]
+    cn_misfiled = [m["text"] for m in n2.get("misfiled", []) if m["source_column"] == "Customer Name"]
+    assert any("Approval" in t for t in cn_review)
+    assert not any("Approval" in t for t in cn_misfiled)
 
-    # No DOB field is ever invented from a 'dob …' salesperson suffix.
+    # An APPROVED status phrase still drives approval_state (unchanged) AND its text
+    # rides in neutral review_notes, never misfiled.
+    rows4 = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
+        name_cell="Pat Lee - ERGON APPROVED",
+    ))))
+    row4 = next(r for r in rows4 if r.legacy_reference == "TESTIMP0009")
+    assert row4.parsed["approval_state"] == "approved"
+    n4 = row4.parsed["details"]["notes"]
+    assert any("APPROVED" in m["text"].upper() for m in n4.get("review_notes", []))
+    assert not any(m["source_column"] == "Customer Name" for m in n4.get("misfiled", []))
+
+    # No DOB field is ever invented from a 'dob …' salesperson suffix; it is a
+    # neutral review note (not misfiled), and never a sale_date.
     rows3 = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
         name_cell="Dana Fox", sales_cell="Robert W - dob 14/05/1980",
     ))))
@@ -392,11 +425,10 @@ def test_parse_rows_diverts_name_and_sales_suffixes_to_misfiled():
     assert row3.parsed["salesperson"] == "Robert W"
     assert row3.parsed["sale_date"] is None
     assert "dob" not in str(row3.parsed["details"].get("sales", {})).lower()
-    sc_misfiled = [
-        m["text"] for m in row3.parsed["details"]["notes"]["misfiled"]
-        if m["source_column"] == "Sales Consultant"
-    ]
-    assert sc_misfiled == ["dob 14/05/1980"]
+    n3 = row3.parsed["details"]["notes"]
+    sc_review = [m["text"] for m in n3.get("review_notes", []) if m["source_column"] == "Sales Consultant"]
+    assert sc_review == ["dob 14/05/1980"]
+    assert not any(m["source_column"] == "Sales Consultant" for m in n3.get("misfiled", []))
 
 
 # --------------------------------------------------------------------------- #
@@ -465,8 +497,9 @@ def test_worst_row_combined_pollution_all_preserved():
     """A deliberately convoluted row (mirrors the architecture-pass stress
     categories): polluted Sales Consultant + customer-name legal descriptor +
     in-name distributor approval phrase + decommission marker. Every structured
-    field stays clean; every stripped suffix is preserved verbatim as misfiled
-    source text with the right source_column; no DOB is ever invented."""
+    field stays clean; every stripped suffix is preserved verbatim with the right
+    source_column — the land descriptor as a misfiled source note, the DOB
+    remainder and approval phrase as neutral review notes; no DOB is ever invented."""
     rows = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
         name_cell="Bill (William) Corn -Lot 4 DP 588479 - JEMENA APPROVAL #000445604 DECOM",
         sales_cell="Robert W - dob 15/06/1965",
@@ -480,13 +513,39 @@ def test_worst_row_combined_pollution_all_preserved():
     # decommission detected + flagged, not left in the name
     assert p["removes_old_system"] is True
     assert "decom" not in p["customer_name"].lower()
-    # every stripped suffix preserved verbatim, tagged by source column
-    mis = {(m["source_column"], m["text"]) for m in p["details"]["notes"]["misfiled"]}
-    assert ("Sales Consultant", "dob 15/06/1965") in mis
+    # every stripped suffix preserved verbatim, tagged by source column, in the
+    # right bucket: land descriptor -> misfiled source note; DOB remainder +
+    # approval phrase -> neutral review notes.
+    notes = p["details"]["notes"]
+    mis = {(m["source_column"], m["text"]) for m in notes.get("misfiled", [])}
+    review = {(m["source_column"], m["text"]) for m in notes.get("review_notes", [])}
+    assert ("Sales Consultant", "dob 15/06/1965") in review
     assert any(c == "Customer Name" and "Lot 4 DP 588479" in t for c, t in mis)
-    assert any(c == "Customer Name" and "APPROVAL" in t.upper() for c, t in mis)
+    assert any(c == "Customer Name" and "APPROVAL" in t.upper() for c, t in review)
+    # the scary "misfiled" bucket holds neither the DOB nor the approval phrase
+    assert not any(c == "Sales Consultant" for c, _t in mis)
+    assert not any(c == "Customer Name" and "APPROVAL" in _t.upper() for c, _t in mis)
     # no DOB field/concept anywhere
     assert "dob" not in str(p["details"].get("sales", {})).lower()
+
+
+def test_nonnumeric_panel_count_is_review_note_and_not_an_error():
+    # A battery/inverter-only job (non-numeric panel cell) is valid: the text is a
+    # neutral review note, NOT a misfiled warning, and the parser raises NO error
+    # issue for it — so it can never block a commit as an unresolved error.
+    rows = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
+        name_cell="Pat Lee", panels="existing system - battery only",
+    ))))
+    row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
+    notes = row.parsed["details"]["notes"]
+    assert any(
+        m["source_column"] == "No of Panels" and "battery only" in m["text"]
+        for m in notes.get("review_notes", [])
+    )
+    assert not any(m["source_column"] == "No of Panels" for m in notes.get("misfiled", []))
+    assert "panel_count" not in row.parsed["details"].get("system", {})
+    # No error-severity issue is produced by the non-numeric panel cell.
+    assert not any(i["severity"] == "error" for i in row.issues)
 
 
 # --------------------------------------------------------------------------- #
