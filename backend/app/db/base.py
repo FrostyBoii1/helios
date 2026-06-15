@@ -12,6 +12,7 @@ from app.models.customer import Customer
 from app.models.document import Document
 from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.models.job import Job
+from app.models.job_label import JobLabelAssignment, JobLabelDefinition
 from app.models.role import Role
 from app.models.task import Task
 from app.models.user import User
@@ -25,6 +26,8 @@ __all__ = [
     "ImportIssue",
     "ImportRow",
     "Job",
+    "JobLabelAssignment",
+    "JobLabelDefinition",
     "Role",
     "Task",
     "User",

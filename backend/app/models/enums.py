@@ -88,6 +88,26 @@ class ActivityType(str, enum.Enum):
 
 
 # --------------------------------------------------------------------------- #
+# Job labels / operational flags (Phase L)
+# --------------------------------------------------------------------------- #
+class JobLabelCategory(str, enum.Enum):
+    """Grouping for a label definition. Drives display + which roles may edit it."""
+
+    APPROVAL = "approval"          # system-derived approval state (locked from casual edit)
+    OPERATIONAL = "operational"    # cross-cutting operational flags (maintenance, warranty, …)
+    SYSTEM = "system"              # other auto/system-generated flags (decommission, …)
+    CUSTOM = "custom"              # user-created labels
+
+
+class JobLabelSource(str, enum.Enum):
+    """How a label assignment came to exist."""
+
+    IMPORT_AUTO = "import_auto"    # auto-assigned by the import commit (Phase L3)
+    MANUAL = "manual"             # a user added it via the UI (Phase L2)
+    SYSTEM = "system"             # assigned by another automated/system flow
+
+
+# --------------------------------------------------------------------------- #
 # Spreadsheet import staging (Phase A — parse-only; no live writes)
 # --------------------------------------------------------------------------- #
 class ImportBatchStatus(str, enum.Enum):
