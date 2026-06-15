@@ -15,6 +15,8 @@ from app.services import import_parser
 from app.services.import_details import (
     build_details,
     build_imported_notes,
+    is_approval_context_note,
+    is_empty_panel_placeholder,
     render_legacy_blobs,
 )
 
@@ -172,34 +174,84 @@ def test_approval_pending_date_in_structured_details():
     assert "approval" not in build_details({"approval_state": "pending"}, {})
 
 
-def test_build_imported_notes_gathers_all_preserved_context():
-    # Safety net: name-cell notes + review notes + misfiled are ALL gathered.
+def test_build_imported_notes_p2_mapping():
+    # P2 owner mapping: heading "Uncategorised Data on Import"; source-column
+    # labels OMITTED; approval/reference context EXCLUDED; bare no-panel
+    # placeholder EXCLUDED; useful context (name-cell, DOB, Lot/DP) KEPT verbatim.
     details = {
         "_v": 2,
         "notes": {
-            "customer_name_notes": "includes hot water timer",
+            "customer_name_notes": "HOUSE",
             "review_notes": [
-                {"source_column": "Customer Name", "text": "Jemena Approval # 000413493"},
+                {"source_column": "Customer Name", "text": "Jemena Approval number 000410056"},
                 {"source_column": "Sales Consultant", "text": "dob 23/11/55"},
+                {"source_column": "No of Panels", "text": "-"},
             ],
             "misfiled": [{"source_column": "Customer Name", "text": "Lot 4 DP 588479"}],
         },
     }
     block = build_imported_notes(details)
-    assert block.startswith("Imported notes:")
-    assert "Name cell: includes hot water timer" in block      # name-cell notes
-    assert "Jemena Approval # 000413493" in block              # stripped approval reference
-    assert "dob 23/11/55" in block                             # sales-cell DOB remainder
-    assert "Lot 4 DP 588479" in block                          # misfiled Lot/DP now INCLUDED
-    # Identical lines are de-duplicated.
+    # 1. New heading, no trailing colon.
+    assert block.startswith("Uncategorised Data on Import")
+    assert "Imported notes:" not in block
+    # 2. Source-column labels are gone (text only).
+    for label in ("Customer Name:", "Name cell:", "No of Panels:", "Sales Consultant:"):
+        assert label not in block
+    # 3. Useful context kept, verbatim, as bare bullets.
+    assert "- HOUSE" in block                  # name-cell note
+    assert "- dob 23/11/55" in block           # DOB-like leftover
+    assert "- Lot 4 DP 588479" in block        # Lot/DP descriptor
+    # 4. Approval reference excluded.
+    assert "Jemena Approval number 000410056" not in block
+    assert "000410056" not in block
+    # 5. Bare no-panel placeholder excluded.
+    assert "- -" not in block
+
+
+def test_build_imported_notes_excludes_approval_status_text():
+    # Distributor approval/status phrasing (any column) is kept out of internal notes.
+    for txt in ("Jemena Approval number 000410056", "ERGON APPROVED", "pending approval"):
+        d = {"_v": 2, "notes": {"misfiled": [{"source_column": "X", "text": txt}]}}
+        assert build_imported_notes(d) is None
+
+
+def test_build_imported_notes_dedupes_identical_lines():
+    # Identical TEXT (regardless of source column) collapses to one bullet.
     dupe = {"_v": 2, "notes": {
-        "review_notes": [{"source_column": "X", "text": "same"}],
-        "misfiled": [{"source_column": "X", "text": "same"}],
+        "review_notes": [{"source_column": "A", "text": "same"}],
+        "misfiled": [{"source_column": "B", "text": "same"}],
     }}
-    assert build_imported_notes(dupe).count("- X: same") == 1
-    # Nothing preserved -> None (internal_notes left blank, not an empty block).
+    assert build_imported_notes(dupe).count("- same") == 1
+
+
+def test_build_imported_notes_none_when_nothing_useful():
+    # Nothing preserved, or only excluded junk -> None (internal_notes left blank).
     assert build_imported_notes({"_v": 2, "notes": {}}) is None
     assert build_imported_notes(None) is None
+    only_junk = {"_v": 2, "notes": {
+        "review_notes": [
+            {"source_column": "No of Panels", "text": "-"},
+            {"source_column": "Customer Name", "text": "Energex approved"},
+        ],
+    }}
+    assert build_imported_notes(only_junk) is None
+
+
+def test_p2_note_predicates():
+    # is_approval_context_note: explicit approval/approved wording only.
+    assert is_approval_context_note("Jemena Approval number 000410056")
+    assert is_approval_context_note("ERGON APPROVED")
+    assert is_approval_context_note("approval pending")
+    # Useful, non-approval context is NOT treated as approval.
+    for keep in ("HOUSE", "dob 23/11/55", "Lot 4 DP 588479", "FINALISE TO AGL",
+                 "export limited", "pillar 111178023"):
+        assert not is_approval_context_note(keep)
+    # is_empty_panel_placeholder: bare dashes / blanks / no-value markers only.
+    for junk in ("-", "--", "—", "", "   ", "n/a", "N/A", "nil", "No panels"):
+        assert is_empty_panel_placeholder(junk)
+    # Substantive panel/context text is NOT a placeholder.
+    for keep in ("existing system - battery only", "6.6kw", "HOUSE", "Lot 4 DP 588479"):
+        assert not is_empty_panel_placeholder(keep)
 
 
 def test_legacy_present_only_when_populated():

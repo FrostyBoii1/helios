@@ -547,8 +547,9 @@ def test_commit_assigns_no_labels_when_no_states(users, db_session: Session):
 
 
 def test_commit_seeds_internal_notes_from_all_preserved_context(users, db_session: Session):
-    # Safety net: name-cell notes, stripped Customer Name approval reference, AND a
-    # stripped Lot/DP descriptor all seed Job.internal_notes on commit.
+    # P2 safety net: USEFUL preserved context (name-cell note + stripped Lot/DP
+    # descriptor) seeds Job.internal_notes on commit under the new heading and with
+    # NO source-column labels; the stripped approval reference is EXCLUDED.
     parsed = _details_parsed()
     parsed["details"] = dict(parsed["details"])
     parsed["details"]["notes"] = {
@@ -557,10 +558,11 @@ def test_commit_seeds_internal_notes_from_all_preserved_context(users, db_sessio
         "misfiled": [{"source_column": "Customer Name", "text": "Lot 4 DP 588479"}],
     }
     _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPSN1")
-    assert job.internal_notes.startswith("Imported notes:")
-    assert "Name cell: includes hot water timer" in job.internal_notes
-    assert "Jemena Approval # 000413493" in job.internal_notes   # stripped approval reference
-    assert "Lot 4 DP 588479" in job.internal_notes               # stripped Lot/DP descriptor
+    assert job.internal_notes.startswith("Uncategorised Data on Import")
+    assert "- includes hot water timer" in job.internal_notes     # name-cell note, no label
+    assert "- Lot 4 DP 588479" in job.internal_notes              # stripped Lot/DP, no label
+    assert "Jemena Approval # 000413493" not in job.internal_notes  # approval reference EXCLUDED
+    assert "Customer Name:" not in job.internal_notes              # source labels dropped
 
 
 def test_commit_leaves_internal_notes_blank_when_no_preserved_context(users, db_session: Session):
@@ -574,19 +576,22 @@ def test_commit_leaves_internal_notes_blank_when_no_preserved_context(users, db_
 def test_seed_internal_notes_only_when_blank_never_overwrites_manual(db_session: Session):
     from types import SimpleNamespace
 
+    # Useful (non-approval) preserved context so seeding actually produces a note.
     details = {"_v": 2, "notes": {
-        "review_notes": [{"source_column": "Customer Name", "text": "Jemena Approval # 000413493"}],
+        "misfiled": [{"source_column": "Customer Name", "text": "Lot 4 DP 588479"}],
     }}
     # blank -> seeded
     j = SimpleNamespace(internal_notes=None, details=details)
     import_commit.seed_internal_notes(j)
-    assert j.internal_notes and "Jemena Approval # 000413493" in j.internal_notes
+    assert j.internal_notes and "Lot 4 DP 588479" in j.internal_notes
     # a manual note is NEVER overwritten
     j2 = SimpleNamespace(internal_notes="MANUAL: call before 9am", details=details)
     import_commit.seed_internal_notes(j2)
     assert j2.internal_notes == "MANUAL: call before 9am"
-    # blank but nothing preserved -> stays None
-    j3 = SimpleNamespace(internal_notes=None, details={"_v": 2, "notes": {}})
+    # blank but nothing useful preserved (only an excluded approval reference) -> stays None
+    j3 = SimpleNamespace(internal_notes=None, details={"_v": 2, "notes": {
+        "review_notes": [{"source_column": "Customer Name", "text": "Jemena Approval # 000413493"}],
+    }})
     import_commit.seed_internal_notes(j3)
     assert j3.internal_notes is None
 

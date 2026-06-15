@@ -287,47 +287,98 @@ def _join_bits(bits: list[tuple[str, Any]]) -> str | None:
     return " | ".join(parts) or None
 
 
+# Explicit approval/approved/approving wording. Deliberately narrow — keyed on
+# the approval word itself so the predicate never swallows useful unrelated
+# context (a "finalise"/admin remark, a DOB, a Lot/DP descriptor, "export
+# limited", "pillar", …). The reference/status it implies belongs in structured
+# approval (label + details.approval), so it is dropped from the junk bucket.
+_APPROVAL_CONTEXT_RE = re.compile(r"\bapprov(?:al|als|ed|e|ing)?\b", re.IGNORECASE)
+
+# Bare no-value placeholders that carry no information (a lone dash, a blank,
+# "n/a", "no panels"). Used to drop "No of Panels: -" style junk: having no
+# panels is unambiguous and is not internal-note context.
+_PANEL_PLACEHOLDER_VALUES = {"n/a", "na", "nil", "none", "no panels", "no panel"}
+
+
+def is_approval_context_note(text: Any) -> bool:
+    """True when a preserved note is clearly network-approval / reference / status
+    context (e.g. "Jemena Approval number 000410056", "ERGON APPROVED").
+
+    Such text is NOT generic junk — its STATE is captured structurally (the
+    approval label + ``details.approval``), so it must not pollute the
+    internal-notes safety bucket (owner P2 rule 3). The approval reference itself
+    is to be structured properly in a later pass (P3/P4); here we only keep it out
+    of internal notes."""
+    return bool(_APPROVAL_CONTEXT_RE.search(_s(text)))
+
+
+def is_empty_panel_placeholder(text: Any) -> bool:
+    """True when a preserved note is a bare no-value placeholder (a lone dash, a
+    blank, "n/a", "no panels"). Owner P2 rule 4: having no panels is unambiguous
+    and should not be imported as internal-note junk."""
+    t = _s(text).strip().lower()
+    # Strip surrounding dashes / dots / whitespace; a residue-free string is a
+    # placeholder ("-", "--", "—", "", ".").
+    stripped = t.strip(" \t-–—.")
+    if stripped == "":
+        return True
+    return stripped in _PANEL_PLACEHOLDER_VALUES
+
+
 def build_imported_notes(details: dict | None) -> str | None:
-    """Readable SAFETY-NET summary of ALL preserved imported context, for seeding
-    ``Job.internal_notes`` on commit when it is blank. Returns None when there is
-    nothing preserved.
+    """Readable SAFETY-NET summary of USEFUL preserved imported context, for
+    seeding ``Job.internal_notes`` on commit when it is blank. Returns None when
+    there is nothing useful to preserve.
 
     The principle: if source text was stripped / diverted / preserved from the
     workbook, staff should be able to see it in internal notes — better duplicated
     in a readable place than effectively lost in a hidden panel. So this gathers,
     in order:
       * the name-cell notes (extra text kept off the Customer Name cell),
-      * the neutral review notes (approval references, a DOB / free-note
-        remainder, non-numeric panel remarks),
+      * the neutral review notes (a DOB / free-note remainder, substantive panel
+        remarks),
       * the misfiled source notes (Lot/DP / legal descriptors and other diverted
         column text).
-    Exact source text is preserved; identical lines are de-duplicated. Structured
-    field values, generated approval-state text, and provenance noise are NOT
-    included — those have dedicated fields / are not in details.notes. This is a
-    safety net, not the authoritative state (labels/fields remain authoritative).
-    """
+
+    Owner P2 mapping rules:
+      * the heading is "Uncategorised Data on Import";
+      * the EXACT source text is kept, but its source-column label is NOT rendered
+        (no "Customer Name:" / "Name cell:" / "No of Panels:" prefixes);
+      * approval / reference / status context is EXCLUDED (it is structured
+        elsewhere — see ``is_approval_context_note``);
+      * bare no-value / no-panel placeholders are EXCLUDED
+        (see ``is_empty_panel_placeholder``);
+      * identical lines are de-duplicated.
+    Structured field values, generated approval-state text, and provenance noise
+    are NOT included — those have dedicated fields / are not in details.notes.
+    This is a safety net, not the authoritative state (labels/fields remain
+    authoritative)."""
     notes = (details or {}).get("notes", {}) or {}
     lines: list[str] = []
     seen: set[str] = set()
 
-    def add(label: str, text: Any) -> None:
+    def add(text: Any) -> None:
         t = _s(text).strip()
         if not t:
             return
-        line = f"- {label}: {t}" if label else f"- {t}"
+        # Drop approval/reference context and bare no-value placeholders; keep the
+        # exact source text WITHOUT its source-column label; de-dup identical text.
+        if is_approval_context_note(t) or is_empty_panel_placeholder(t):
+            return
+        line = f"- {t}"
         if line not in seen:
             seen.add(line)
             lines.append(line)
 
-    add("Name cell", notes.get("customer_name_notes"))
+    add(notes.get("customer_name_notes"))
     for m in notes.get("review_notes") or []:
-        add(_s(m.get("source_column")).strip(), m.get("text"))
+        add(m.get("text"))
     for m in notes.get("misfiled") or []:
-        add(_s(m.get("source_column")).strip(), m.get("text"))
+        add(m.get("text"))
 
     if not lines:
         return None
-    return "Imported notes:\n" + "\n".join(lines)
+    return "Uncategorised Data on Import\n" + "\n".join(lines)
 
 
 def render_structured_blobs(details: dict | None) -> dict[str, str | None]:
