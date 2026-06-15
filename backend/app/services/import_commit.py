@@ -65,11 +65,20 @@ def build_customer_data(parsed: dict, raw: dict, *, batch_id: int, source_row_in
     if extracted:
         note_lines.append("From name cell: " + extracted)
     note_lines.append(f"Imported from legacy workbook (batch {batch_id}, row {source_row_index}).")
+    # Conservative AU address split (Phase-7 parser cleanup). When parse_address
+    # confidently structured the cell, populate suburb/state/postcode; otherwise
+    # `line1` holds the raw address and the rest stay blank. Falls back to the
+    # preview mapper's single-line address for rows staged before address_parts
+    # existed (back-compat). No matching/dedup or property logic here.
+    ap = parsed.get("address_parts") or {}
     return {
         "full_name": pv["full_name"],
         "email": pv["email"],
         "phone": pv["phone"],
-        "address_line1": pv["address_line1"],
+        "address_line1": ap.get("line1") or pv["address_line1"],
+        "suburb": ap.get("suburb"),
+        "state": ap.get("state"),
+        "postcode": ap.get("postcode"),
         "notes": "\n".join(note_lines) or None,
     }
 

@@ -120,6 +120,9 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
 
     # --- Sales ---
     put_text("sales", "salesperson_text", parsed.get("salesperson"))
+    # Non-name suffix lifted off the Sales Consultant cell (payment/system/free
+    # note text) — preserved verbatim, never coerced into the salesperson field.
+    divert("Sales Consultant", parsed.get("sales_consultant_misfiled"))
 
     # --- System ---
     put_text("system", "panel", parsed.get("panel_raw"))
@@ -215,6 +218,12 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
         d["contacts"]["extra_emails"] = emails[1:]
 
     # --- Notes ---
+    # Suffixes lifted off the Customer Name cell, preserved verbatim with their
+    # source column: a land/legal parcel descriptor ("Lot 7 DP 123") and/or a
+    # distributor approval/reference phrase ("Jemena Approval # 000…"). Neither is
+    # part of the person's name; both are kept here instead of polluting it.
+    divert("Customer Name", parsed.get("name_cell_land_descriptor"))
+    divert("Customer Name", parsed.get("name_cell_approval_phrase"))
     cnn = _s(parsed.get("customer_name_notes")).strip()
     if cnn:
         d["notes"]["customer_name_notes"] = cnn

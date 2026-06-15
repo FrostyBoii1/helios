@@ -62,8 +62,43 @@ _APPROVAL_TOKEN_RE = re.compile(
     r"(?:APPROVED|PENDING\b\s*(?:[0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})?)\b",
     re.IGNORECASE,
 )
-NAME_STOP_MARKERS = [" - ", " DOB", " PENDING", " APPROVED", " Approved", " LOT", " Lot",
-                     " lot", " #", " REF", " Ref", " DP ", " dp "]
+# Trailing-text markers in the Customer Name cell. Land/legal parcel descriptors
+# (Lot/DP) are NOT here — they are handled by LAND_DESCRIPTOR_RE below, which
+# requires a parcel number so it can't truncate surnames like "Lott" the way a
+# loose " Lot" substring marker did.
+NAME_STOP_MARKERS = [" - ", " DOB", " PENDING", " APPROVED", " Approved",
+                     " #", " REF", " Ref"]
+# Land/legal parcel descriptor trailing a customer name ("Jane - Lot 7 DP 123",
+# "John-Lot 5"): a Lot/DP keyword followed by a number, however it is separated
+# (space, bare hyphen, comma). Never part of the person's name — it is captured
+# verbatim and diverted to a misfiled note (source_column 'Customer Name'). The
+# required digit avoids matching surnames like "Lott" / initials like "DP".
+LAND_DESCRIPTOR_RE = re.compile(r"\s*[-,]?\s*\b(?:lot|dp)\b\.?\s*\d[\w/.\- ]*$", re.IGNORECASE)
+# Distributor approval / reference phrase appended to a name cell
+# ("Jane - JEMENA APPROVAL #000445604", "ESSENTIAL APPROVED"): a network label
+# that reaches an approval/approved/pending/ref keyword, captured to end of cell.
+# Separated out so the phrase is preserved verbatim and the network label never
+# becomes the customer name; status words are still read by parse_approval. A
+# network word that is NOT followed by an approval keyword (e.g. "ESSENTIAL
+# repairs needed") is left untouched.
+_NAME_APPROVAL_PHRASE_RE = re.compile(
+    r"\s*[-,]?\s*\b(?:" + "|".join(_NETWORK_LABELS) + r")\b.*?"
+    r"\b(?:approval|approved|pending|ref)\b.*$",
+    re.IGNORECASE | re.DOTALL,
+)
+# Australian address tail: a state code immediately followed by a 4-digit
+# postcode (or the rarer postcode-then-state). Anchored to the END so we only
+# structure an address when this reliable signal is present — everything before
+# it is the street + suburb. Real workbook data: ~98.5% of addresses end exactly
+# this way, so this is conservative, not a guess.
+AU_STATES = ("NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT")
+_ADDR_TAIL_RE = re.compile(
+    r"[\s,]*(?:"
+    r"\b(?P<state1>" + "|".join(AU_STATES) + r")\b[\s,]+(?P<pc1>\d{4})"
+    r"|(?P<pc2>\d{4})[\s,]+\b(?P<state2>" + "|".join(AU_STATES) + r")\b"
+    r")\s*$",
+    re.IGNORECASE,
+)
 DIVIDER_HINTS = ("FORTNIGHT", "WEEK ", "BELOW", "ABOVE", "MONTH", "TBC")
 PANEL_BRAND_HINTS = ("longi", "trina", "ae", "tw", "jinko", "ja ", "canadian", "risen", "qcell",
                      "rec", "sunpower", "hyundai", "seraphim", "phono")
@@ -169,24 +204,68 @@ def parse_msb(raw: str) -> str:
 
 
 def parse_sales_consultant(raw: str) -> dict[str, Any]:
+    """Split the Sales Consultant cell into the leading salesperson NAME and any
+    trailing non-name suffix.
+
+    Owner rule (Phase 7): only the actual salesperson name belongs in the
+    structured field. Text after a ' - ' separator — payment/system/free-note text
+    such as 'cash', '13.28kw Humm', or 'dob 14/05/1980' — is NOT part of the name;
+    it is returned as ``misfiled`` so the caller preserves it verbatim under
+    source_column 'Sales Consultant'.
+
+    A suffix that is ONLY a date (e.g. 'Jane - 3/2/23') is still taken as the sale
+    date, preserving prior behaviour. A date that is part of a labelled/mixed
+    suffix (e.g. 'dob 14/05/1980') is NOT extracted — there is no DOB concept in
+    this model, so it stays verbatim note text and never becomes a sale_date."""
     if not raw:
-        return {"name": "", "sale_date": None}
-    date_m = DATE_RE.search(raw)
+        return {"name": "", "sale_date": None, "misfiled": None}
+    misfiled: str | None = None
+    head = raw
+    sep = raw.find(" - ")
+    if sep != -1:
+        suffix = raw[sep + 3:].strip()
+        # Pure-date suffix -> leave it on `head` so the date extraction below takes
+        # it as the sale date. Anything else -> divert the whole suffix verbatim
+        # and pull NO date out of it.
+        if suffix and DATE_RE.sub("", suffix).strip(" -,;|"):
+            misfiled = suffix
+            head = raw[:sep]
+    date_m = DATE_RE.search(head)
     sale_date = date_m.group(1) if date_m else None
-    name = raw
+    name = head
     if date_m:
-        name = raw[: date_m.start()] + raw[date_m.end():]
+        name = head[: date_m.start()] + head[date_m.end():]
     name = name.strip().rstrip("-").strip().strip("-").strip()
-    return {"name": name, "sale_date": sale_date}
+    return {"name": name, "sale_date": sale_date, "misfiled": misfiled or None}
 
 
 def parse_customer_name(raw: str) -> dict[str, Any]:
     if not raw:
-        return {"name": "", "extracted": "", "looks_like_name": False}
-    idxs = [raw.find(m) for m in NAME_STOP_MARKERS if raw.find(m) > 0]
-    cut = min(idxs) if idxs else len(raw)
-    name = raw[:cut].strip()
-    extracted = raw[cut:].strip(" -")
+        return {"name": "", "extracted": "", "looks_like_name": False,
+                "land_descriptor": None, "approval_phrase": None}
+    work = raw
+    # 1) Distributor approval / reference phrase appended to the name cell
+    #    ("Jane - JEMENA APPROVAL #123", "ESSENTIAL APPROVED"): captured verbatim,
+    #    never left in the name. Status words are still read by parse_approval (the
+    #    caller passes approval_phrase to it). A reference-only phrase (e.g.
+    #    "Jemena Approval # 000…") yields no status but is preserved as a note.
+    approval_phrase: str | None = None
+    am = _NAME_APPROVAL_PHRASE_RE.search(work)
+    if am:
+        approval_phrase = work[am.start():].strip(" -,;|")
+        work = work[: am.start()].rstrip(" -,;|")
+    # 2) Land/legal parcel descriptor ("- Lot 7 DP 123", "-Lot 5"): never part of
+    #    the name; captured verbatim regardless of separator style.
+    land_descriptor: str | None = None
+    lm = LAND_DESCRIPTOR_RE.search(work)
+    if lm:
+        land_descriptor = work[lm.start():].strip(" -,;|")
+        work = work[: lm.start()].rstrip(" -,;|")
+    # 3) Remaining trailing notes via the existing stop-marker split.
+    idxs = [work.find(m) for m in NAME_STOP_MARKERS if work.find(m) > 0]
+    cut = min(idxs) if idxs else len(work)
+    name = work[:cut].strip()
+    extracted = work[cut:].strip(" -")
     # The remove-old-system / decommission marker is detected separately (and the
     # flag/banner set) — it must never remain in the customer name. It can be glued
     # to the name without a stop-marker (e.g. "Jane Roe -remove old system"), which
@@ -197,7 +276,13 @@ def parse_customer_name(raw: str) -> dict[str, Any]:
     looks_like_name = bool(name) and name[0].isalpha() and not re.match(
         r"(?i)^(ref|essential|ergon|energex|approved|pending|lot)\b", name
     )
-    return {"name": name, "extracted": extracted, "looks_like_name": looks_like_name}
+    return {
+        "name": name,
+        "extracted": extracted,
+        "looks_like_name": looks_like_name,
+        "land_descriptor": land_descriptor or None,
+        "approval_phrase": approval_phrase or None,
+    }
 
 
 def clean_name_cell_notes(extracted: str) -> str:
@@ -269,6 +354,48 @@ def parse_emails(raw: str) -> list[str]:
     if not raw:
         return []
     return [e.strip() for e in raw.split("/") if e.strip() and e.strip().lower() not in {"n/a", "na"}]
+
+
+def parse_address(raw: str) -> dict[str, Any]:
+    """Conservatively split an Australian address into line1 / suburb / state /
+    postcode. Pure; never discards text.
+
+    It ONLY structures when a reliable trailing "STATE POSTCODE" (or
+    "POSTCODE STATE") anchor is present; otherwise it returns the whole raw string
+    as ``line1`` with the other parts blank and ``structured=False`` (the owner's
+    rule: keep the raw address rather than over-confidently mangle a weird one).
+
+    With the anchor found, the suburb is the segment after the LAST comma in the
+    remaining head; the street (incl. any Lot/DP/legal descriptor, preserved
+    verbatim) is everything before that comma. If the head has no comma we cannot
+    confidently separate suburb from street, so the whole head stays as ``line1``
+    and ``suburb`` is left blank — never guessed. line1 + suburb + state +
+    postcode always reconstruct the original (no text is lost)."""
+    s = (raw or "").strip()
+    out: dict[str, Any] = {
+        "line1": s or None, "suburb": None, "state": None,
+        "postcode": None, "structured": False,
+    }
+    if not s:
+        out["line1"] = None
+        return out
+    m = _ADDR_TAIL_RE.search(s)
+    if not m:
+        return out  # no reliable anchor -> keep the raw line, structure nothing
+    state = (m.group("state1") or m.group("state2") or "").upper()
+    postcode = m.group("pc1") or m.group("pc2")
+    head = s[: m.start()].strip().rstrip(",").strip()
+    if "," in head:
+        street, suburb = head.rsplit(",", 1)
+        out["line1"] = street.strip().rstrip(",").strip() or None
+        out["suburb"] = suburb.strip() or None
+    else:
+        # No comma: can't split suburb from street without guessing — keep head.
+        out["line1"] = head or None
+    out["state"] = state
+    out["postcode"] = postcode
+    out["structured"] = True
+    return out
 
 
 def parse_date_maybe(raw: str) -> date | None:
@@ -394,7 +521,12 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
         nmi_raw = get(r, "nmi")
         dist_inferred, _prefix = infer_distributor(nmi_raw)
         dist_raw = get(r, "distributor")
-        approval = parse_approval(name_info["extracted"], get(r, "notes"))
+        # Include the name-cell approval phrase (e.g. "ESSENTIAL APPROVED",
+        # "JEMENA PENDING 12/3/26") so status words still set approval_state even
+        # though the phrase has been separated out of the customer name.
+        approval = parse_approval(
+            name_info.get("approval_phrase") or "", name_info["extracted"], get(r, "notes")
+        )
         # Meaningful non-name trailing text from the Customer Name cell, with pure
         # approval status removed (the approval is captured separately above).
         name_cell_notes = clean_name_cell_notes(name_info["extracted"])
@@ -411,14 +543,25 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
             "legacy_reference": ref,
             "salesperson": sales["name"],
             "sale_date": sales["sale_date"],
+            # Non-name suffix from the Sales Consultant cell (payment/system/note
+            # text) — preserved verbatim as a misfiled note by build_details.
+            "sales_consultant_misfiled": sales.get("misfiled"),
             "customer_name": name_info["name"],
             "name_extracted_notes": name_info["extracted"] or None,
+            # Suffixes lifted out of the Customer Name cell — preserved verbatim as
+            # misfiled notes (source_column 'Customer Name') by build_details.
+            "name_cell_land_descriptor": name_info.get("land_descriptor"),
+            "name_cell_approval_phrase": name_info.get("approval_phrase"),
             # Reviewer-visible/editable preserved note (approval status removed).
             "customer_name_notes": name_cell_notes or None,
             # Operationally important old-system removal flag + the matched text.
             "removes_old_system": decommission_marker is not None,
             "decommission_marker": decommission_marker,
             "address": get(r, "address") or None,
+            # Conservatively split AU address (line1/suburb/state/postcode). The
+            # commit mapping can populate Customer.suburb/state/postcode from this
+            # on a future re-ingest; the raw `address` above is retained verbatim.
+            "address_parts": parse_address(get(r, "address")),
             "approval_state": approval["state"],
             "approval_pending_date": approval["pending_date"],
             "phones": phones["numbers"],

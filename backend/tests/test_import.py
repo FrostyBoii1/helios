@@ -210,14 +210,16 @@ def test_detect_decommission_variants():
     assert import_parser.detect_decommission("Jane DECOM").upper() == "DECOM"
 
 
-def _one_job_row_bytes(*, name_cell: str, notes_cell: str = "") -> bytes:
+def _one_job_row_bytes(
+    *, name_cell: str, notes_cell: str = "", sales_cell: str = "Rep 10/10/2025"
+) -> bytes:
     """A minimal COMPLETED sheet: header + one clean job row, with the Customer
-    Name + Notes cells controllable. Fabricated data only."""
+    Name + Notes + Sales Consultant cells controllable. Fabricated data only."""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "COMPLETED"
     ws.append(HEADERS)
-    ws.append(["TESTIMP0009", "Rep 10/10/2025", name_cell, "9 Test St", "0400000000",
+    ws.append(["TESTIMP0009", sales_cell, name_cell, "9 Test St", "0400000000",
                notes_cell, "Yes", "x@example.test", "Essential", "Origin", "42041234567",
                "M9", "10", "Longi 440", "Goodwe 5kw", "1", "1", "Tin", "", "", "", "Installer One"])
     buf = BytesIO()
@@ -279,6 +281,212 @@ def test_parse_rows_strips_decommission_marker_from_name_keeps_flag():
     assert row.parsed["removes_old_system"] is True
     assert "remove old system" in row.parsed["decommission_marker"].lower()
     assert "remove old system" not in (row.parsed.get("customer_name_notes") or "").lower()
+
+
+# --------------------------------------------------------------------------- #
+# Phase-7 parser fixes (batch 3299 owner review): Sales Consultant suffix split,
+# Customer Name land/legal descriptor split, name-cell distributor approval phrase.
+# --------------------------------------------------------------------------- #
+def test_parse_sales_consultant_splits_non_name_suffix():
+    psc = import_parser.parse_sales_consultant
+    # payment suffix -> name kept, suffix preserved, no sale date
+    r = psc("Jason Gowans - cash")
+    assert r["name"] == "Jason Gowans"
+    assert r["misfiled"] == "cash"
+    assert r["sale_date"] is None
+    # system + payment suffix
+    r2 = psc("Jason G - 13.28kw Humm")
+    assert r2["name"] == "Jason G"
+    assert r2["misfiled"] == "13.28kw Humm"
+    # a labelled DOB suffix is preserved verbatim, NEVER a sale_date, no DOB field
+    r3 = psc("Robert W - dob 14/05/1980")
+    assert r3["name"] == "Robert W"
+    assert r3["misfiled"] == "dob 14/05/1980"
+    assert r3["sale_date"] is None
+
+
+def test_parse_sales_consultant_keeps_clean_names_and_bare_dates():
+    psc = import_parser.parse_sales_consultant
+    # bare-date suffix is still the sale date (prior behaviour preserved)
+    r = psc("Jane Smith - 10/10/2025")
+    assert r["name"] == "Jane Smith" and r["sale_date"] == "10/10/2025" and r["misfiled"] is None
+    # trailing date without separator is unchanged
+    r2 = psc("Jane Smith 10/10/2025")
+    assert r2["name"] == "Jane Smith" and r2["sale_date"] == "10/10/2025" and r2["misfiled"] is None
+    # a plain name is untouched
+    r3 = psc("Jane Smith")
+    assert r3 == {"name": "Jane Smith", "sale_date": None, "misfiled": None}
+
+
+def test_parse_customer_name_splits_land_descriptor():
+    cn = import_parser.parse_customer_name
+    # hyphen-glued Lot/DP (the src-88 shape) -> name clean, descriptor preserved
+    r = cn("Jane Roe -Lot 4 DP 588479")
+    assert r["name"] == "Jane Roe"
+    assert r["land_descriptor"] == "Lot 4 DP 588479"
+    # space-separated Lot/DP
+    r2 = cn("John Smith - Lot 7 DP 12345")
+    assert r2["name"] == "John Smith"
+    assert r2["land_descriptor"] == "Lot 7 DP 12345"
+    # no false positive: a surname containing "lot" and no parcel number
+    r3 = cn("Charlotte Lott")
+    assert r3["name"] == "Charlotte Lott"
+    assert r3["land_descriptor"] is None
+
+
+def test_parse_customer_name_separates_distributor_approval_phrase():
+    cn = import_parser.parse_customer_name
+    # reference phrase (the src-61 shape) -> phrase out of the name, preserved
+    r = cn("Jane Roe - Jemena Approval # 000413493")
+    assert r["name"] == "Jane Roe"
+    assert "jemena" not in r["name"].lower() and "approval" not in r["name"].lower()
+    assert r["approval_phrase"] == "Jemena Approval # 000413493"
+    # glued by hyphen-space (the src-323 shape) -> network label not left in name
+    r2 = cn("John Smith- JEMENA APPROVAL #000445604")
+    assert r2["name"] == "John Smith"
+    assert "jemena" not in r2["name"].lower()
+    # a status word in the phrase still drives approval_state via parse_approval
+    appr = import_parser.parse_approval(cn("Pat Lee ERGON APPROVED")["approval_phrase"] or "")
+    assert appr["state"] == "approved"
+    # a network word that is NOT an approval phrase is left in place, not stripped
+    r3 = cn("Bob Lee - ENERGEX meter upgrade needed")
+    assert r3["approval_phrase"] is None
+    assert r3["name"] == "Bob Lee"
+
+
+def test_parse_rows_diverts_name_and_sales_suffixes_to_misfiled():
+    # End-to-end through parse_rows -> build_details: each lifted suffix lands in
+    # details.notes.misfiled tagged with its source column; the structured name /
+    # salesperson stay clean.
+    rows = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
+        name_cell="Jane Roe -Lot 4 DP 588479",
+        sales_cell="Jason Gowans - cash",
+    ))))
+    row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
+    assert row.parsed["customer_name"] == "Jane Roe"
+    assert row.parsed["salesperson"] == "Jason Gowans"
+    misfiled = row.parsed["details"]["notes"]["misfiled"]
+    by_col = {(m["source_column"], m["text"]) for m in misfiled}
+    assert ("Customer Name", "Lot 4 DP 588479") in by_col
+    assert ("Sales Consultant", "cash") in by_col
+
+    # Name-cell distributor approval phrase (src-61 shape): out of the name,
+    # preserved under 'Customer Name'.
+    rows2 = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
+        name_cell="Jane Roe - Jemena Approval # 000413493",
+    ))))
+    row2 = next(r for r in rows2 if r.legacy_reference == "TESTIMP0009")
+    assert row2.parsed["customer_name"] == "Jane Roe"
+    assert "jemena" not in row2.parsed["customer_name"].lower()
+    cn_misfiled = [
+        m["text"] for m in row2.parsed["details"]["notes"]["misfiled"]
+        if m["source_column"] == "Customer Name"
+    ]
+    assert any("Approval" in t for t in cn_misfiled)
+
+    # No DOB field is ever invented from a 'dob …' salesperson suffix.
+    rows3 = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
+        name_cell="Dana Fox", sales_cell="Robert W - dob 14/05/1980",
+    ))))
+    row3 = next(r for r in rows3 if r.legacy_reference == "TESTIMP0009")
+    assert row3.parsed["salesperson"] == "Robert W"
+    assert row3.parsed["sale_date"] is None
+    assert "dob" not in str(row3.parsed["details"].get("sales", {})).lower()
+    sc_misfiled = [
+        m["text"] for m in row3.parsed["details"]["notes"]["misfiled"]
+        if m["source_column"] == "Sales Consultant"
+    ]
+    assert sc_misfiled == ["dob 14/05/1980"]
+
+
+# --------------------------------------------------------------------------- #
+# Conservative AU address parsing (Phase-7 cleanup). Fabricated addresses only.
+# --------------------------------------------------------------------------- #
+def test_parse_address_standard_au_format():
+    pa = import_parser.parse_address
+    r = pa("39 Example St, Cooma NSW 2866")
+    assert r["line1"] == "39 Example St"
+    assert r["suburb"] == "Cooma"
+    assert r["state"] == "NSW"
+    assert r["postcode"] == "2866"
+    assert r["structured"] is True
+    # lowercase state is normalised; reconstruct loses nothing
+    r2 = pa("12 Test Road, Sometown vic 3434")
+    assert r2["state"] == "VIC" and r2["suburb"] == "Sometown" and r2["postcode"] == "3434"
+
+
+def test_parse_address_reversed_postcode_state():
+    r = import_parser.parse_address("4 Test Place, Bartown 2705 NSW")
+    assert r["state"] == "NSW" and r["postcode"] == "2705"
+    assert r["suburb"] == "Bartown" and r["line1"] == "4 Test Place"
+
+
+def test_parse_address_preserves_lot_dp_in_line1():
+    pa = import_parser.parse_address
+    # Lot in parentheses leading the street — stays in line1, exactly preserved.
+    r = pa("(Lot 24) 19 Example Lane, Faketown NSW 2711")
+    assert r["line1"] == "(Lot 24) 19 Example Lane"
+    assert r["suburb"] == "Faketown" and r["state"] == "NSW" and r["postcode"] == "2711"
+    # "Lot 34, 4 St, Town STATE PC": the suburb is the LAST comma segment; the Lot
+    # descriptor is preserved within line1.
+    r2 = pa("Lot 34, 4 Example St, Faketown NSW 2647")
+    assert r2["suburb"] == "Faketown"
+    assert r2["line1"] == "Lot 34, 4 Example St"
+    assert "Lot 34" in r2["line1"]
+
+
+def test_parse_address_conservative_when_uncertain():
+    pa = import_parser.parse_address
+    # No comma -> cannot split suburb without guessing; keep head as line1.
+    r = pa("39 Example St Cooma NSW 2866")
+    assert r["state"] == "NSW" and r["postcode"] == "2866"
+    assert r["line1"] == "39 Example St Cooma" and r["suburb"] is None
+    assert r["structured"] is True
+    # No state+postcode anchor at all -> keep raw verbatim, structure nothing.
+    weird = pa("c/- the shed out the back, ask for directions")
+    assert weird["structured"] is False
+    assert weird["line1"] == "c/- the shed out the back, ask for directions"
+    assert weird["suburb"] is None and weird["state"] is None and weird["postcode"] is None
+    # Blank.
+    blank = pa("")
+    assert blank == {"line1": None, "suburb": None, "state": None, "postcode": None, "structured": False}
+
+
+def test_parse_rows_attaches_address_parts():
+    rows = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(name_cell="Pat Lee"))))
+    row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
+    # The fixture's address is "9 Test St" (no state/pc) -> conservatively unstructured.
+    ap = row.parsed["address_parts"]
+    assert ap["line1"] == "9 Test St" and ap["structured"] is False
+    assert row.parsed["address"] == "9 Test St"  # raw retained for back-compat
+
+
+def test_worst_row_combined_pollution_all_preserved():
+    """A deliberately convoluted row (mirrors the architecture-pass stress
+    categories): polluted Sales Consultant + customer-name legal descriptor +
+    in-name distributor approval phrase + decommission marker. Every structured
+    field stays clean; every stripped suffix is preserved verbatim as misfiled
+    source text with the right source_column; no DOB is ever invented."""
+    rows = list(import_parser.parse_rows(_ws_from_bytes(_one_job_row_bytes(
+        name_cell="Bill (William) Corn -Lot 4 DP 588479 - JEMENA APPROVAL #000445604 DECOM",
+        sales_cell="Robert W - dob 15/06/1965",
+    ))))
+    row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
+    p = row.parsed
+    # structured fields are clean
+    assert p["customer_name"] == "Bill (William) Corn"
+    assert p["salesperson"] == "Robert W"
+    assert p["sale_date"] is None  # the dob date is NEVER taken as a sale date
+    # decommission detected + flagged, not left in the name
+    assert p["removes_old_system"] is True
+    assert "decom" not in p["customer_name"].lower()
+    # every stripped suffix preserved verbatim, tagged by source column
+    mis = {(m["source_column"], m["text"]) for m in p["details"]["notes"]["misfiled"]}
+    assert ("Sales Consultant", "dob 15/06/1965") in mis
+    assert any(c == "Customer Name" and "Lot 4 DP 588479" in t for c, t in mis)
+    assert any(c == "Customer Name" and "APPROVAL" in t.upper() for c, t in mis)
+    # no DOB field/concept anywhere
+    assert "dob" not in str(p["details"].get("sales", {})).lower()
 
 
 # --------------------------------------------------------------------------- #

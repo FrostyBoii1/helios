@@ -131,8 +131,61 @@ def test_address_and_case_year_mapping(client_for, users, db_session: Session):
     j4 = db_session.get(Job, rows["TESTIMP0004"].committed_job_id)
     cust1 = db_session.get(Customer, rows["TESTIMP0001"].committed_customer_id)
     assert cust1.address_line1 == "1 Test St"            # parsed address mapped
+    # "1 Test St" has no state+postcode anchor -> conservatively unstructured, so
+    # suburb/state/postcode are NOT guessed.
+    assert cust1.suburb is None and cust1.state is None and cust1.postcode is None
     assert j1.case_number.startswith("SCS-2025-")        # sale_date 10/10/2025
     assert j4.case_number.startswith("SCS-2026-")        # install_date 01/01/2026
+
+
+def test_address_parts_populate_customer_columns(users, db_session: Session):
+    """When parse_address structured the cell, the committed Customer gets
+    address_line1 / suburb / state / postcode populated (Phase-7 cleanup wiring)."""
+    admin_id = users["admin"].id
+    b = ImportBatch(
+        source_filename="syn.xlsx", sheet_name="COMPLETED",
+        status=ImportBatchStatus.REVIEWING.value,
+    )
+    db_session.add(b)
+    db_session.flush()
+    db_session.add(
+        ImportRow(
+            batch_id=b.id, source_row_index=2, row_class=ImportRowClass.JOB.value,
+            legacy_reference="ADDR0001",
+            raw={"address": "39 Example St, Cooma NSW 2866"},
+            parsed={
+                "customer_name": "Pat Lee", "sale_date": "01/06/2025",
+                "address": "39 Example St, Cooma NSW 2866",
+                "address_parts": {
+                    "line1": "39 Example St", "suburb": "Cooma",
+                    "state": "NSW", "postcode": "2866", "structured": True,
+                },
+            },
+            review_status=ImportRowReviewStatus.APPROVED.value,
+        )
+    )
+    db_session.flush()
+    res = import_commit.commit_batch(db_session, b, actor_id=admin_id)
+    assert res["committed"] == 1
+    row = db_session.scalars(select(ImportRow).where(ImportRow.batch_id == b.id)).one()
+    cust = db_session.get(Customer, row.committed_customer_id)
+    assert cust.address_line1 == "39 Example St"
+    assert cust.suburb == "Cooma"
+    assert cust.state == "NSW"
+    assert cust.postcode == "2866"
+
+
+def test_address_fallback_when_address_parts_absent(users, db_session: Session):
+    """A row staged before the cleanup (no address_parts) keeps the raw address in
+    address_line1, and suburb/state/postcode stay blank — back-compat preserved."""
+    admin_id = users["admin"].id
+    b = _seed_batch(db_session, 1, prefix="ADDRB")  # parsed has no address_parts
+    res = import_commit.commit_batch(db_session, b, actor_id=admin_id)
+    assert res["committed"] == 1
+    row = db_session.scalars(select(ImportRow).where(ImportRow.batch_id == b.id)).one()
+    cust = db_session.get(Customer, row.committed_customer_id)
+    assert cust.address_line1 == "0 Seed St"  # raw single-line preserved
+    assert cust.suburb is None and cust.state is None and cust.postcode is None
 
 
 # --------------------------------------------------------------------------- #

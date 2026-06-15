@@ -17,7 +17,7 @@ from app.models.activity import Activity
 from app.models.customer import Customer
 from app.models.import_staging import ImportRow
 from app.models.job import Job
-from app.services import import_commit_preview as preview_svc
+from app.services import import_commit, import_commit_preview as preview_svc
 from tests.test_import import _synthetic_bytes
 
 
@@ -138,6 +138,69 @@ def test_address_prefers_parsed_then_raw():
     assert m2["address_line1"] == "1 Old St"
     m3 = preview_svc.map_customer_preview({"customer_name": "X"}, {"address": "1 Old St"})
     assert m3["address_line1"] == "1 Old St"
+
+
+def test_preview_surfaces_structured_address_parts():
+    """A structured address_parts shows split suburb/state/postcode in the preview
+    (matching what commit now writes)."""
+    parsed = {
+        "customer_name": "Pat Lee",
+        "address": "39 Example St, Cooma NSW 2866",
+        "address_parts": {
+            "line1": "39 Example St", "suburb": "Cooma",
+            "state": "NSW", "postcode": "2866", "structured": True,
+        },
+    }
+    m = preview_svc.map_customer_preview(parsed, {})
+    assert m["address_line1"] == "39 Example St"
+    assert m["suburb"] == "Cooma"
+    assert m["state"] == "NSW"
+    assert m["postcode"] == "2866"
+
+
+def test_preview_address_fallback_when_unstructured_or_absent():
+    """No/unstructured address_parts -> raw address stays in line1; suburb/state/
+    postcode are blank (old preview behaviour preserved)."""
+    # Absent.
+    m = preview_svc.map_customer_preview(
+        {"customer_name": "X", "address": "1 Old St"}, {}
+    )
+    assert m["address_line1"] == "1 Old St"
+    assert m["suburb"] is None and m["state"] is None and m["postcode"] is None
+    # Present but unstructured (parse_address kept the whole raw as line1).
+    parsed = {
+        "customer_name": "X", "address": "somewhere odd",
+        "address_parts": {
+            "line1": "somewhere odd", "suburb": None,
+            "state": None, "postcode": None, "structured": False,
+        },
+    }
+    m2 = preview_svc.map_customer_preview(parsed, {})
+    assert m2["address_line1"] == "somewhere odd"
+    assert m2["suburb"] is None and m2["state"] is None and m2["postcode"] is None
+
+
+def test_preview_and_commit_address_fields_consistent():
+    """The preview mapper and the commit customer builder must agree field-for-
+    field on the address mapping, for structured / unstructured / absent inputs."""
+    cases = [
+        {  # structured
+            "customer_name": "A", "address": "39 Example St, Cooma NSW 2866",
+            "address_parts": {"line1": "39 Example St", "suburb": "Cooma",
+                              "state": "NSW", "postcode": "2866", "structured": True},
+        },
+        {  # unstructured (raw kept)
+            "customer_name": "B", "address": "weird place",
+            "address_parts": {"line1": "weird place", "suburb": None,
+                              "state": None, "postcode": None, "structured": False},
+        },
+        {"customer_name": "C", "address": "5 Raw St"},  # absent (pre-cleanup row)
+    ]
+    for parsed in cases:
+        prev = preview_svc.map_customer_preview(parsed, {})
+        comm = import_commit.build_customer_data(parsed, {}, batch_id=1, source_row_index=2)
+        for field in ("address_line1", "suburb", "state", "postcode"):
+            assert prev[field] == comm[field], (field, parsed["customer_name"])
 
 
 def test_invalid_case_year_excluded(client_for, users):
