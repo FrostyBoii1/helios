@@ -19,10 +19,12 @@ from app.models.enums import (
     ImportBatchStatus,
     ImportRowClass,
     ImportRowReviewStatus,
+    JobLabelSource,
 )
 from app.models.import_staging import ImportBatch, ImportRow
 from app.models.job import Job
 from app.services import import_commit
+from app.services import job_labels as job_labels_service
 from app.services.import_details import render_legacy_blobs
 from tests.test_import import _synthetic_bytes
 
@@ -494,3 +496,66 @@ def test_commit_fallback_builds_details_when_absent(users, db_session: Session):
     assert job.details is not None and job.details["_v"] == 2
     assert job.details["system"]["panel_count"] == 16
     assert job.system_details and "Panels: 16" in job.system_details
+
+
+# --------------------------------------------------------------------------- #
+# Phase L3: import auto-label assignment on commit
+# --------------------------------------------------------------------------- #
+def _label_keys(db, job) -> list[str]:
+    return [a.label.key for a in job_labels_service.list_job_labels(db, job.id)]
+
+
+def test_commit_auto_assigns_approval_approved_label(users, db_session: Session):
+    # _details_parsed defaults to approval_state="approved".
+    _b, _row, job = _commit_one_seeded(db_session, users, _details_parsed(), "TESTIMPL3A")
+    assigns = job_labels_service.list_job_labels(db_session, job.id)
+    keys = [a.label.key for a in assigns]
+    assert "approval_approved" in keys
+    # source is import_auto, attributed to the commit operator (admin).
+    appr = next(a for a in assigns if a.label.key == "approval_approved")
+    assert appr.source == JobLabelSource.IMPORT_AUTO
+    assert appr.assigned_by_id == users["admin"].id
+
+
+def test_commit_auto_assigns_approval_pending_label(users, db_session: Session):
+    parsed = _details_parsed(approval_state="pending", approval_pending_date="01/07/2025")
+    parsed["details"] = {**parsed["details"], "flags": {}}  # isolate the approval label
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPL3B")
+    assigns = job_labels_service.list_job_labels(db_session, job.id)
+    keys = [a.label.key for a in assigns]
+    assert keys == ["approval_pending"]
+    assert assigns[0].note == "pending 01/07/2025"  # pending date carried as a note
+
+
+def test_commit_auto_assigns_decommission_label(users, db_session: Session):
+    # _details_parsed defaults to details.flags.removes_old_system = True.
+    parsed = _details_parsed(approval_state="none")
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPL3C")
+    assigns = job_labels_service.list_job_labels(db_session, job.id)
+    keys = [a.label.key for a in assigns]
+    assert keys == ["decommission_pre_existing"]
+    # decommission marker carried as the note.
+    assert assigns[0].note == "REMOVE OLD SYSTEM"
+
+
+def test_commit_assigns_no_labels_when_no_states(users, db_session: Session):
+    parsed = _details_parsed(approval_state="none")
+    parsed["details"] = dict(parsed["details"])
+    parsed["details"].pop("flags", None)
+    _b, _row, job = _commit_one_seeded(db_session, users, parsed, "TESTIMPL3D")
+    assert job_labels_service.list_job_labels(db_session, job.id) == []
+
+
+def test_commit_auto_label_idempotent(users, db_session: Session):
+    # The default row yields approval_approved + decommission_pre_existing, each once.
+    _b, _row, job = _commit_one_seeded(db_session, users, _details_parsed(), "TESTIMPL3E")
+    keys = _label_keys(db_session, job)
+    assert sorted(keys) == ["approval_approved", "decommission_pre_existing"]
+    assert len(keys) == len(set(keys))  # no duplicates
+    # re-assigning an already-present label is a no-op (returns the existing row).
+    before = len(job_labels_service.list_job_labels(db_session, job.id))
+    job_labels_service.assign_label_by_key(
+        db_session, job_id=job.id, key="approval_approved", source=JobLabelSource.IMPORT_AUTO
+    )
+    after = len(job_labels_service.list_job_labels(db_session, job.id))
+    assert before == after == 2

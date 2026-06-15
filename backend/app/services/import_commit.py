@@ -22,9 +22,16 @@ from datetime import date, datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.enums import ActivityType, ImportBatchStatus, ImportRowReviewStatus, JobStatus
+from app.models.enums import (
+    ActivityType,
+    ImportBatchStatus,
+    ImportRowReviewStatus,
+    JobLabelSource,
+    JobStatus,
+)
 from app.models.import_staging import ImportBatch, ImportRow
 from app.models.job import Job
+from app.services import job_labels as job_labels_service
 from app.services import jobs as jobs_service
 from app.services.activity import log_activity
 from app.services.customers import create_customer
@@ -170,6 +177,20 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
             job_id=job.id,
             meta={"batch_id": batch_id, "source_row_index": sidx, "legacy_reference": legacy},
         )
+        # Phase L3: auto-assign import-derived labels (approval state, decommission)
+        # in the SAME per-row transaction. Additive + idempotent — never reads or
+        # alters the preserved review_notes / source text. assigned_by_id = the
+        # commit operator (provenance, mirrors RECORD_IMPORTED.actor_id); source =
+        # import_auto marks it machine-derived rather than a manual UI choice.
+        for label_key, label_note in job_labels_service.auto_label_keys(parsed, job.details or {}):
+            job_labels_service.assign_label_by_key(
+                db,
+                job_id=job.id,
+                key=label_key,
+                source=JobLabelSource.IMPORT_AUTO,
+                assigned_by_id=actor_id,
+                note=label_note,
+            )
         db.commit()  # per-row durability
         return {
             **base,
