@@ -7,6 +7,8 @@ import {
   canEditJobDetails,
   canEditJobInstallDate,
 } from '@/auth/permissions'
+import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
+import { InternalNotesPanel } from '@/components/InternalNotesPanel'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
 import { ImportedJobDetails } from '@/components/ImportedJobDetails'
 import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
@@ -30,10 +32,12 @@ const DESCRIPTIVE_FIELDS: { key: keyof JobInput; label: string; textarea?: boole
 ]
 
 // In structured edit mode the derived blobs (system_details/install_details) are
-// re-rendered by the backend from Job.details, so they are NOT edited directly —
-// only these legacy fields are editable alongside the structured fields (D-A).
+// re-rendered by the backend from Job.details, so they are NOT edited directly.
+// `notes` is also excluded here: it is the read-only IMPORTED source blob —
+// manual notes now live in the dedicated internal-notes panel (Phase A), so the
+// two never mix.
 const STRUCTURED_MODE_LEGACY_FIELDS = DESCRIPTIVE_FIELDS.filter(
-  (f) => f.key !== 'system_details' && f.key !== 'install_details',
+  (f) => f.key !== 'system_details' && f.key !== 'install_details' && f.key !== 'notes',
 )
 
 function describeError(err: unknown, fallback: string): string {
@@ -231,8 +235,13 @@ export function JobDetailPage() {
         </div>
       )}
 
-      {/* Status + install date controls */}
-      <div className="mb-4 grid gap-4 sm:grid-cols-2">
+      {/* Two columns: status + details on the left, a tall manual internal-notes
+          panel on the right (sticky). Tasks/documents/timeline stay full-width
+          below this grid. */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* Status + install date controls */}
+          <div className="grid gap-4 sm:grid-cols-2">
         <div className="card p-4">
           <h2 className="eyebrow mb-2">Status</h2>
           {mayChangeStatus ? (
@@ -386,6 +395,12 @@ export function JobDetailPage() {
               </div>
             </dl>
             <StructuredDetailsView registry={registry} details={job.details} />
+            {job.approval_details && (
+              <div>
+                <dt className="eyebrow text-faint">Approval details</dt>
+                <dd className="mt-0.5 whitespace-pre-wrap text-fg">{job.approval_details}</dd>
+              </div>
+            )}
           </div>
         ) : importedView ? (
           // Imported job (legacy blobs): title/sale-date + structured detail sections.
@@ -442,6 +457,27 @@ export function JobDetailPage() {
             </button>
           </div>
         )}
+          </div>
+
+          {/* Imported source notes. For details-BACKED jobs these come from the
+              structured details (StructuredDetailsView's misfiled / name-cell
+              fields above) — never the rendered legacy blob, which bundles
+              Salesperson/Payment/Compliance/provenance. Only a details=NULL
+              (legacy/native) job falls back to its plain notes text here. */}
+          {!job.details && <ImportedSourceNotes text={job.notes} />}
+        </div>
+
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <InternalNotesPanel
+            title="Job internal notes"
+            value={job.internal_notes}
+            canWrite={mayEditDetails}
+            saving={updateMutation.isPending}
+            onSave={(text) =>
+              updateMutation.mutateAsync({ internal_notes: text || null }).then(() => undefined)
+            }
+          />
+        </aside>
       </div>
 
       {/* Tasks + timeline are live; Documents remains a later phase. */}

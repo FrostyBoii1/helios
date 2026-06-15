@@ -188,6 +188,30 @@ def test_descriptive_update_logs_job_updated(client_for, users, customer, db_ses
     assert set(logged[0].meta["changes"]) == {"title", "notes"}
 
 
+def test_job_internal_notes_round_trip_and_separate_from_notes(client_for, users, customer):
+    """Phase A: a job's manual internal_notes round-trips, is permission-gated like
+    other descriptive fields, and is independent of the imported `notes` blob."""
+    admin = client_for(users["admin"])
+    job = _create(admin, customer.id).json()
+    assert job["internal_notes"] is None
+
+    resp = admin.patch(
+        f"/api/v1/jobs/{job['id']}",
+        json={"notes": "imported blob", "internal_notes": "spoke to installer"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["internal_notes"] == "spoke to installer"
+    assert body["notes"] == "imported blob"
+
+    # Support role cannot edit descriptive fields (internal_notes included).
+    support = client_for(users["support"])
+    blocked = support.patch(
+        f"/api/v1/jobs/{job['id']}", json={"internal_notes": "nope"}
+    )
+    assert blocked.status_code == 403
+
+
 def test_initial_install_date_logs_job_updated(client_for, users, customer, db_session):
     admin = client_for(users["admin"])
     job = _create(admin, customer.id).json()

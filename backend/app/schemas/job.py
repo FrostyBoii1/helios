@@ -18,6 +18,7 @@ class JobBase(BaseModel):
     install_details: str | None = None
     approval_details: str | None = None
     notes: str | None = None
+    internal_notes: str | None = None
     # Structured, registry-shaped attributes. On CREATE (commit) this is a full
     # object; on UPDATE (Phase 4b) it is treated as a path-restricted PARTIAL
     # PATCH — validated against the field registry and deep-merged, never a full
@@ -66,6 +67,7 @@ class JobRead(BaseModel):
     install_details: str | None = None
     approval_details: str | None = None
     notes: str | None = None
+    internal_notes: str | None = None
     details: dict[str, Any] | None = None
     sale_date: date | None = None
     install_date: date | None = None

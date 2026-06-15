@@ -3,11 +3,15 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { canDeleteCustomers, canWriteCustomers } from '@/auth/permissions'
 import { CustomerJobsPanel } from '@/components/CustomerJobsPanel'
+import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
+import { InternalNotesPanel } from '@/components/InternalNotesPanel'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
 import type { CustomerInput } from '@/types'
 
+// `notes` (imported source) and `internal_notes` (manual) are handled by their
+// own dedicated panels, NOT this editable grid.
 const EDITABLE_FIELDS: { key: keyof CustomerInput; label: string }[] = [
   { key: 'full_name', label: 'Full name' },
   { key: 'email', label: 'Email' },
@@ -17,7 +21,6 @@ const EDITABLE_FIELDS: { key: keyof CustomerInput; label: string }[] = [
   { key: 'suburb', label: 'Suburb' },
   { key: 'state', label: 'State' },
   { key: 'postcode', label: 'Postcode' },
-  { key: 'notes', label: 'Notes' },
 ]
 
 export function CustomerDetailPage() {
@@ -124,56 +127,70 @@ export function CustomerDetailPage() {
         </div>
       )}
 
-      <div className="card p-5">
-        <h2 className="eyebrow mb-3">Details</h2>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-          {EDITABLE_FIELDS.map(({ key, label }) => (
-            <div key={key}>
-              <dt className="eyebrow text-faint">{label}</dt>
-              {editing ? (
-                <input
-                  value={form[key] ?? ''}
-                  onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                  className="input mt-1 px-2 py-1 text-sm"
-                />
-              ) : (
-                <dd className="mt-0.5 text-fg">{(customer[key] as string | null) || '—'}</dd>
-              )}
-            </div>
-          ))}
-        </dl>
+      {/* Two columns: details + history on the left, a tall manual-notes panel
+          on the right (sticky so it stays in view while scrolling). */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <div className="card p-5">
+            <h2 className="eyebrow mb-3">Details</h2>
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+              {EDITABLE_FIELDS.map(({ key, label }) => (
+                <div key={key}>
+                  <dt className="eyebrow text-faint">{label}</dt>
+                  {editing ? (
+                    <input
+                      value={form[key] ?? ''}
+                      onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className="input mt-1 px-2 py-1 text-sm"
+                    />
+                  ) : (
+                    <dd className="mt-0.5 text-fg">{(customer[key] as string | null) || '—'}</dd>
+                  )}
+                </div>
+              ))}
+            </dl>
 
-        {editing && (
-          <div className="mt-5 flex justify-end gap-3">
-            <button
-              onClick={() => {
-                setEditing(false)
-                setError(null)
-              }}
-              className="btn-secondary text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={updateMutation.isPending}
-              className="btn-primary text-sm"
-            >
-              {updateMutation.isPending ? 'Saving…' : 'Save changes'}
-            </button>
+            {editing && (
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setEditing(false)
+                    setError(null)
+                  }}
+                  className="btn-secondary text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={updateMutation.isPending}
+                  className="btn-primary text-sm"
+                >
+                  {updateMutation.isPending ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Jobs, tasks, then the activity timeline. */}
-      <div className="mt-6">
-        <CustomerJobsPanel customerId={customer.id} customerName={customer.full_name} />
-      </div>
-      <div className="mt-6">
-        <TasksPanel customerId={customer.id} />
-      </div>
-      <div className="mt-6">
-        <Timeline customerId={customer.id} />
+          {/* Read-only imported source notes (provenance / filtered junk). */}
+          <ImportedSourceNotes text={customer.notes} />
+
+          <CustomerJobsPanel customerId={customer.id} customerName={customer.full_name} />
+          <TasksPanel customerId={customer.id} />
+          <Timeline customerId={customer.id} />
+        </div>
+
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <InternalNotesPanel
+            title="Customer internal notes"
+            value={customer.internal_notes}
+            canWrite={canWrite}
+            saving={updateMutation.isPending}
+            onSave={(text) =>
+              updateMutation.mutateAsync({ internal_notes: text || null }).then(() => undefined)
+            }
+          />
+        </aside>
       </div>
     </div>
   )

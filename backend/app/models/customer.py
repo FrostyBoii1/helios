@@ -31,7 +31,14 @@ class Customer(IntPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     state: Mapped[str | None] = mapped_column(String(60), nullable=True)
     postcode: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
 
+    # Legacy/imported source notes (provenance, "other emails/phones", and the
+    # rendered import blob). Kept read-only in the UI — distinct from the manual
+    # staff-communication field below.
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Manual staff communication notes (Phase A). A free-form, always-visible,
+    # editable scratchpad — deliberately separate from imported source notes so
+    # the two never mix. Never written by the import pipeline.
+    internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Non-destructive cascade: customers are soft-deleted (deleted_at), never
     # hard-deleted, so child jobs must NOT be cascade-deleted. "save-update,

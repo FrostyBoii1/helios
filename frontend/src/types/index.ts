@@ -43,6 +43,7 @@ export interface Customer {
   state: string | null
   postcode: string | null
   notes: string | null
+  internal_notes: string | null
   created_at: string
   updated_at: string
 }
@@ -58,6 +59,7 @@ export interface CustomerInput {
   state?: string | null
   postcode?: string | null
   notes?: string | null
+  internal_notes?: string | null
 }
 
 export interface CustomerListResponse {
@@ -96,6 +98,7 @@ export interface Job {
   install_details: string | null
   approval_details: string | null
   notes: string | null
+  internal_notes: string | null
   // Phase 4: structured, registry-shaped attributes. Null for jobs imported
   // before the structured commit mapping (currently all live jobs) — those fall
   // back to the legacy *_details blobs above.
@@ -115,6 +118,7 @@ export interface JobInput {
   install_details?: string | null
   approval_details?: string | null
   notes?: string | null
+  internal_notes?: string | null
   sale_date?: string | null
   install_date?: string | null
   salesperson_id?: number | null

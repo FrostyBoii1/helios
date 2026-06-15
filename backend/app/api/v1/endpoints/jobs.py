@@ -43,6 +43,7 @@ DESCRIPTIVE_FIELDS = {
     "install_details",
     "approval_details",
     "notes",
+    "internal_notes",
     "sale_date",
     "salesperson_id",
     "assigned_user_id",

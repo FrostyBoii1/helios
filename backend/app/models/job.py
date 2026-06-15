@@ -57,7 +57,13 @@ class Job(IntPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     system_details: Mapped[str | None] = mapped_column(Text, nullable=True)
     install_details: Mapped[str | None] = mapped_column(Text, nullable=True)
     approval_details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Legacy/imported source-notes blob (provenance + misfiled source text).
+    # Kept read-only in the UI — distinct from the manual field below.
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Manual staff communication notes (Phase A). Always-visible, editable, and
+    # deliberately separate from the imported `notes` blob. Never written by the
+    # import pipeline.
+    internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Structured, grouped import attributes (Phase 1 scaffolding). Shape is driven
     # by app.services.import_field_registry; nullable and not yet populated by the

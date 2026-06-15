@@ -17,6 +17,7 @@ class CustomerBase(BaseModel):
     state: str | None = Field(default=None, max_length=60)
     postcode: str | None = Field(default=None, max_length=20)
     notes: str | None = None
+    internal_notes: str | None = None
 
 
 class CustomerCreate(CustomerBase):
@@ -35,6 +36,7 @@ class CustomerUpdate(BaseModel):
     state: str | None = Field(default=None, max_length=60)
     postcode: str | None = Field(default=None, max_length=20)
     notes: str | None = None
+    internal_notes: str | None = None
 
 
 class CustomerRead(CustomerBase):

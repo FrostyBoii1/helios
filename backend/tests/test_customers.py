@@ -125,6 +125,26 @@ def test_support_cannot_update_customer(client_for, users):
     assert resp.status_code == 403
 
 
+def test_internal_notes_round_trip_and_separate_from_notes(client_for, users):
+    """Phase A: manual internal_notes round-trips and stays independent of the
+    legacy/imported `notes` field — the two never overwrite each other."""
+    admin = client_for(users["admin"])
+    created = admin.post(
+        "/api/v1/customers",
+        json={"full_name": "Karen Sparck Jones", "notes": "imported source text"},
+    ).json()
+    assert created["internal_notes"] is None  # exposed on read, blank by default
+
+    resp = admin.patch(
+        f"/api/v1/customers/{created['id']}",
+        json={"internal_notes": "call back Tuesday"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["internal_notes"] == "call back Tuesday"
+    assert body["notes"] == "imported source text"  # imported field untouched
+
+
 # --------------------------------------------------------------------------- #
 # Soft delete
 # --------------------------------------------------------------------------- #

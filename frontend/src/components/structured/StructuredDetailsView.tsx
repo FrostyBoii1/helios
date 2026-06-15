@@ -289,7 +289,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
       {misfiled.length > 0 && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
           <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-amber-300">
-            Imported notes (misfiled)
+            Imported source notes (misfiled)
           </h4>
           <ul className="flex flex-col gap-1">
             {misfiled.map((m, i) => (
