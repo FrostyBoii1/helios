@@ -390,6 +390,119 @@ def test_parse_approval_reference_means_approved():
     assert pa("approval expected 2025")["state"] == "none"
 
 
+# --------------------------------------------------------------------------- #
+# P3 parser fixes (batch 5846 owner review): non-name suffixes peeled off the
+# Customer Name cell + an email-only name is a blocking error. Each is a CATEGORY,
+# not a one-off: the suffix is preserved VERBATIM as a name-cell note (no text
+# loss, no structured DOB) and the name is left clean.
+# --------------------------------------------------------------------------- #
+def test_parse_customer_name_strips_dob_phrase():
+    cn = import_parser.parse_customer_name
+    # "DATE OF BIRTH" hyphen-glued (no space) -> name cleaned, text preserved.
+    r = cn("Cooper Boardman -DATE OF BIRTH 10/04/2003")
+    assert r["name"] == "Cooper Boardman"
+    assert r["extracted"] == "DATE OF BIRTH 10/04/2003"
+    # lowercase "dob" + a date.
+    r2 = cn("Margaret Sutton -dob 15/11/1955")
+    assert r2["name"] == "Margaret Sutton"
+    assert r2["extracted"] == "dob 15/11/1955"
+    # NO structured DOB field is ever produced.
+    assert "dob" not in r and "date_of_birth" not in r
+    # A "Dobson" surname is NOT stripped (needs the DOB label followed by a date).
+    assert cn("John Dobson")["name"] == "John Dobson"
+
+
+def test_parse_customer_name_strips_bare_trailing_date():
+    cn = import_parser.parse_customer_name
+    # hyphen-glued bare date.
+    r = cn("Naomi Carter- 18/4/75")
+    assert r["name"] == "Naomi Carter"
+    assert r["extracted"] == "18/4/75"
+    # space-only trailing date after a two-person name -> BOTH names kept.
+    r2 = cn("Edward Joshua- Claire Joshua 11/05/2003")
+    assert r2["name"] == "Edward Joshua- Claire Joshua"
+    assert "11/05/2003" in r2["extracted"]
+    # no false strip: a plain name is untouched.
+    assert cn("Pat Lee")["name"] == "Pat Lee"
+
+
+def test_parse_customer_name_strips_pillar_reference():
+    cn = import_parser.parse_customer_name
+    r = cn("Steve Olive pillar 111178023")
+    assert r["name"] == "Steve Olive"
+    assert r["extracted"] == "pillar 111178023"
+    # a surname "Pillar" with no following number is never stripped.
+    assert cn("Joan Pillar")["name"] == "Joan Pillar"
+
+
+def test_parse_customer_name_strips_export_limited():
+    cn = import_parser.parse_customer_name
+    r = cn("Tracy Bain 2.28KW EXPORT LIMITED")
+    assert r["name"] == "Tracy Bain"
+    assert r["extracted"] == "2.28KW EXPORT LIMITED"
+    # "kw" inside a surname is not an export-limit annotation.
+    assert cn("Mark Kwan")["name"] == "Mark Kwan"
+
+
+def test_parse_customer_name_strips_finalise_to():
+    cn = import_parser.parse_customer_name
+    r = cn("Michael Simpson FINALISE TO AGL")
+    assert r["name"] == "Michael Simpson"
+    assert r["extracted"] == "FINALISE TO AGL"
+    # the whole trailing instruction (incl. a later date) is preserved as one note.
+    r2 = cn("Michael Simpson  FINALISE TO AGL - GET HIS BILL DETAILS - 06/02/64")
+    assert r2["name"] == "Michael Simpson"
+    assert r2["extracted"] == "FINALISE TO AGL - GET HIS BILL DETAILS - 06/02/64"
+    # P3 does NOT auto-label admin work — approval status stays 'none' (that is P4).
+    assert import_parser.parse_approval(r["extracted"])["state"] == "none"
+
+
+def test_parse_customer_name_email_only_flagged():
+    cn = import_parser.parse_customer_name
+    r = cn("jjmckoz82@gmail.com")
+    assert r["email_only"] is True
+    assert r["looks_like_name"] is False
+    # a mixed "Name <email>" cell is NOT email-only (left untouched in this pass).
+    assert cn("Jane Smith jjmckoz82@gmail.com")["email_only"] is False
+    # an empty cell is not email-only.
+    assert cn("")["email_only"] is False
+
+
+def test_parse_rows_email_only_name_is_blocking_error():
+    rows = list(import_parser.parse_rows(_ws_from_bytes(
+        _one_job_row_bytes(name_cell="jjmckoz82@gmail.com")
+    )))
+    row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
+    kinds = {(i["kind"], i["severity"]) for i in row.issues}
+    assert ("email_only_name", "error") in kinds          # blocking (error severity)
+    assert not any(i["kind"] == "ambiguous_name" for i in row.issues)  # specific kind, not generic
+
+
+def test_parse_rows_name_suffix_lands_in_customer_name_notes():
+    # End-to-end: each non-name suffix is peeled from customer_name and preserved in
+    # customer_name_notes -> details.notes.customer_name_notes, the bucket that seeds
+    # Job.internal_notes after commit (P2). No structured DOB; no text loss.
+    cases = {
+        "Cooper Boardman -DATE OF BIRTH 10/04/2003": ("Cooper Boardman", "DATE OF BIRTH 10/04/2003"),
+        "Steve Olive pillar 111178023": ("Steve Olive", "pillar 111178023"),
+        "Tracy Bain 2.28KW EXPORT LIMITED": ("Tracy Bain", "2.28KW EXPORT LIMITED"),
+        "Michael Simpson FINALISE TO AGL": ("Michael Simpson", "FINALISE TO AGL"),
+        "Naomi Carter- 18/4/75": ("Naomi Carter", "18/4/75"),
+        "Margaret Sutton -dob 15/11/1955": ("Margaret Sutton", "dob 15/11/1955"),
+    }
+    for name_cell, (exp_name, exp_note) in cases.items():
+        rows = list(import_parser.parse_rows(_ws_from_bytes(
+            _one_job_row_bytes(name_cell=name_cell)
+        )))
+        row = next(r for r in rows if r.legacy_reference == "TESTIMP0009")
+        assert row.parsed["customer_name"] == exp_name, name_cell
+        assert row.parsed["customer_name_notes"] == exp_note, name_cell
+        # flows into the structured notes bucket that internal_notes seeding reads.
+        assert row.parsed["details"]["notes"]["customer_name_notes"] == exp_note, name_cell
+        # no structured DOB / approval invented from a date-bearing suffix.
+        assert "approval" not in row.parsed["details"], name_cell
+
+
 def test_parse_rows_jemena_reference_is_approved_and_preserved():
     # End-to-end: a name-cell "Jemena Approval # …" -> approval_state approved AND
     # the exact reference is kept as a neutral review note (never lost).

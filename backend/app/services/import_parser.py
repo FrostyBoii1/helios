@@ -95,6 +95,42 @@ _NAME_APPROVAL_PHRASE_RE = re.compile(
     r"\b(?:approval|approved|pending|ref)\b.*$",
     re.IGNORECASE | re.DOTALL,
 )
+# Name-cell suffixes that are NEVER part of a person's name. Each anchors to the
+# END of the cell with an optional leading separator (space / hyphen / comma /
+# semicolon / pipe), is captured VERBATIM and preserved as a name-cell note (no
+# text loss — it flows to customer_name_notes and the post-commit internal_notes
+# safety net), then removed from the name. NONE infers a structured field — there
+# is no DOB concept in this model; a date here stays plain preserved text.
+_NAME_SUFFIX_NOTE_RES = (
+    # Date-of-birth phrase: "DATE OF BIRTH" (with or without a date), or a
+    # "DOB" / "D.O.B" label FOLLOWED BY a date. A bare "DOB" with no date is left
+    # to the existing NAME_STOP_MARKERS handling, keeping this change additive.
+    re.compile(r"[\s\-,;|]*\bdate\s+of\s+birth\b.*$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"[\s\-,;|]*\bd\.?\s*o\.?\s*b\.?\b[\s:.\-]*" + DATE_RE.pattern + r".*$",
+               re.IGNORECASE | re.DOTALL),
+    # Network "pillar" reference ("pillar 111178023"): the keyword must reach a
+    # digit, so a surname like "Pillar" is never stripped.
+    re.compile(r"[\s\-,;|]*\bpillar\b[\s#:.]*\d.*$", re.IGNORECASE | re.DOTALL),
+    # Export-limit annotation, with an optional leading "<n>kW"
+    # ("2.28KW EXPORT LIMITED", "EXPORT LIMITED 5kw").
+    re.compile(r"[\s\-,;|]*(?:\d+(?:\.\d+)?\s*kw\s+)?export\s+limit\w*\b.*$",
+               re.IGNORECASE | re.DOTALL),
+    # Retailer-admin "finalise to ..." instruction ("FINALISE TO AGL").
+    re.compile(r"[\s\-,;|]*\bfinali[sz]e\b.*$", re.IGNORECASE | re.DOTALL),
+    # Bare trailing date preceded by whitespace or a separator ("Carter- 18/4/75",
+    # "Claire Joshua 11/05/2003"): a date at the very end of a name cell is a note,
+    # never part of the name. LAST so a DOB / finalise phrase claims its own date.
+    re.compile(r"[\s\-,;|]+" + DATE_RE.pattern + r"\s*$"),
+)
+# An email occupying the WHOLE Customer Name cell ("jjmckoz82@gmail.com") is not a
+# person's name. parse_rows raises a BLOCKING email_only_name error so it cannot
+# commit as a customer name; a mixed "Name <email>" cell is left untouched.
+_EMAIL_TOKEN_RE = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
+# A trailing date preceded by a PENDING / approval keyword ("Pat Lee - PENDING
+# 19/08/2026") is the APPROVAL date, not a bare note: it must stay adjacent to the
+# keyword so parse_approval can read approval_pending_date. Guards the bare-date
+# stripper (the last entry of _NAME_SUFFIX_NOTE_RES) only.
+_APPROVAL_DATE_TAIL_RE = re.compile(r"(?i)\b(?:pending|approv\w*)\b[\s:\-]*$")
 # Australian address tail: a state code immediately followed by a 4-digit
 # postcode (or the rarer postcode-then-state). Anchored to the END so we only
 # structure an address when this reliable signal is present — everything before
@@ -262,7 +298,7 @@ def parse_sales_consultant(raw: str) -> dict[str, Any]:
 def parse_customer_name(raw: str) -> dict[str, Any]:
     if not raw:
         return {"name": "", "extracted": "", "looks_like_name": False,
-                "land_descriptor": None, "approval_phrase": None}
+                "land_descriptor": None, "approval_phrase": None, "email_only": False}
     work = raw
     # 1) Distributor approval / reference phrase appended to the name cell
     #    ("Jane - JEMENA APPROVAL #123", "ESSENTIAL APPROVED"): captured verbatim,
@@ -281,11 +317,38 @@ def parse_customer_name(raw: str) -> dict[str, Any]:
     if lm:
         land_descriptor = work[lm.start():].strip(" -,;|")
         work = work[: lm.start()].rstrip(" -,;|")
+    # 2b) Generic non-name suffixes (DOB / date-of-birth, a bare trailing date,
+    #     "pillar <id>", an export-limit annotation, a "finalise to <retailer>"
+    #     instruction): peeled off the END of the name, preserved VERBATIM, and
+    #     never coerced into a structured field. Looped so several can be removed;
+    #     accumulated right-to-left then reversed back to reading order.
+    suffix_notes: list[str] = []
+    _trailing_date_rx = _NAME_SUFFIX_NOTE_RES[-1]
+    for _ in range(8):
+        for rx in _NAME_SUFFIX_NOTE_RES:
+            sm = rx.search(work)
+            if not (sm and work[sm.start():].strip(" -,;|")):
+                continue
+            # A trailing date that follows PENDING / approval is the approval date,
+            # not a bare note — leave it adjacent so parse_approval keeps it.
+            if rx is _trailing_date_rx and _APPROVAL_DATE_TAIL_RE.search(work[: sm.start()]):
+                continue
+            suffix_notes.append(work[sm.start():].strip(" -,;|"))
+            work = work[: sm.start()].rstrip(" -,;|")
+            break
+        else:
+            break
+    suffix_notes.reverse()
     # 3) Remaining trailing notes via the existing stop-marker split.
     idxs = [work.find(m) for m in NAME_STOP_MARKERS if work.find(m) > 0]
     cut = min(idxs) if idxs else len(work)
     name = work[:cut].strip()
     extracted = work[cut:].strip(" -")
+    # Fold the generic suffix notes into the preserved trailing text so they flow
+    # to customer_name_notes (and thus the post-commit internal_notes safety net).
+    if suffix_notes:
+        joined = " - ".join(suffix_notes)
+        extracted = f"{extracted} - {joined}" if extracted else joined
     # The remove-old-system / decommission marker is detected separately (and the
     # flag/banner set) — it must never remain in the customer name. It can be glued
     # to the name without a stop-marker (e.g. "Jane Roe -remove old system"), which
@@ -293,8 +356,13 @@ def parse_customer_name(raw: str) -> dict[str, Any]:
     # separator. Non-marker name text and standalone dates are preserved.
     if DECOMMISSION_RE.search(name):
         name = re.sub(r"\s+", " ", DECOMMISSION_RE.sub(" ", name)).strip(" -,;|")
-    looks_like_name = bool(name) and name[0].isalpha() and not re.match(
-        r"(?i)^(ref|essential|ergon|energex|approved|pending|lot)\b", name
+    # An email address filling the WHOLE name cell is a data-quality error, not a
+    # name: parse_rows flags it blocking so it cannot commit as a customer name.
+    email_only = bool(_EMAIL_TOKEN_RE.search(name)) and not _EMAIL_TOKEN_RE.sub("", name).strip(" -,;|")
+    looks_like_name = (
+        bool(name) and name[0].isalpha()
+        and not re.match(r"(?i)^(ref|essential|ergon|energex|approved|pending|lot)\b", name)
+        and not email_only
     )
     return {
         "name": name,
@@ -302,6 +370,7 @@ def parse_customer_name(raw: str) -> dict[str, Any]:
         "looks_like_name": looks_like_name,
         "land_descriptor": land_descriptor or None,
         "approval_phrase": approval_phrase or None,
+        "email_only": email_only,
     }
 
 
@@ -631,7 +700,10 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
         def add(kind: str, severity: str, fld: str, msg: str) -> None:
             issues.append({"kind": kind, "severity": severity, "field": fld, "message": msg})
 
-        if not name_info["looks_like_name"]:
+        if name_info.get("email_only"):
+            add("email_only_name", "error", "customer_name",
+                f"email-only name cell: {name_info['name']!r}")
+        elif not name_info["looks_like_name"]:
             add("ambiguous_name", "error", "customer_name", f"name={name_info['name']!r}")
         if len(phones["numbers"]) > 1:
             add("multi_phone", "info", "phone", f"{len(phones['numbers'])} numbers")
