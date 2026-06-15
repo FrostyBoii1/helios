@@ -130,6 +130,14 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const { data: registry } = useFieldRegistry()
   // Phase 3b-1: structured read-only view when the row carries parsed.details.
   const details = row.parsed?.details ?? null
+  // Suffix text stripped out of the Customer Name cell (Lot/DP/legal descriptors,
+  // approval phrases) is preserved in details.notes.misfiled. Surface those
+  // entries right by the name fields so they are findable, not buried at the
+  // bottom under "Imported source notes". Display-only; the canonical data still
+  // lives in details.notes.misfiled.
+  const customerNameMisfiled = (details?.notes?.misfiled ?? []).filter(
+    (m) => m.source_column === 'Customer Name',
+  )
 
   const [text, setText] = useState<Record<string, string>>({})
   const [emails, setEmails] = useState<string[]>([])
@@ -444,6 +452,28 @@ function DrawerBody({ batchId, row }: { batchId: number; row: ImportRow }) {
             </span>
           </label>
         </div>
+
+        {/* Stripped Customer Name suffixes (Lot/DP/legal descriptors, approval
+            phrases) surfaced read-only right by the name — the same entries also
+            appear in the full "Imported source notes" list below. Never written
+            back into customer_name. */}
+        {customerNameMisfiled.length > 0 && (
+          <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
+              Removed from customer name
+            </h4>
+            <p className="mb-1.5 text-xs text-amber-200/70">
+              Stripped from the Customer Name cell and preserved as imported source text (read-only).
+            </p>
+            <ul className="flex flex-col gap-1">
+              {customerNameMisfiled.map((m, i) => (
+                <li key={i} className="break-words text-sm text-amber-100/90">
+                  {m.text ?? ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {PARSED_TEXT_FIELDS.filter(
