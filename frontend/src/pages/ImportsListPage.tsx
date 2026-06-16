@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '@/lib/api'
+import { DevResetPanel } from '@/components/imports/DevResetPanel'
 import { useImportBatches, useUploadBatch } from '@/hooks/useImports'
 import type { ImportBatch } from '@/types/imports'
 
@@ -49,6 +50,9 @@ export function ImportsListPage() {
           </table>
         </div>
       )}
+
+      {/* System-admin-only dev reset tools (returns null for non-admins). */}
+      <DevResetPanel />
     </div>
   )
 }

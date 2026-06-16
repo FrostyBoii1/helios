@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     activities,
     auth,
     customers,
+    dev_reset,
     health,
     imports,
     job_labels,
@@ -27,3 +28,5 @@ api_router.include_router(activities.router, prefix="/activities", tags=["activi
 api_router.include_router(imports.router, prefix="/imports", tags=["imports"])
 # Job labels declare full paths (/job-labels and /jobs/{id}/labels) — no prefix.
 api_router.include_router(job_labels.router)
+# Dev/test-only reset tools (env + system-admin + confirmation-phrase gated).
+api_router.include_router(dev_reset.router, prefix="/dev/reset", tags=["dev-reset"])

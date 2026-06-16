@@ -7,6 +7,12 @@ export function canWriteCustomers(role: RoleName | undefined): boolean {
   return role === 'admin' || role === 'sales_admin'
 }
 
+// Dev/test reset tools (Clear imports / Clear live CRM): system-admin only. The
+// backend additionally refuses these in production and requires a typed phrase.
+export function canUseDevReset(role: RoleName | undefined): boolean {
+  return role === 'admin'
+}
+
 export function canDeleteCustomers(role: RoleName | undefined): boolean {
   return role === 'admin'
 }
