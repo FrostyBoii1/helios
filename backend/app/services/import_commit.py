@@ -141,11 +141,20 @@ def _eligible_uncommitted_count(db: Session, batch_id: int) -> int:
     return sum(1 for r in rows if classify_row(r) is None)
 
 
-def seed_internal_notes(job: Job) -> None:
-    """Seed ``Job.internal_notes`` from the preserved-imported-context safety net
-    ONLY when it is blank — never overwrites a manual note. No-op when there is
-    nothing preserved (internal_notes stays as-is)."""
+def seed_internal_notes(job: Job, *, override: str | None = None) -> None:
+    """Seed ``Job.internal_notes`` on commit — ONLY when it is blank, so a manual
+    note is never overwritten.
+
+    ``override`` is the import row's ``internal_notes_override``:
+      * None -> use the generated build_imported_notes default (existing behavior);
+      * ""   -> commit BLANK internal notes (leave it unset);
+      * text -> commit that text verbatim.
+    """
     if _str(job.internal_notes).strip():
+        return
+    if override is not None:
+        # Reviewer override: "" -> blank internal notes; any other text -> verbatim.
+        job.internal_notes = override or None
         return
     imported = build_imported_notes(job.details)
     if imported:
@@ -183,9 +192,10 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
         row.committed_customer_id = customer.id
         row.committed_job_id = job.id
         row.review_status = ImportRowReviewStatus.COMMITTED.value
-        # Safety net: seed internal notes from ALL preserved imported context —
-        # ONLY when blank, so a manual note is never overwritten.
-        seed_internal_notes(job)
+        # Safety net: seed internal notes — the reviewer's internal_notes_override
+        # wins when set (NULL falls back to the generated build_imported_notes
+        # default); ONLY when blank, so a manual note is never overwritten.
+        seed_internal_notes(job, override=row.internal_notes_override)
         log_activity(
             db,
             activity_type=ActivityType.RECORD_IMPORTED,

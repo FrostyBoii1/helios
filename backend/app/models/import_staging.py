@@ -77,6 +77,11 @@ class ImportRow(IntPkMixin, TimestampMixin, Base):
         String(20), default=ImportRowReviewStatus.PENDING, nullable=False, index=True
     )
     review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Reviewer's explicit override of what import commit seeds into
+    # Job.internal_notes. NULL = use the generated build_imported_notes default;
+    # "" (empty string) = commit blank internal notes; any other text = commit it
+    # verbatim. Editable only before approval (the review service guards this).
+    internal_notes_override: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

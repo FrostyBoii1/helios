@@ -64,6 +64,7 @@ class ImportRowRead(BaseModel):
     context_text: str | None = None
     review_status: ImportRowReviewStatus
     review_notes: str | None = None
+    internal_notes_override: str | None = None
     reviewer_id: int | None = None
     reviewed_at: datetime | None = None
     committed_customer_id: int | None = None
@@ -124,11 +125,21 @@ class ImportRowEdit(BaseModel):
     details: dict[str, Any] | None = None
 
     review_notes: str | None = None
+    # Override of the seeded Job.internal_notes (a column on ImportRow, NOT part of
+    # `parsed`). NULL = generated default, "" = blank, text = verbatim. The review
+    # service applies it by key-presence (model_dump(exclude_unset=True)), so the
+    # client can explicitly send null to reset to the generated default.
+    internal_notes_override: str | None = None
 
 
-# Flat scalar fields merged directly into `parsed` (excludes review_notes and the
-# structured details patch, which are handled specially in the review service).
-PARSED_EDIT_FIELDS = frozenset(ImportRowEdit.model_fields) - {"review_notes", "details"}
+# Flat scalar fields merged directly into `parsed` (excludes review_notes, the
+# structured details patch, and internal_notes_override — all handled specially in
+# the review service, not merged into `parsed`).
+PARSED_EDIT_FIELDS = frozenset(ImportRowEdit.model_fields) - {
+    "review_notes",
+    "details",
+    "internal_notes_override",
+}
 
 
 # --------------------------------------------------------------------------- #

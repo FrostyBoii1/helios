@@ -163,8 +163,8 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const customerNameMisfiled = (details?.notes?.misfiled ?? []).filter(
     (m) => m.source_column === 'Customer Name',
   )
-  // Exactly what import commit will seed into Job.internal_notes (read-only preview;
-  // pre-commit editing of internal_notes is not supported yet — see the P5 report).
+  // The GENERATED default internal notes (build_imported_notes mirror). Shown as the
+  // editable textarea's value when there is no override; editing it sets an override.
   const internalNotesPreview = previewInternalNotes(details)
   // Approval signal recorded by the parser (none/pending/approved). The "Needs
   // approval" auto-label is derived on the backend at commit, not projected here.
@@ -178,6 +178,9 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const [detailsEdits, setDetailsEdits] = useState<Record<string, string>>({})
   const [message, setMessage] = useState<{ kind: 'error' | 'success'; text: string } | null>(null)
   const [issueNotes, setIssueNotes] = useState<Record<number, string>>({})
+  // Reviewer override of the seeded Job.internal_notes: null = use the generated
+  // default; "" = commit blank; text = commit verbatim. Sent only when it changes.
+  const [internalNotesOverride, setInternalNotesOverride] = useState<string | null>(null)
 
   // path ("<section>.<key>") → field spec, for input_type-aware coercion.
   const fieldByPath = useMemo(() => {
@@ -195,6 +198,7 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     setPhones(asPhones(row.parsed))
     setReviewNotes(row.review_notes ?? '')
     setDetailsEdits({})
+    setInternalNotesOverride(row.internal_notes_override ?? null)
     setMessage(null)
   }, [row])
 
@@ -233,6 +237,13 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     if (reviewNotes.trim() !== (row.review_notes ?? '').trim()) {
       edit.review_notes = reviewNotes.trim() || null
     }
+    // Internal-notes override — send only when changed. null (reset to generated),
+    // "" (blank), or text (verbatim) are all sent verbatim; the key is omitted when
+    // unchanged so the backend (model_dump(exclude_unset=True)) leaves it untouched.
+    const curOverride = row.internal_notes_override ?? null
+    if (internalNotesOverride !== curOverride) {
+      edit.internal_notes_override = internalNotesOverride
+    }
     // Structured details patch — only touched-and-changed leaves, coerced.
     if (details) {
       const patch = buildDetailsPatch(detailsEdits, details, fieldByPath)
@@ -241,7 +252,7 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     return edit
   }
 
-  const pendingEdit = useMemo(buildEdit, [text, emails, phones, reviewNotes, detailsEdits, fieldByPath, details, row])
+  const pendingEdit = useMemo(buildEdit, [text, emails, phones, reviewNotes, internalNotesOverride, detailsEdits, fieldByPath, details, row])
   const hasChanges = Object.keys(pendingEdit).length > 0
 
   async function handleSave() {
@@ -290,15 +301,11 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   // An already-approved row shows a neutral "Approved" state instead of a
   // clickable Approve button (re-clicking is harmless but confusing).
   const approved = row.review_status === 'approved'
-
-  // Name-cell notes get a dedicated (de-emphasized) edit field below — the primary
-  // read-only display is the "On commit" internal-notes preview; compute edited state.
-  const nameNotesOriginal = row.original_parsed
-    ? asString(row.original_parsed['customer_name_notes'])
-    : null
-  const nameNotesEdited =
-    nameNotesOriginal != null &&
-    nameNotesOriginal !== asString(row.parsed?.['customer_name_notes'])
+  // The internal-notes override is editable only BEFORE approval; locked once the
+  // row is approved/committed/reversed (the backend enforces this too). Reopen unlocks.
+  const notesEditable = !approved && !locked
+  // An explicit override is active (vs. falling back to the generated default).
+  const overrideActive = internalNotesOverride !== null
 
   return (
     <div className="flex flex-col gap-4 p-5">
@@ -350,9 +357,9 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
 
         <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-0 lg:col-start-3 lg:row-span-2 lg:row-start-1 lg:self-start">
       {/* What this row will become on commit: the approval signal recorded by the
-          import, and the EXACT text that will be seeded into Job.internal_notes.
-          Read-only preview (direct internal_notes editing isn't supported yet —
-          adjust "Name-cell notes" / structured fields below to change it). */}
+          import, and the EXACTLY editable text that will be seeded into
+          Job.internal_notes. The textarea defaults to the generated notes; editing
+          it sets an override (saved with "Save changes"). Locked after approval. */}
       {(row.row_class === 'job' || row.row_class === 'ambiguous') && (
         <section className="rounded-md border border-line bg-elevated p-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -362,19 +369,45 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
               <span className="font-medium capitalize text-fg">{importApprovalState}</span>
             </span>
           </div>
-          <p className="mb-1 text-xs text-faint">Will be saved as Job internal notes:</p>
-          {internalNotesPreview ? (
-            <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded border border-line bg-surface px-3 py-2 text-sm text-fg/90">
-              {internalNotesPreview}
-            </div>
-          ) : (
-            <p className="rounded border border-dashed border-line-strong bg-surface px-3 py-2 text-sm text-faint">
-              No internal notes — nothing extra was preserved for this row.
-            </p>
-          )}
-          <p className="mt-1.5 text-xs text-faint">
-            Read-only preview. Editing internal notes before commit isn’t supported yet.
-          </p>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <label htmlFor="internal-notes-override" className="text-xs font-medium text-fg">
+              Job internal notes
+            </label>
+            {overrideActive && (
+              <span className="rounded bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-300">
+                {internalNotesOverride === '' ? 'Blank' : 'Custom'}
+              </span>
+            )}
+          </div>
+          <textarea
+            id="internal-notes-override"
+            value={internalNotesOverride !== null ? internalNotesOverride : (internalNotesPreview ?? '')}
+            onChange={(e) => setInternalNotesOverride(e.target.value)}
+            disabled={!notesEditable}
+            rows={6}
+            placeholder="(blank — no internal notes will be saved on commit)"
+            className="input max-h-56 min-h-[6rem] w-full resize-y disabled:opacity-70"
+          />
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-faint">
+              {!notesEditable
+                ? 'Locked — reopen the row to edit.'
+                : overrideActive
+                  ? internalNotesOverride === ''
+                    ? 'Will commit blank internal notes.'
+                    : 'Custom — overrides the generated notes.'
+                  : 'Generated from preserved import context. Edit to override.'}
+            </span>
+            {overrideActive && notesEditable && (
+              <button
+                type="button"
+                onClick={() => setInternalNotesOverride(null)}
+                className="text-xs text-brand-400 hover:underline"
+              >
+                Reset to generated
+              </button>
+            )}
+          </div>
         </section>
       )}
 
@@ -491,36 +524,9 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           Parsed candidate
         </h3>
 
-        {/* Name-cell notes — the EDITABLE source for preserved Customer Name text.
-            De-emphasized (no longer a prominent card): the read-only "On commit"
-            internal-notes preview on the right is the primary display. Kept editable
-            because it is currently the only way to change what import commit seeds
-            into Job.internal_notes. */}
-        <label className="mb-3 block text-sm">
-          <span className="mb-1 flex items-center gap-2 font-medium text-fg">
-            Name-cell notes
-            {nameNotesEdited && (
-              <span
-                className="rounded bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-300"
-                title={`Original: ${nameNotesOriginal || '(empty)'}`}
-              >
-                Edited
-              </span>
-            )}
-          </span>
-          <textarea
-            value={text['customer_name_notes'] ?? ''}
-            onChange={(e) =>
-              setText((prev) => ({ ...prev, customer_name_notes: e.target.value }))
-            }
-            rows={2}
-            placeholder="Extra text preserved from the Customer Name cell"
-            className="input"
-          />
-          <span className="mt-1 block text-xs text-faint">
-            Editable — feeds the “On commit” internal-notes preview.
-          </span>
-        </label>
+        {/* Name-cell notes is no longer a separate edit field — the "On commit"
+            Job internal-notes textarea (right) is now the single edit surface. The
+            parser still stores customer_name_notes, which feeds the generated default. */}
 
         {/* Land/legal parcel text stripped off the Customer Name cell, surfaced
             read-only right by the name — the same entries also appear in the

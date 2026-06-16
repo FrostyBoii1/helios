@@ -154,6 +154,9 @@ export interface ImportRow {
   context_text: string | null
   review_status: ImportRowReviewStatus
   review_notes: string | null
+  // Reviewer override of the seeded Job.internal_notes: null = generated default,
+  // "" = commit blank, text = commit verbatim.
+  internal_notes_override: string | null
   reviewer_id: number | null
   reviewed_at: string | null
   committed_customer_id: number | null
@@ -192,6 +195,9 @@ export interface ImportRowEdit {
   emails?: string[] | null
   phones?: PhoneEntry[] | null
   review_notes?: string | null
+  // Override of the seeded Job.internal_notes. Send null to reset to the generated
+  // default, "" to commit blank, or text to commit verbatim. Sent only when changed.
+  internal_notes_override?: string | null
   // Phase 3b-2: path-restricted structured patch (nested section → key → value).
   // The backend whitelists allowed job.details.* paths and deep-merges a copy.
   details?: Record<string, unknown> | null

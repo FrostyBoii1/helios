@@ -671,6 +671,63 @@ def test_seed_internal_notes_only_when_blank_never_overwrites_manual(db_session:
     assert j3.internal_notes is None
 
 
+# --------------------------------------------------------------------------- #
+# internal_notes_override: reviewer override of the seeded Job.internal_notes
+# (NULL = generated default, "" = blank, text = verbatim).
+# --------------------------------------------------------------------------- #
+def test_seed_internal_notes_override_semantics(db_session: Session):
+    from types import SimpleNamespace
+    details = {"_v": 2, "notes": {"customer_name_notes": "generated note"}}
+    # text override -> used verbatim
+    j = SimpleNamespace(internal_notes=None, details=details)
+    import_commit.seed_internal_notes(j, override="Ring the strata manager first.")
+    assert j.internal_notes == "Ring the strata manager first."
+    # "" override -> blank, even though the row has preserved context
+    j2 = SimpleNamespace(internal_notes=None, details=details)
+    import_commit.seed_internal_notes(j2, override="")
+    assert j2.internal_notes is None
+    # None override -> the generated build_imported_notes default
+    j3 = SimpleNamespace(internal_notes=None, details=details)
+    import_commit.seed_internal_notes(j3, override=None)
+    assert j3.internal_notes == "Uncategorised Data on Import\n- generated note"
+    # a manual note is NEVER overwritten, even with an override
+    j4 = SimpleNamespace(internal_notes="MANUAL", details=details)
+    import_commit.seed_internal_notes(j4, override="custom")
+    assert j4.internal_notes == "MANUAL"
+
+
+def _commit_with_override(db, users, parsed, ref, override):
+    b = _seed_one(db, parsed, ref=ref)
+    row = db.scalars(select(ImportRow).where(ImportRow.batch_id == b.id)).one()
+    row.internal_notes_override = override
+    db.flush()
+    res = import_commit.commit_batch(db, b, actor_id=users["admin"].id)
+    assert res["committed"] == 1
+    row = db.scalars(select(ImportRow).where(ImportRow.batch_id == b.id)).one()
+    return db.get(Job, row.committed_job_id)
+
+
+def test_commit_uses_internal_notes_override_verbatim(users, db_session: Session):
+    parsed = _details_parsed(approval_state="none")
+    job = _commit_with_override(db_session, users, parsed, "TESTIMPOV1", "Ring the strata manager first.")
+    assert job.internal_notes == "Ring the strata manager first."
+
+
+def test_commit_override_empty_string_commits_blank(users, db_session: Session):
+    # "" override commits blank internal notes even though the row has preserved
+    # context (customer_name_notes) that would otherwise generate a note.
+    parsed = _details_parsed(approval_state="none")
+    job = _commit_with_override(db_session, users, parsed, "TESTIMPOV2", "")
+    assert not (job.internal_notes or "").strip()
+
+
+def test_commit_null_override_falls_back_to_generated(users, db_session: Session):
+    parsed = _details_parsed(approval_state="none")
+    job = _commit_with_override(db_session, users, parsed, "TESTIMPOV3", None)
+    assert job.internal_notes.startswith("Uncategorised Data on Import")
+    assert "includes hot water timer" in job.internal_notes
+
+
 def test_commit_auto_label_idempotent(users, db_session: Session):
     # The default row yields approval_approved + decommission_pre_existing, each once.
     _b, _row, job = _commit_one_seeded(db_session, users, _details_parsed(), "TESTIMPL3E")

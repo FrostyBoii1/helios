@@ -22,6 +22,15 @@ from app.services.import_field_registry import allowed_details_paths
 
 APPROVABLE_CLASSES = (ImportRowClass.JOB.value, ImportRowClass.AMBIGUOUS.value)
 
+# A row's internal_notes_override may only be edited before it is finalized. Once
+# approved (or committed/reversed) it is locked — the reviewer must reopen the row
+# to edit it again.
+_OVERRIDE_LOCKED_STATES = frozenset({
+    ImportRowReviewStatus.APPROVED.value,
+    ImportRowReviewStatus.COMMITTED.value,
+    ImportRowReviewStatus.REVERSED.value,
+})
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -109,7 +118,18 @@ def edit_row(db: Session, batch: ImportBatch, row: ImportRow, edits: dict, *, ac
     """
     review_notes = edits.pop("review_notes", None)
     details_patch = edits.pop("details", None)
+    # internal_notes_override is a column on the row (NOT part of `parsed`). Applied
+    # by KEY PRESENCE (the endpoint uses model_dump(exclude_unset=True)) so the
+    # client can send null (reset to generated), "" (commit blank), or text (commit
+    # verbatim). Locked once the row is approved/committed/reversed.
+    override_set = "internal_notes_override" in edits
+    override_value = edits.pop("internal_notes_override", None)
     field_edits = {k: v for k, v in edits.items() if k in PARSED_EDIT_FIELDS}
+
+    if override_set and row.review_status in _OVERRIDE_LOCKED_STATES:
+        raise ValueError(
+            "Internal notes can only be edited before approval — reopen the row to edit."
+        )
 
     if field_edits or details_patch:
         if row.original_parsed is None:
@@ -126,6 +146,8 @@ def edit_row(db: Session, batch: ImportBatch, row: ImportRow, edits: dict, *, ac
 
     if review_notes is not None:
         row.review_notes = review_notes
+    if override_set:
+        row.internal_notes_override = override_value
 
     row.reviewer_id = actor_id
     row.reviewed_at = _now()

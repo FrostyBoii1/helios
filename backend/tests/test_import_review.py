@@ -82,6 +82,54 @@ def test_edit_rejects_unknown_field(client_for, users):
     assert resp.status_code == 422  # extra="forbid"
 
 
+def test_row_read_includes_internal_notes_override(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
+    # The field is exposed and defaults to null (use the generated notes).
+    assert "internal_notes_override" in row
+    assert row["internal_notes_override"] is None
+
+
+def test_edit_internal_notes_override_null_empty_text_semantics(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    rid = _by_ref(_rows(admin, bid), "TESTIMP0001")["id"]
+
+    def patch(value):
+        return admin.patch(f"/api/v1/imports/{bid}/rows/{rid}", json={"internal_notes_override": value})
+
+    # text -> stored verbatim; persists on reload
+    assert patch("Ring before 9am").json()["internal_notes_override"] == "Ring before 9am"
+    assert admin.get(f"/api/v1/imports/{bid}/rows/{rid}").json()["internal_notes_override"] == "Ring before 9am"
+    # "" -> stored as empty string (commit-blank semantics), NOT reset to null
+    assert patch("").json()["internal_notes_override"] == ""
+    # null -> explicit reset to the generated default
+    assert patch(None).json()["internal_notes_override"] is None
+    # omitting the key leaves it unchanged (set it, then patch an unrelated field)
+    patch("keep me")
+    admin.patch(f"/api/v1/imports/{bid}/rows/{rid}", json={"customer_name": "Alex Roe Jr"})
+    assert admin.get(f"/api/v1/imports/{bid}/rows/{rid}").json()["internal_notes_override"] == "keep me"
+
+
+def test_internal_notes_override_locked_after_approval_until_reopen(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    rid = _by_ref(_rows(admin, bid), "TESTIMP0001")["id"]
+    # editable while pending
+    assert admin.patch(f"/api/v1/imports/{bid}/rows/{rid}", json={"internal_notes_override": "pre"}).status_code == 200
+    # approve -> override edits are blocked (422)
+    assert admin.post(f"/api/v1/imports/{bid}/rows/{rid}/approve").json()["review_status"] == "approved"
+    blocked = admin.patch(f"/api/v1/imports/{bid}/rows/{rid}", json={"internal_notes_override": "late"})
+    assert blocked.status_code == 422
+    # the value is unchanged by the rejected edit
+    assert admin.get(f"/api/v1/imports/{bid}/rows/{rid}").json()["internal_notes_override"] == "pre"
+    # reopen -> editable again
+    assert admin.post(f"/api/v1/imports/{bid}/rows/{rid}/reopen").json()["review_status"] == "pending"
+    ok = admin.patch(f"/api/v1/imports/{bid}/rows/{rid}", json={"internal_notes_override": "now allowed"})
+    assert ok.status_code == 200 and ok.json()["internal_notes_override"] == "now allowed"
+
+
 # --------------------------------------------------------------------------- #
 # Approve gating + resolve
 # --------------------------------------------------------------------------- #
