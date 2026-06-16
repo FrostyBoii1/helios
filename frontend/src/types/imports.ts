@@ -351,3 +351,15 @@ export interface ReverseResult {
   job_id: number | null
   case_number: string | null
 }
+
+// Section B1: an advisory same-customer candidate for an import row. Advisory
+// only — no action is implied (no merge/link/resolve yet).
+export interface MatchCandidate {
+  kind: 'batch_row' | 'live_customer'
+  name: string
+  confidence: 'strong' | 'medium' | 'weak'
+  reasons: string[]
+  row_id: number | null
+  source_row_index: number | null
+  customer_id: number | null
+}

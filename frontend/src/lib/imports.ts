@@ -15,6 +15,7 @@ import type {
   ImportRowList,
   ImportRowReviewStatus,
   ListRowsParams,
+  MatchCandidate,
   ReverseCheck,
   ReverseResult,
 } from '@/types/imports'
@@ -50,6 +51,14 @@ export function listRows(batchId: number, params: ListRowsParams = {}): Promise<
 
 export function getRow(batchId: number, rowId: number): Promise<ImportRow> {
   return apiFetch<ImportRow>(`/imports/${batchId}/rows/${rowId}`)
+}
+
+// Section B1: advisory same-customer candidates for a row (read-only).
+export function getRowMatchCandidates(
+  batchId: number,
+  rowId: number,
+): Promise<MatchCandidate[]> {
+  return apiFetch<MatchCandidate[]>(`/imports/${batchId}/rows/${rowId}/match-candidates`)
 }
 
 export function editRow(batchId: number, rowId: number, edit: ImportRowEdit): Promise<ImportRow> {

@@ -11,6 +11,7 @@ import {
   getFieldRegistry,
   getReverseCheck,
   getRow,
+  getRowMatchCandidates,
   listBatches,
   listRows,
   resolveIssue,
@@ -29,6 +30,8 @@ const keys = {
   summary: (id: number) => ['imports', 'summary', id] as const,
   rows: (id: number, params: ListRowsParams) => ['imports', 'rows', id, params] as const,
   row: (batchId: number, rowId: number) => ['imports', 'row', batchId, rowId] as const,
+  matchCandidates: (batchId: number, rowId: number) =>
+    ['imports', 'match-candidates', batchId, rowId] as const,
   commitPreview: (id: number) => ['imports', 'commit-preview', id] as const,
   reverseCheck: (batchId: number, rowId: number) =>
     ['imports', 'reverse-check', batchId, rowId] as const,
@@ -76,6 +79,15 @@ export function useImportRow(batchId: number, rowId: number | null) {
   return useQuery({
     queryKey: keys.row(batchId, rowId ?? 0),
     queryFn: () => getRow(batchId, rowId as number),
+    enabled: Number.isFinite(batchId) && batchId > 0 && rowId != null && rowId > 0,
+  })
+}
+
+// Section B1: advisory same-customer candidates for the open row (read-only).
+export function useRowMatchCandidates(batchId: number, rowId: number | null) {
+  return useQuery({
+    queryKey: keys.matchCandidates(batchId, rowId ?? 0),
+    queryFn: () => getRowMatchCandidates(batchId, rowId as number),
     enabled: Number.isFinite(batchId) && batchId > 0 && rowId != null && rowId > 0,
   })
 }

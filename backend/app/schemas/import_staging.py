@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -311,3 +311,20 @@ class ReverseResult(BaseModel):
     customer_id: int | None = None
     job_id: int | None = None
     case_number: str | None = None
+
+
+class MatchCandidateRead(BaseModel):
+    """One advisory same-customer candidate for an import row (Section B1).
+
+    Advisory only — no action is implied. ``kind`` is "batch_row" (another row in
+    the same import batch) or "live_customer" (an existing customer). ``reasons``
+    are human-readable match signals; ``confidence`` is one of strong/medium/weak.
+    """
+
+    kind: Literal["batch_row", "live_customer"]
+    name: str
+    confidence: Literal["strong", "medium", "weak"]
+    reasons: list[str]
+    row_id: int | None = None
+    source_row_index: int | None = None
+    customer_id: int | None = None

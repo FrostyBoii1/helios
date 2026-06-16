@@ -34,6 +34,7 @@ from app.schemas.import_staging import (
     ImportRowList,
     ImportRowRead,
     IssueResolveRequest,
+    MatchCandidateRead,
     ReverseCheck,
     ReverseResult,
     ReviewActionRequest,
@@ -43,6 +44,7 @@ from app.services import (
     import_commit_preview,
     import_field_registry,
     import_ingest,
+    import_matching,
     import_review,
     import_reverse,
 )
@@ -308,6 +310,23 @@ def get_import_row(
     _: User = Depends(require_admin),
 ) -> ImportRowRead:
     return ImportRowRead.model_validate(_row_or_404(db, batch_id, row_id))
+
+
+@router.get(
+    "/{batch_id}/rows/{row_id}/match-candidates",
+    response_model=list[MatchCandidateRead],
+)
+def get_row_match_candidates(
+    batch_id: int,
+    row_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> list[MatchCandidateRead]:
+    """ADVISORY, read-only (Section B1): possible same-customer candidates for this
+    row — other rows in the batch and existing live customers — with reasons and a
+    confidence band. Does NOT merge, link, resolve, or write anything."""
+    row = _row_or_404(db, batch_id, row_id)
+    return [MatchCandidateRead(**c) for c in import_matching.find_candidates(db, row)]
 
 
 @router.patch("/{batch_id}/rows/{row_id}", response_model=ImportRowRead)

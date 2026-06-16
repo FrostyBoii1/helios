@@ -17,6 +17,7 @@ import type { RowAction } from '@/lib/imports'
 import { ReviewStatusBadge, RowClassBadge } from '@/components/imports/ReviewStatusBadge'
 import { SeverityChip } from '@/components/imports/IssueBadges'
 import { CommitReverseSection } from '@/components/imports/CommitReverseSection'
+import { MatchCandidatesPanel } from '@/components/imports/MatchCandidatesPanel'
 import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
 import { buildDetailsPatch } from '@/lib/detailsPatch'
 import {
@@ -337,7 +338,13 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           preview + approval — and the review actions on the right, like the Job
           detail page. Stacks vertically on small screens. */}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-1">
+        <div className="min-w-0 lg:col-span-2 lg:col-start-1 lg:row-start-1 flex flex-col gap-4">
+      {/* Section B1: advisory "Possible same customer" — surfaces likely continuity
+          matches (other rows / existing customers) with reasons. Read-only; no
+          merge/link action yet. Renders nothing when there are no candidates. */}
+      {(row.row_class === 'job' || row.row_class === 'ambiguous') && (
+        <MatchCandidatesPanel batchId={batchId} rowId={row.id} />
+      )}
       {/* Phase 3b-1: registry-driven structured read-only view. Falls back to the
           flat fields below (with a hint) for rows staged before structured parsing. */}
       {details && registry ? (
