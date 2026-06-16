@@ -85,6 +85,18 @@ export type JobStatus =
 export interface CustomerRef {
   id: number
   full_name: string
+  // Present on the Jobs list (Suburb/State column); may be absent on older refs.
+  suburb?: string | null
+  state?: string | null
+}
+
+// Lightweight label info embedded per job in the Jobs list (chips + filtering).
+export interface JobLabelChip {
+  key: string
+  name: string
+  color: string
+  category: JobLabelCategory
+  is_system: boolean
 }
 
 export interface Job {
@@ -93,6 +105,9 @@ export interface Job {
   customer_id: number
   customer: CustomerRef
   status: JobStatus
+  // Operational label chips for the Jobs list. Empty/absent on the detail fetch
+  // (the Job detail page loads labels via /jobs/{id}/labels instead).
+  labels?: JobLabelChip[]
   title: string | null
   system_details: string | null
   install_details: string | null

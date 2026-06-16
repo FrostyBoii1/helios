@@ -7,6 +7,8 @@ export interface ListJobsParams {
   q?: string
   customer_id?: number
   status?: JobStatus
+  /** Filter by operational label key (single-label). */
+  label?: string
   install_date_from?: string
   install_date_to?: string
   unscheduled?: boolean
@@ -19,6 +21,7 @@ export function listJobs(params: ListJobsParams = {}): Promise<JobListResponse> 
   if (params.q) search.set('q', params.q)
   if (params.customer_id != null) search.set('customer_id', String(params.customer_id))
   if (params.status) search.set('status', params.status)
+  if (params.label) search.set('label', params.label)
   if (params.install_date_from) search.set('install_date_from', params.install_date_from)
   if (params.install_date_to) search.set('install_date_to', params.install_date_to)
   if (params.unscheduled) search.set('unscheduled', 'true')

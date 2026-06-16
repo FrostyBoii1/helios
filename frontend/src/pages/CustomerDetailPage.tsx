@@ -126,9 +126,19 @@ export function CustomerDetailPage() {
         </div>
       )}
 
-      {/* Two columns: details + history on the left, a tall manual-notes panel
-          on the right (sticky so it stays in view while scrolling). */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+      {/* Jobs — the customer's main continuity view — sits directly under the
+          header, full content width so the table (Suburb/State + label chips) has
+          room without a horizontal scrollbar. */}
+      <CustomerJobsPanel customerId={customer.id} customerName={customer.full_name} />
+
+      {/* Lower layout: Details + Tasks + Timeline on the left; the tall manual
+          internal-notes panel on the right (sticky). This balances the page and
+          removes the big gap that appeared when Jobs sat below the notes panel.
+          Imported source notes are intentionally NOT shown on the customer file —
+          preserved import context lives in the job's On-commit / Job Internal Notes
+          (and structured details); Customer.notes is still stored, just not
+          surfaced here. */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="flex min-w-0 flex-col gap-6">
           <div className="card p-5">
             <h2 className="eyebrow mb-3">Details</h2>
@@ -171,12 +181,6 @@ export function CustomerDetailPage() {
             )}
           </div>
 
-          {/* Imported source notes are intentionally NOT shown on the customer file:
-              preserved import context lives in the job's "On commit" / Job Internal
-              Notes (and the structured details), so a duplicate customer-source
-              panel was clutter. Customer.notes is still stored, just not surfaced
-              here. Manual customer internal notes have their own panel (right). */}
-          <CustomerJobsPanel customerId={customer.id} customerName={customer.full_name} />
           <TasksPanel customerId={customer.id} />
           <Timeline customerId={customer.id} />
         </div>

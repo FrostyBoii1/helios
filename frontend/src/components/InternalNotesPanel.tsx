@@ -15,8 +15,9 @@ interface InternalNotesPanelProps {
 
 /**
  * A tall, always-visible manual-notes panel — a shared staff scratchpad
- * (lightweight Google-Doc feel). Deliberately SEPARATE from imported source
- * notes: this is operational communication, never import provenance.
+ * (lightweight Google-Doc feel) for operational communication. Note: Job internal
+ * notes may be seeded from preserved import context on commit, then freely edited,
+ * so this is NOT claimed to be free of imported text.
  *
  * Visible in read mode (the textarea always shows the saved text); editable +
  * savable when the user has write permission. A background refetch never
@@ -56,7 +57,7 @@ export function InternalNotesPanel({ title, value, canWrite, saving = false, onS
           <span className="text-xs text-emerald-400">Saved ✓</span>
         ) : null}
       </div>
-      <p className="mb-2 text-xs text-faint">Shared staff notes — operational, not imported source text.</p>
+      <p className="mb-2 text-xs text-faint">Shared staff notes — operational communication for the team.</p>
       <textarea
         value={draft}
         readOnly={!canWrite}

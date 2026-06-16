@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
 import { JobsTable } from '@/components/JobsTable'
 import { useJobs } from '@/hooks/useJobs'
+import { useLabelDefinitions } from '@/hooks/useJobLabels'
 import type { JobStatus } from '@/types'
 
 const PAGE_SIZE = 25
@@ -10,7 +11,10 @@ export function JobsListPage() {
   const [searchInput, setSearchInput] = useState('')
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<JobStatus | ''>('')
+  const [label, setLabel] = useState('')
   const [offset, setOffset] = useState(0)
+
+  const { data: labelDefs } = useLabelDefinitions()
 
   // Debounce search; reset to first page on a new query.
   useEffect(() => {
@@ -24,6 +28,7 @@ export function JobsListPage() {
   const { data, isLoading, isError, isFetching } = useJobs({
     q: q || undefined,
     status: status || undefined,
+    label: label || undefined,
     limit: PAGE_SIZE,
     offset,
   })
@@ -60,6 +65,22 @@ export function JobsListPage() {
             </option>
           ))}
         </select>
+        <select
+          value={label}
+          onChange={(e) => {
+            setLabel(e.target.value)
+            setOffset(0)
+          }}
+          className="input sm:w-56"
+          aria-label="Filter by label"
+        >
+          <option value="">All labels</option>
+          {(labelDefs ?? []).map((d) => (
+            <option key={d.key} value={d.key}>
+              {d.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <JobsTable
@@ -67,7 +88,7 @@ export function JobsListPage() {
         showCustomer
         loading={isLoading}
         error={isError}
-        emptyMessage={q || status ? 'No jobs match your filters.' : 'No jobs yet.'}
+        emptyMessage={q || status || label ? 'No jobs match your filters.' : 'No jobs yet.'}
       />
 
       <div className="mt-3 flex items-center justify-between text-sm text-muted">

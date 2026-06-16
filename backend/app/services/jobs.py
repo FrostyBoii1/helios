@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.customer import Customer
 from app.models.enums import JobStatus
 from app.models.job import Job
+from app.models.job_label import JobLabelAssignment, JobLabelDefinition
 from app.services.case_number import next_case_number
 from app.services.details_patch import merge_details_patch
 from app.services.import_details import render_structured_blobs
@@ -42,6 +43,7 @@ def list_jobs(
     q: str | None = None,
     customer_id: int | None = None,
     status: JobStatus | None = None,
+    label: str | None = None,
     install_date_from: date | None = None,
     install_date_to: date | None = None,
     unscheduled: bool = False,
@@ -50,16 +52,26 @@ def list_jobs(
 ) -> tuple[list[Job], int]:
     """Return (page of active jobs, total matching count).
 
-    `q` is a case-insensitive ILIKE across case_number and title.
-    `install_date_from`/`install_date_to` bound the install date (inclusive) for
-    the scheduling calendar. `unscheduled` selects jobs with no install date that
-    still need scheduling (status not completed/cancelled).
+    `q` is a case-insensitive ILIKE across case_number and title. `label` filters
+    to jobs carrying the operational label with that key (single-label; ANDs with
+    the other filters). `install_date_from`/`install_date_to` bound the install
+    date (inclusive) for the scheduling calendar. `unscheduled` selects jobs with
+    no install date that still need scheduling (status not completed/cancelled).
     """
     filters = [Job.deleted_at.is_(None)]
     if customer_id is not None:
         filters.append(Job.customer_id == customer_id)
     if status is not None:
         filters.append(Job.status == status.value)
+    if label:
+        # Jobs that have an assignment of the (active) label definition `label`.
+        filters.append(
+            Job.id.in_(
+                select(JobLabelAssignment.job_id)
+                .join(JobLabelDefinition, JobLabelAssignment.label_id == JobLabelDefinition.id)
+                .where(JobLabelDefinition.key == label, JobLabelDefinition.deleted_at.is_(None))
+            )
+        )
     if unscheduled:
         filters.append(Job.install_date.is_(None))
         filters.append(Job.status.not_in(_UNSCHEDULABLE_STATUSES))
@@ -83,6 +95,27 @@ def list_jobs(
     )
     items = list(db.scalars(stmt).all())
     return items, total
+
+
+def labels_for_jobs(db: Session, job_ids: list[int]) -> dict[int, list[JobLabelDefinition]]:
+    """Active label definitions per job, for a batch of job ids — ONE query, no
+    N+1. Soft-deleted definitions are excluded; each job's labels are ordered by
+    the catalogue display order. Jobs with no labels are absent from the dict."""
+    if not job_ids:
+        return {}
+    rows = db.execute(
+        select(JobLabelAssignment.job_id, JobLabelDefinition)
+        .join(JobLabelDefinition, JobLabelAssignment.label_id == JobLabelDefinition.id)
+        .where(
+            JobLabelAssignment.job_id.in_(job_ids),
+            JobLabelDefinition.deleted_at.is_(None),
+        )
+        .order_by(JobLabelDefinition.sort_order, JobLabelDefinition.id)
+    ).all()
+    out: dict[int, list[JobLabelDefinition]] = {}
+    for job_id, definition in rows:
+        out.setdefault(job_id, []).append(definition)
+    return out
 
 
 def customer_is_active(db: Session, customer_id: int) -> bool:

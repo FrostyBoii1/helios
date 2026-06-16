@@ -67,6 +67,7 @@ def list_jobs(
     q: str | None = Query(default=None, description="Search case number / title"),
     customer_id: int | None = Query(default=None),
     status: JobStatus | None = Query(default=None),
+    label: str | None = Query(default=None, description="Filter by operational label key"),
     install_date_from: date | None = Query(
         default=None, description="Install date on/after (scheduling calendar)"
     ),
@@ -86,12 +87,18 @@ def list_jobs(
         q=q,
         customer_id=customer_id,
         status=status,
+        label=label,
         install_date_from=install_date_from,
         install_date_to=install_date_to,
         unscheduled=unscheduled,
         limit=limit,
         offset=offset,
     )
+    # Batch-load each job's labels (one query) and attach for serialization, so the
+    # list carries chips without a per-row /jobs/{id}/labels round-trip.
+    labels_by_job = jobs_service.labels_for_jobs(db, [j.id for j in items])
+    for j in items:
+        j.labels = labels_by_job.get(j.id, [])
     return JobList(
         items=[JobRead.model_validate(j) for j in items],
         total=total,

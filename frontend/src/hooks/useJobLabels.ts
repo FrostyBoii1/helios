@@ -37,6 +37,13 @@ export function useAssignJobLabel(jobId: number) {
     mutationFn: (key: string) => assignJobLabel(jobId, key),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.forJob(jobId) })
+      // The Jobs list rows embed label chips. This invalidation is LOAD-BEARING:
+      // the global query default is staleTime 30s (lib/queryClient.ts), so merely
+      // navigating back to the Jobs list within 30s serves cached rows and does NOT
+      // refetch — the chip change would be invisible until the window elapses.
+      // Invalidating ['jobs'] forces a refetch of every jobs list/detail query
+      // (global Jobs page + customer-embedded list both key on ['jobs', ...]).
+      void qc.invalidateQueries({ queryKey: ['jobs'] })
     },
   })
 }
@@ -47,6 +54,10 @@ export function useRemoveJobLabel(jobId: number) {
     mutationFn: (key: string) => removeJobLabel(jobId, key),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.forJob(jobId) })
+      // Same as add, and equally load-bearing (30s staleTime — see useAssignJobLabel):
+      // a removed chip must disappear from the Jobs list rows immediately, not after
+      // the cache window elapses.
+      void qc.invalidateQueries({ queryKey: ['jobs'] })
     },
   })
 }
@@ -59,7 +70,9 @@ export function useSetJobApproval(jobId: number) {
     onSuccess: () => {
       // labels drive the approval chip; the job carries details.approval.pending_date.
       void qc.invalidateQueries({ queryKey: keys.forJob(jobId) })
-      void qc.invalidateQueries({ queryKey: ['jobs', 'detail', jobId] })
+      // Approval changes an approval label chip — refresh job detail AND the Jobs
+      // list rows (which show the chip).
+      void qc.invalidateQueries({ queryKey: ['jobs'] })
     },
   })
 }

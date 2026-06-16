@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import JobStatus
+from app.models.enums import JobLabelCategory, JobStatus
 
 
 class JobBase(BaseModel):
@@ -45,12 +45,28 @@ class JobStatusUpdate(BaseModel):
 
 
 class CustomerRef(BaseModel):
-    """Lightweight customer reference embedded in job responses."""
+    """Lightweight customer reference embedded in job responses. suburb/state are
+    additive read-only fields used by the Jobs list's Suburb/State column."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     full_name: str
+    suburb: str | None = None
+    state: str | None = None
+
+
+class JobLabelChip(BaseModel):
+    """Minimal label info embedded per job for the Jobs list (chips + filtering),
+    so the list never needs a per-row /jobs/{id}/labels round-trip."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    name: str
+    color: str
+    category: JobLabelCategory
+    is_system: bool
 
 
 class JobRead(BaseModel):
@@ -62,6 +78,10 @@ class JobRead(BaseModel):
     customer_id: int
     customer: CustomerRef
     status: JobStatus
+    # Operational labels (approval/decommission/admin/etc.) for the Jobs list. The
+    # list endpoint batch-loads these; other JobRead producers leave it empty (the
+    # Job detail page reads labels via its own /jobs/{id}/labels call).
+    labels: list[JobLabelChip] = []
     title: str | None = None
     system_details: str | None = None
     install_details: str | None = None

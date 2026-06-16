@@ -122,6 +122,48 @@ def test_filter_by_status(client_for, users, customer):
 
 
 # --------------------------------------------------------------------------- #
+# Section D: Jobs list carries Suburb/State + label chips, and a label filter.
+# --------------------------------------------------------------------------- #
+def test_list_includes_suburb_state_and_label_chips(client_for, users, customer, db_session):
+    admin = client_for(users["admin"])
+    customer.state = "VIC"  # fixture has suburb="Testville"; give it a state too
+    db_session.flush()
+    job = _create(admin, customer.id, title="Roof job").json()
+    r = admin.post(f"/api/v1/jobs/{job['id']}/labels", json={"key": "admin_work_required"})
+    assert r.status_code == 200, r.text
+
+    row = next(it for it in admin.get("/api/v1/jobs").json()["items"] if it["id"] == job["id"])
+    # Suburb/State on the embedded customer ref (the Jobs list column).
+    assert row["customer"]["suburb"] == "Testville"
+    assert row["customer"]["state"] == "VIC"
+    # Lightweight label chips embedded per job (no per-row round-trip).
+    chips = {lab["key"]: lab for lab in row["labels"]}
+    assert "admin_work_required" in chips
+    chip = chips["admin_work_required"]
+    assert chip["name"] == "Admin work required"
+    assert chip["category"] == "operational"
+    assert chip["is_system"] is False
+    assert chip.get("color")  # a colour token for chip styling
+
+
+def test_list_label_filter_single_and_ands_with_status(client_for, users, customer):
+    admin = client_for(users["admin"])
+    a = _create(admin, customer.id, title="A").json()
+    b = _create(admin, customer.id, title="B").json()
+    admin.post(f"/api/v1/jobs/{a['id']}/labels", json={"key": "admin_work_required"})
+    admin.post(f"/api/v1/jobs/{b['id']}/labels", json={"key": "battery_only"})
+
+    ids = {it["id"] for it in admin.get("/api/v1/jobs", params={"label": "admin_work_required"}).json()["items"]}
+    assert a["id"] in ids and b["id"] not in ids
+    # Label filter ANDs with status (both jobs are 'new', so completed -> none).
+    assert admin.get(
+        "/api/v1/jobs", params={"label": "admin_work_required", "status": "completed"}
+    ).json()["total"] == 0
+    # An unknown label key matches nothing.
+    assert admin.get("/api/v1/jobs", params={"label": "no_such_label"}).json()["total"] == 0
+
+
+# --------------------------------------------------------------------------- #
 # Scheduling filters (install-date range + unscheduled)
 # --------------------------------------------------------------------------- #
 def test_install_date_range_filter(client_for, users, customer):

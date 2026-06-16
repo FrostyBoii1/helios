@@ -4,6 +4,8 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { JobStatusBadge } from '@/components/JobStatusBadge'
+import { LabelChips } from '@/components/LabelChips'
+import type { CustomerRef } from '@/types'
 import type { Job } from '@/types'
 
 interface JobsTableProps {
@@ -15,6 +17,11 @@ interface JobsTableProps {
   error?: boolean
 }
 
+/** "Sunbury, VIC" / "Sunbury" / "VIC" / "—" from the embedded customer ref. */
+function suburbState(c: CustomerRef): string {
+  return [c.suburb, c.state].map((p) => p?.trim()).filter(Boolean).join(', ') || '—'
+}
+
 export function JobsTable({
   jobs,
   showCustomer = true,
@@ -23,17 +30,19 @@ export function JobsTable({
   error = false,
 }: JobsTableProps) {
   const navigate = useNavigate()
-  const colSpan = showCustomer ? 5 : 4
+  // Columns: Case # · [Customer] · Suburb/State · Status · Labels · Install date.
+  const colSpan = showCustomer ? 6 : 5
 
   return (
     <div className="card overflow-x-auto">
-      <table className="w-full min-w-[44rem] text-left text-sm">
+      <table className="w-full min-w-[56rem] text-left text-sm">
         <thead className="border-b border-line bg-elevated text-muted">
           <tr>
             <th className="px-4 py-2 font-medium">Case #</th>
-            <th className="px-4 py-2 font-medium">Title</th>
             {showCustomer && <th className="px-4 py-2 font-medium">Customer</th>}
+            <th className="px-4 py-2 font-medium">Suburb/State</th>
             <th className="px-4 py-2 font-medium">Status</th>
+            <th className="px-4 py-2 font-medium">Labels</th>
             <th className="px-4 py-2 font-medium">Install date</th>
           </tr>
         </thead>
@@ -53,15 +62,20 @@ export function JobsTable({
                 onClick={() => navigate(`/jobs/${job.id}`)}
                 className="cursor-pointer border-b border-line/60 last:border-0 hover:bg-elevated"
               >
-                <td className="px-4 py-2 font-mono text-xs text-brand-400">{job.case_number}</td>
-                <td className="px-4 py-2 text-fg">{job.title ?? '—'}</td>
+                <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-brand-400">
+                  {job.case_number}
+                </td>
                 {showCustomer && (
-                  <td className="px-4 py-2 text-muted">{job.customer.full_name}</td>
+                  <td className="px-4 py-2 text-fg">{job.customer.full_name}</td>
                 )}
+                <td className="whitespace-nowrap px-4 py-2 text-muted">{suburbState(job.customer)}</td>
                 <td className="px-4 py-2">
                   <JobStatusBadge status={job.status} />
                 </td>
-                <td className="px-4 py-2 text-muted">{job.install_date ?? '—'}</td>
+                <td className="px-4 py-2">
+                  <LabelChips labels={job.labels} />
+                </td>
+                <td className="whitespace-nowrap px-4 py-2 text-muted">{job.install_date ?? '—'}</td>
               </tr>
             ))
           )}
