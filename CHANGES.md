@@ -9,6 +9,47 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-16 — Job labels, import parser/review refinements, dev reset tools (incl. commits 199cbf7, b5ad78e, 05bb381, 2255179)
+
+- **What:**
+  - **Job labels** — operational *workflow signals*, not decorative tags. A seeded
+    catalogue (`job_label_definitions`) + per-job assignments
+    (`job_label_assignments`). Approval state is "law": at most one **system**
+    approval label (Needs approval / Pending approval / Approved) + a decommission
+    preset, all auto-assigned at import commit and edited only via the structured
+    controls (`/jobs/{id}/approval`, system labels are not manually add/removable).
+    Operational labels (Admin work required, Battery only, Existing solar, Awaiting
+    documents, Needs maintenance) are user-managed via `/jobs/{id}/labels`.
+    (`warranty_issue` was rekeyed to `admin_work_required`.)
+  - **Import parser/review refinements** (Section A + follow-ups): approval
+    REFERENCE numbers are preserved into On Commit / Job Internal Notes;
+    approval-ACTION phrases ("DO APPROVAL", "NEEDS APPROVAL", …) classify as
+    **Needs approval** (not Approved); a numeric-panel + inverter job with no
+    explicit approval evidence is derived as **Needs approval** at parse time
+    (matching the commit-time auto-label, one shared predicate); benign name-cell
+    suffixes (booked/prescreened dates, vm/on fb/pole/agreed, SV submitted, export,
+    invoice-sent, free-form notes) are stripped from the customer name and kept
+    verbatim in internal notes; the duplicate "Imported review/source notes" panels
+    were removed and the customer file no longer shows an imported-source panel —
+    preserved context lives only in On Commit / Job Internal Notes.
+  - **Dev/system-admin reset tools** (`199cbf7`): admin-only **Clear imports** and
+    **Clear live CRM** danger-zone actions — refused in production, requiring an
+    exact typed confirmation phrase; deliberately no "clear everything".
+- **Why:** make labels the operational filtering/workflow layer; keep imported
+  context clean and non-duplicated (in one place, not scary panels); give admins a
+  safe, gated way to reset dev data between import trials.
+- **Files:** `backend/app/{models/job_label.py, services/{job_labels,import_parser,
+  import_details,import_commit,dev_reset}.py, schemas/job_label.py,
+  api/v1/endpoints/{job_labels,dev_reset}.py}` + matching frontend label/import
+  components and the dev-reset panel; tests across import/label/reset.
+- **Temporary or permanent:** Permanent. Migrations: the two `job_label_*` tables
+  (+ catalogue seed). Parser/note refinements affect **future** parses only —
+  applying them to already-staged/committed rows requires a re-ingest + recommit.
+- **Risks / follow-up:** Reset tools are destructive (gated, dev/non-prod only).
+  **In progress / proposed:** Section D (Jobs list labels/filter/columns) is in
+  progress; multi-client / similar-name matching (B) and conservative NMI "Same"
+  (C) are diagnosed/proposed, not implemented; future NAS document classification.
+
 ## 2026-06-14 — Spreadsheet import pipeline: parse → review → commit → reverse (commits f938100 → a60fe83)
 
 - **What:** Built the full legacy-workbook migration pipeline, admin-only, in

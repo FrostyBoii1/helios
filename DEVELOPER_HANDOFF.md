@@ -6,9 +6,11 @@ history — is the source of truth.
 
 ## 1. What exists today
 
-The foundation plus the core workflow (Customers → Jobs → Activity Timeline →
-Tasks → Weekly Scheduling) and the SunCentral dark theme are implemented at
-HEAD `87c6475`. Implemented:
+The foundation, the core workflow (Customers → Jobs → Activity Timeline →
+Tasks → Weekly Scheduling), the SunCentral dark theme, the **spreadsheet import
+pipeline**, an operational **job-labels** system, and successive **import
+parser/review refinements** are implemented and pushed on `main` (HEAD
+`2255179`). Implemented:
 
 - Repository structure + Docker Compose (db, backend, frontend).
 - FastAPI backend skeleton: config, structured logging, CORS, versioned router.
@@ -51,26 +53,57 @@ HEAD `87c6475`. Implemented:
 - **Spreadsheet import pipeline** (§5a) — parse-only staging, review backend +
   UI, commit-preview, commit-to-live (+ UI), scoped reverse (+ UI), and a
   case-year guard.
+- **Job labels** (workflow signals, not decorative tags) — a seeded catalogue
+  (`job_label_definitions`) + per-job `job_label_assignments`. Approval state is
+  represented by at most one **system** approval label (Needs approval / Pending /
+  Approved) + a decommission preset, auto-assigned at commit and edited only via
+  the structured approval control; **operational** labels (Admin work required,
+  Battery only, Existing solar, Awaiting documents, Needs maintenance) are
+  user-managed. APIs: `GET /job-labels`, `GET/POST/DELETE /jobs/{id}/labels`,
+  `PUT /jobs/{id}/approval`.
+- **Import parser/review refinements** (Section A + follow-ups) — approval
+  references kept in Job Internal Notes; approval-action phrases and numeric-panel
+  + inverter jobs derive **Needs approval**; benign name-cell suffixes cleaned and
+  preserved verbatim in internal notes; duplicate imported review/source panels
+  removed (preserved context lives only in On Commit / Job Internal Notes).
+- **Dev/system-admin reset tools** — admin-only, non-production **Clear imports** /
+  **Clear live CRM** with an exact typed confirmation phrase (`/dev/reset/*`).
 - Tests: backend smoke (no DB) + database-backed integration tests
-  (rollback-isolated) across Customers/Jobs/Tasks/Activity and the import
-  pipeline. **124 backend tests total.**
+  (rollback-isolated) across Customers/Jobs/Tasks/Activity, the import pipeline,
+  labels, and reset tools. **~300 backend tests** at HEAD (Section D adds more,
+  in progress). Verify before staging with the full backend suite + frontend
+  typecheck/build.
 
 ## 2. What is NOT built yet
 
 These are stubbed/absent and represent the next phases:
 
+- **In progress — Section D (Jobs list labels/filter/columns):** the Jobs list
+  now embeds Suburb/State + label chips and a single-label filter, with the
+  customer-embedded jobs table widened (no scrollbar on desktop). Status-column
+  cleanup is deliberately deferred (no `JobStatus` changes yet).
+- **Proposed, not implemented — import matching:** **(B)** multi-client /
+  similar-name matching so multiple jobs/properties for the same client link to
+  one customer file (exact-name auto-link, near-name manual resolution) instead of
+  always creating a new customer; **(C)** a conservative NMI **"Same"** rule
+  (only infer a meter from a strong adjacent-row + address match, else keep as a
+  review issue). Both are diagnosed/specified; neither is built.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.
+  Future scope: **NAS document classification** (detect approval docs/case numbers
+  and feed approval state) — the label/approval model is designed so an external
+  source can later upgrade approval state through the same path.
 - **Reporting/analytics** and **reminders/notifications**.
 - **Frontend user-management** screens (the API exists; UI does not).
 - Import pipeline scope **not** in v1: reference catalogs (Distributor/Retailer/
   HardwareCatalog/StaffDirectory), status-label tables, a CustomerContact table,
-  customer dedup/merge, batch/bulk reverse, and re-commit-after-reverse. (The
-  **staged spreadsheet import/review/commit/reverse pipeline itself is built** —
-  see §5a.)
-- Job **tags/flags** UI beyond status; **shared-admin task clearing**.
-- Production deployment (static frontend build + reverse proxy + TLS).
+  batch/bulk reverse, and re-commit-after-reverse. (The **staged import/review/
+  commit/reverse pipeline itself is built** — see §5a.)
+- **Future task-backed labels:** some operational labels should become real
+  assignable tasks (owner + due date) rather than passive flags — not yet modelled.
+- **Shared-admin task clearing**; production deployment (static frontend build +
+  reverse proxy + TLS).
 
 ## 3. First-run checklist
 
@@ -116,27 +149,27 @@ end-to-end.
 
 ## 5. Recommended next task
 
-The core workflow (Customers → Jobs → Activity Timeline → Tasks → Weekly
-Scheduling), the dark theme, and the **spreadsheet import pipeline** (§5a) are
-done. Reasonable next choices, in order of recommendation:
+The core workflow, dark theme, import pipeline (§5a), job labels, and the import
+parser/review refinements are done. Reasonable next steps, in order:
 
-1. **Continue the supervised real import** — the legacy workbook is staged as
-   `ImportBatch` 388 (dev DB only, **2,561 rows**). A **supervised 3-row trial
-   has been committed to live** (**3 committed / 2,558 pending**, 3 `committed_*`
-   links); those imported Customers/Jobs are pristine and reversible while
-   unchanged, and live totals after the trial are **19 customers / 22 jobs /
-   131 activities**. The recommended operational next step is to keep migrating
-   in **small approved batches** — review/correct a subset, approve it,
-   **commit ≤25 rows/call** via the UI, then **inspect the created
-   Customers/Jobs** (case numbers, mapping, address, provenance) and timelines
-   before scaling. Each commit is an owner-initiated live-write action.
-2. **NAS file integration** (baseline priority #8) — link each job/customer to
-   its NAS folder, list/upload/preview files with permission gating. Heavier
-   (storage mounts, path safety), so plan-first.
-3. **Reporting/analytics** (#9), then **notifications** (#10).
+1. **Finish Section D** (Jobs list labels/filter/columns) — in progress; then run
+   the pre-staging audit → stage → commit → push (see §7).
+2. **Import matching (B/C)** — multi-client / similar-name matching (one customer
+   file for multiple jobs/properties; exact-name auto-link, near-name manual
+   resolution) and the conservative NMI **"Same"** rule. Both are diagnosed/
+   specified; implement behind an explicit review/manual-resolution step — **no
+   silent merges**.
+3. **NAS file integration** (baseline priority #8) — link each job/customer to its
+   NAS folder, list/upload/preview with permission gating; later, **document
+   classification** feeding approval state. Heavier (storage mounts, path safety) —
+   plan-first.
+4. **Reporting/analytics** (#9), then **notifications** (#10).
 
-A live import commit and the NAS work each warrant care (live writes /
-storage + permission complexity).
+> **The dev DB is volatile.** The legacy workbook is re-imported / reset
+> frequently during trials, so batch ids and live customer/job/row counts change
+> between sessions. Treat any live count as a snapshot, never a fixture, and never
+> assume a specific batch id. A live import commit and the NAS work each warrant
+> care (live writes / storage + permission complexity).
 
 ## 5a. Spreadsheet import pipeline (parse → review → commit → reverse)
 
@@ -215,3 +248,38 @@ staging ingest, so the dry-run and the staged import classify identically.
 - Files: store **relative** paths + metadata only; validate paths and check
   permissions before serving. Never run destructive NAS operations.
 - Keep `CHANGES.md` current — propose structural changes before making them.
+
+## 7. Working rules (process)
+
+- **Order of authority** (when deciding intended behaviour):
+  1. Explicit owner instructions and approved decisions.
+  2. `BASE.txt` and established business rules.
+  3. Current implementation, migrations, schemas, and tests (evidence of existing
+     behaviour).
+  4. Documentation and handoff files.
+  5. Conversation history.
+
+  If these disagree, **name the conflict — don't silently pick one.** Existing code
+  is **not** automatically correct when the owner has called it a bug; stale docs
+  are **not** authoritative when the implementation has clearly moved on. Reconcile
+  before proceeding, and **protect important explicit decisions with tests**, not
+  documentation alone.
+- **After any compaction / context loss / drift, re-read first:** `BASE.txt`, the
+  relevant docs (`PROJECT_OVERVIEW.md`, `docs/`, `CHANGES.md`, this file), the
+  **git state** (`git status` / `log` / `diff`), **and the relevant source files**
+  before giving implementation guidance. Chat memory is not the source of truth —
+  the repo is.
+- **Change pipeline (per change):** implement → run automated checks (full backend
+  suite if backend changed; frontend typecheck + build if frontend changed) →
+  **manual/browser check for any visible parser or UI change** → **pre-staging
+  audit** (git status = exactly the intended files, scope check, `git diff --check`,
+  DB unchanged) → **stage explicit paths** → commit → push. Each gate is owner-
+  confirmed; don't skip ahead.
+- **Parser/note changes affect future parses only.** Existing staged/committed rows
+  need a re-ingest + recommit to reflect them — call this out, never silently
+  assume live data updated.
+- **Keep local notes out of commits.** `ADMIN NOTES/` (and any untracked working
+  notes / PII workbooks under `ref/`) are **never staged** unless explicitly
+  requested. Stage with explicit file paths, never `git add -A`.
+- **Dev reset tools are destructive and admin/non-prod only** — they exist to reset
+  trial data, not for routine use.

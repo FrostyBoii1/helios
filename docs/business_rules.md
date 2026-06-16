@@ -1,7 +1,11 @@
 # Business Rules
 
-Rules the system enforces (or will enforce). These derive from `BASE.txt`. When
-a rule is implemented, the code is the authority; this document explains intent.
+Rules the system enforces (or will enforce). These derive from `BASE.txt`. Code,
+migrations, schemas, and tests are **evidence of existing behaviour** — but when
+sources disagree, follow the **order of authority** in `DEVELOPER_HANDOFF.md` §7
+(owner decisions › BASE/business rules › implementation › docs › chat) and
+**reconcile the conflict** rather than silently choosing one. This document
+explains intent; protect important explicit decisions with tests, not docs alone.
 
 ## Identity & access
 
@@ -30,6 +34,25 @@ a rule is implemented, the code is the authority; this document explains intent.
   visible and filterable.
 - **Changing the install date** updates the job (and, in the UI, its calendar
   placement) and is recorded on the timeline.
+
+## Labels & approval (workflow signals)
+
+- **Labels are operational workflow signals, not decorative tags.** They drive
+  filtering and "what needs doing" — they are visible on the job and (Section D)
+  filterable in the Jobs list.
+- **Approval state is "law" — system workflow state, not a casual tag.** A job has
+  at most **one** approval label: **Needs approval** / **Pending approval** /
+  **Approved**. It is set only through the dedicated approval control (and
+  auto-assigned at import commit); the system approval/decommission labels are
+  **not** manually add/removable. Operational labels (Admin work required, Battery
+  only, Existing solar, Awaiting documents, Needs maintenance) **are** user-managed.
+- **Approval evidence has precedence** (so a later, stronger source — e.g. future
+  NAS approval-document detection — can upgrade state without re-plumbing):
+  explicit "approved"/reference number or "pending" wins; an approval-action phrase
+  ("DO APPROVAL", "NEEDS APPROVAL") or a numeric-panel + inverter job with no
+  approval evidence derives **Needs approval**; otherwise none.
+- **Future direction:** some operational labels should become real assignable
+  **tasks** (owner + due date), not passive flags.
 
 ## Tasks & accountability
 
@@ -97,14 +120,39 @@ a rule is implemented, the code is the authority; this document explains intent.
   sets the row `reversed`, preserves the commit links as audit, and logs one
   `RECORD_IMPORT_REVERSED` activity. Reversed rows are terminal (no re-open /
   re-commit yet).
-- **v1 scope:** one Customer per Job (no dedup/merge), salesperson/installer kept
-  as text, single-line address. No NAS matching, reference catalogs,
-  StaffDirectory, status-label tables, or CustomerContact.
+- **Parsed customer name is clean; nothing is lost.** Operational/source suffixes
+  in the name cell — booked/prescreened dates, vm / on fb / pole / agreed, SV
+  submitted, export/system notes, invoice-sent notes, free-form admin notes, a
+  trailing bare delimiter — are stripped from the name and preserved **verbatim**
+  in On Commit / Job Internal Notes (never discarded, never inferred as a DOB).
+  Real business/trust names, hotel entities, and hyphenated surnames are **not**
+  rewritten unless a confident delimiter+keyword pattern applies; an entity's
+  contact appositive ("The Leeton Heritage Motor Inn- Wayne Bond") is kept, and an
+  ambiguous entity name ("C &J Horton PTY as Trustees …") is left for **manual
+  resolution**, not auto-rewritten.
+- **Approval references** ("Jemena Approval number 000410056") are preserved into
+  Job Internal Notes; a bare approval **status** marker is not (its state lives on
+  the approval label — see *Labels & approval*).
+- **Preserved import context appears once.** It lives in On Commit / Job Internal
+  Notes — there are no duplicate "Imported review/source" panels, and the customer
+  file does not show an imported-source panel. Raw workbook cells stay inspectable
+  in the import review only.
+- Parser/note rules apply to **future** parses; existing staged/committed rows need
+  a re-ingest to reflect a parser change.
+- **v1 scope:** one Customer per Job (no dedup/merge — *multi-client matching is
+  proposed, not built*), salesperson/installer kept as text, single-line address.
+  No NAS matching, reference catalogs, StaffDirectory, status-label tables, or
+  CustomerContact.
 
 ## Environments
 
 - Development, testing, and production are separated. Development is never run
   against production data.
+- **Dev reset tools** (Clear imports / Clear live CRM) are **admin-only**, **refused
+  in production**, and require an **exact typed confirmation phrase**; there is
+  deliberately no "clear everything". They exist to reset trial data during the
+  supervised migration — not for routine use. "Clear live CRM" detaches (does not
+  delete) committed import rows so they can be re-committed.
 
 ## Deferred by design (do not pre-build)
 

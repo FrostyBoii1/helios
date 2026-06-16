@@ -132,6 +132,27 @@ pending/approved/rejected/skipped/committed/reversed), `review_notes`,
 info/warning/error), `field`, `message`, `resolved` + `resolution_note` /
 `resolved_by_id` / `resolved_at`.
 
+### job labels (operational workflow signals)
+
+**job_label_definitions** — the seeded label catalogue (migration-seeded).
+Columns: `id`, `key` (unique slug), `name`, `category` (`JobLabelCategory`:
+approval/operational/system/custom), `color`, `description`, `is_system` (approval
++ decommission presets — not manually add/removable), `is_auto` (auto-assignable
+at import commit), `sort_order`, timestamps + `deleted_at` (soft-deleted
+definitions are excluded from the catalogue).
+
+**job_label_assignments** — a label on a job. Columns: `id`, `job_id` FK,
+`label_id` FK, `source` (`JobLabelSource`: import_auto/manual/system),
+`assigned_by_id` FK → users.id null, `note`, `created_at`. A job has **at most one**
+approval label (the structured approval control enforces this).
+
+> **Columns added since the foundation table (no separate doc row yet):**
+> `jobs.internal_notes` (manual staff notes, distinct from the read-only imported
+> `notes` blob) and `jobs.details` (JSONB, registry-shaped structured import
+> attributes); `customers.internal_notes`; `import_rows.internal_notes_override`
+> (the reviewer's editable On-Commit notes). The two `job_label_*` tables are the
+> only schema migration since `legacy_reference`.
+
 ## Relationships
 
 ```

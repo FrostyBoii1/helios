@@ -89,7 +89,8 @@ docs/                    architecture, database_schema, business_rules
 
 ## 4. Data models
 
-Core entities: **User, Role, Customer, Job, Task, Activity, Document.**
+Core entities: **User, Role, Customer, Job, Task, Activity, Document**, plus the
+**job-label** catalogue/assignments and the **import staging** tables.
 
 - A **Customer** has many **Jobs** (customers and jobs are separate entities).
 - A **Job** has a unique `case_number` (e.g. `SCS-2026-00001`), a status, key
@@ -97,6 +98,13 @@ Core entities: **User, Role, Customer, Job, Task, Activity, Document.**
 - **Tasks** carry an owner, status, priority, due date, and completion log.
 - **Activities** are append-only (the timeline + audit log).
 - **Documents** store file metadata only; bytes live on NAS/storage.
+- **Job labels** are a seeded catalogue (`job_label_definitions`) + per-job
+  `job_label_assignments`. They are operational workflow signals; approval state is
+  represented by one **system** approval label, auto-assigned at import commit and
+  edited via the structured approval control (operational labels are user-managed).
+- **Import staging** (`import_batches` / `import_rows` / `import_issues`) holds the
+  legacy-workbook migration; rows become live Customer/Job records only via an
+  explicit, admin-confirmed commit (see `docs/business_rules.md`).
 - Business records use timestamps + soft delete (`deleted_at`); activities are
   permanent.
 
@@ -112,7 +120,8 @@ Full detail and relationships: [docs/database_schema.md](docs/database_schema.md
     `POST /users/{id}/reset-password` (admin), `GET /users/selectable` (any auth).
   - `GET/POST /customers`, `GET/PATCH/DELETE /customers/{id}`.
   - `GET/POST /jobs`, `GET/PATCH/DELETE /jobs/{id}`, `POST /jobs/{id}/status`
-    (jobs list also supports `install_date_from/to` + `unscheduled` for scheduling).
+    (jobs list also supports `install_date_from/to` + `unscheduled` for scheduling,
+    a `label` filter, and embeds customer suburb/state + label chips per row).
   - `GET/POST /tasks`, `GET/PATCH/DELETE /tasks/{id}`,
     `POST /tasks/{id}/complete`, `POST /tasks/{id}/reopen`.
   - `GET /activities?customer_id=&job_id=` — read-only timeline.
@@ -122,6 +131,11 @@ Full detail and relationships: [docs/database_schema.md](docs/database_schema.md
     `bulk-approve-clean`), `GET …/summary`, `GET …/commit-preview`,
     `POST …/commit` (capped commit-to-live), and per-row reverse
     (`GET …/reverse-check`, `POST …/reverse`).
+  - **Job labels:** `GET /job-labels` (catalogue), `GET/POST/DELETE
+    /jobs/{id}/labels` (operational labels), `PUT /jobs/{id}/approval` (the
+    structured approval control — sets the single system approval label).
+  - **Dev reset** (admin, non-production): `GET /dev/reset/counts`,
+    `POST /dev/reset/imports`, `POST /dev/reset/live-crm` (typed-phrase confirmed).
 - Interactive docs at `/docs` (Swagger UI) when the backend runs.
 - The standard feature pattern: **schema validation → permission check → DB
   transaction → activity log → typed response** (see `endpoints/users.py`).
