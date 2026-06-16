@@ -107,6 +107,18 @@ _NAME_APPROVAL_PHRASE_RE = re.compile(
     r"\b(?:approval|approved|pending|ref)\b.*$",
     re.IGNORECASE | re.DOTALL,
 )
+# Delimiter for the recognized note FAMILIES below: a hyphen that is FOLLOWED by a
+# space ("- "), or a comma/semicolon/pipe. Deliberately NOT a bare hyphen (so a
+# hyphenated surname "Smith-Pole" is never split) and NOT a bare space (so a real
+# surname token like "Pole" is never stripped) — a recognized note keyword must
+# follow this delimiter for a family rule to fire.
+_NOTE_FAM_SEP = r"(?:[-–][ \t]+|[ \t]*[,;|][ \t]*)"
+# A trailing note introduced by a SPACE-BEFORE-hyphen (" -<note>"): names and
+# entities never put a space before a hyphen, so this is an unambiguous note
+# delimiter that needs no keyword. Used as an extra name cut point in
+# parse_customer_name. (Hyphen-THEN-space "- " is left to the content-gated family
+# rules + stop-markers, so an entity appositive "Inn- Wayne Bond" is not split.)
+_NAME_NOTE_SPACE_HYPHEN_RE = re.compile(r"\s+[-–]")
 # Name-cell suffixes that are NEVER part of a person's name. Each anchors to the
 # END of the cell with an optional leading separator (space / hyphen / comma /
 # semicolon / pipe), is captured VERBATIM and preserved as a name-cell note (no
@@ -129,6 +141,22 @@ _NAME_SUFFIX_NOTE_RES = (
                re.IGNORECASE | re.DOTALL),
     # Retailer-admin "finalise to ..." instruction ("FINALISE TO AGL").
     re.compile(r"[\s\-,;|]*\bfinali[sz]e\b.*$", re.IGNORECASE | re.DOTALL),
+    # Operational/source-context note FAMILIES introduced by a HYPHEN-THEN-SPACE
+    # ("- ") delimiter (no leading space) or a comma/semicolon/pipe — scheduling,
+    # admin/social, and invoice notes that are never part of the name. CONTENT-GATED
+    # on a recognized keyword so an entity appositive ("The Leeton Heritage Motor
+    # Inn- Wayne Bond") is NOT split — only a recognized note (".. - 2 invoices
+    # sent") is stripped. The hyphen MUST be followed by a space, so a hyphenated
+    # surname ("Smith-Pole", no space) is never touched. Captured verbatim to end.
+    # (A space-BEFORE-hyphen " -<note>" is handled separately in parse_customer_name,
+    # since that delimiter is unambiguous and needs no keyword.)
+    re.compile(_NOTE_FAM_SEP + r"(?:booked|prescreened|pre-screened)\b.*$", re.IGNORECASE | re.DOTALL),
+    re.compile(_NOTE_FAM_SEP + r"(?:on\s+)?fb\b.*$", re.IGNORECASE | re.DOTALL),
+    re.compile(_NOTE_FAM_SEP + r"vm\b.*$", re.IGNORECASE | re.DOTALL),
+    re.compile(_NOTE_FAM_SEP + r"pole\b.*$", re.IGNORECASE | re.DOTALL),
+    re.compile(_NOTE_FAM_SEP + r"agreed\b.*$", re.IGNORECASE | re.DOTALL),
+    re.compile(_NOTE_FAM_SEP + r"sv\s+submitted\b.*$", re.IGNORECASE | re.DOTALL),
+    re.compile(_NOTE_FAM_SEP + r"\d*\s*invoices?\s+sent\b.*$", re.IGNORECASE | re.DOTALL),
     # Bare trailing date preceded by whitespace or a separator ("Carter- 18/4/75",
     # "Claire Joshua 11/05/2003"): a date at the very end of a name cell is a note,
     # never part of the name. LAST so a DOB / finalise phrase claims its own date.
@@ -369,6 +397,14 @@ def parse_customer_name(raw: str) -> dict[str, Any]:
     dm = _NAME_DATE_SPLIT_RE.search(work)
     if dm and dm.start() > 0 and not _APPROVAL_DATE_TAIL_RE.search(work[: dm.start(1)]):
         idxs.append(dm.start())
+    # A trailing note introduced by a SPACE-BEFORE-hyphen (" -<note>"): an unambiguous
+    # note delimiter (a name/entity never puts a space before a hyphen), so cut here
+    # and preserve the whole free-form tail as a note ("Wenselowski -Jason check
+    # wiring to shed- hot water timer", "McGillivray -Troy", a trailing " -"). A
+    # hyphen-THEN-space ("Inn- Wayne Bond") is intentionally NOT cut here.
+    gm = _NAME_NOTE_SPACE_HYPHEN_RE.search(work)
+    if gm and gm.start() > 0:
+        idxs.append(gm.start())
     cut = min(idxs) if idxs else len(work)
     name = work[:cut].strip()
     extracted = work[cut:].strip(" -")

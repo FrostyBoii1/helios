@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { canDeleteCustomers, canWriteCustomers } from '@/auth/permissions'
 import { CustomerJobsPanel } from '@/components/CustomerJobsPanel'
-import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
@@ -172,9 +171,11 @@ export function CustomerDetailPage() {
             )}
           </div>
 
-          {/* Read-only imported source notes (provenance / filtered junk). */}
-          <ImportedSourceNotes text={customer.notes} />
-
+          {/* Imported source notes are intentionally NOT shown on the customer file:
+              preserved import context lives in the job's "On commit" / Job Internal
+              Notes (and the structured details), so a duplicate customer-source
+              panel was clutter. Customer.notes is still stored, just not surfaced
+              here. Manual customer internal notes have their own panel (right). */}
           <CustomerJobsPanel customerId={customer.id} customerName={customer.full_name} />
           <TasksPanel customerId={customer.id} />
           <Timeline customerId={customer.id} />

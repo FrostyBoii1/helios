@@ -265,6 +265,23 @@ def test_p2_note_predicates():
         assert not is_empty_panel_placeholder(keep)
 
 
+def test_suffix_notes_flow_into_generated_internal_notes():
+    # R2: a stripped operational/source suffix is preserved verbatim and appears in
+    # the generated On Commit / Job internal notes (not lost, not a scary panel).
+    for raw, frag in [
+        ("Kathleen Jones -8kw export", "8kw export"),
+        ("Paul Neilsen and Carly Sorenson -booked 28/8", "booked 28/8"),
+        ("Peter and Lesley Wenselowski -Jason check wiring to shed- hot water timer",
+         "Jason check wiring to shed- hot water timer"),
+        ("The Leeton Heritage Motor Inn- Wayne Bond- 2 invoices sent", "2 invoices sent"),
+    ]:
+        r = import_parser.parse_customer_name(raw)
+        note = import_parser.clean_name_cell_notes(r["extracted"])
+        details = build_details({"customer_name_notes": note}, {})
+        block = build_imported_notes(details)
+        assert block is not None and frag in block, (raw, block)
+
+
 def test_needs_approval_from_panels_predicate():
     # The shared "Needs approval" heuristic: numeric panel_count > 0 AND inverter.
     def sysd(**s):

@@ -520,6 +520,99 @@ def test_parse_customer_name_strips_midcell_bare_date():
     assert appr["state"] == "pending" and appr["pending_date"] == "19/08/2026"
 
 
+# --------------------------------------------------------------------------- #
+# R2 name-suffix cleanup — operational/source-context suffixes are pattern
+# FAMILIES, not name-specific hacks. The name is cleaned; the exact stripped text
+# is preserved (it flows to customer_name_notes -> On Commit / Job internal notes).
+# A space-BEFORE-hyphen (" -note") is an unambiguous note delimiter; a hyphen-THEN-
+# space ("- note") only strips when a recognized family keyword follows, so entity
+# appositives ("Inn- Wayne Bond") survive.
+# --------------------------------------------------------------------------- #
+def _name_note(raw):
+    r = import_parser.parse_customer_name(raw)
+    return r["name"], import_parser.clean_name_cell_notes(r["extracted"])
+
+
+def test_suffix_family_booked_prescreened():
+    # Category 1: booked / prescreened scheduling suffixes (date, weekday, range, wk).
+    for raw, name, frag in [
+        ("Paul Neilsen and Carly Sorenson -booked 28/8", "Paul Neilsen and Carly Sorenson", "booked 28/8"),
+        ("Kylie Felton- booked 4/10", "Kylie Felton", "booked 4/10"),
+        ("Mal Moody- booked 06/12", "Mal Moody", "booked 06/12"),
+        ("Gideon Vos -booked 5 or 6/2", "Gideon Vos", "booked"),
+        ("Lee Bargwanna -prescreened wk 1/9", "Lee Bargwanna", "prescreened"),
+        ("Janelle and Wayne Alexander- prescreened wk 17/11", "Janelle and Wayne Alexander", "prescreened"),
+    ]:
+        n, note = _name_note(raw)
+        assert n == name, raw
+        assert frag in note, (raw, note)
+
+
+def test_suffix_family_admin_social_source():
+    # Category 2: vm, on fb, POLE, AGREED, SV submitted.
+    for raw, name, frag in [
+        ("Wendy and Matthew Loffler- vm", "Wendy and Matthew Loffler", "vm"),
+        ("Chantal Jackson -on fb", "Chantal Jackson", "on fb"),
+        ("Heather and George Case -POLE", "Heather and George Case", "POLE"),
+        ("Allen Irwen- AGREED", "Allen Irwen", "AGREED"),
+        ("Kerryn Robertson -SV submitted 17/5", "Kerryn Robertson", "SV submitted 17/5"),
+    ]:
+        n, note = _name_note(raw)
+        assert n == name, raw
+        assert frag in note, (raw, note)
+
+
+def test_suffix_family_export_system():
+    # Category 3: export / Nkw export system suffix.
+    n, note = _name_note("Kathleen Jones -8kw export")
+    assert n == "Kathleen Jones"
+    assert "8kw export" in note
+
+
+def test_suffix_family_multipart_freeform_note():
+    # Category 4: a free-form job/admin note after a space-before-hyphen is kept whole
+    # (including a second internal hyphen), never part of the name.
+    n, note = _name_note("Peter and Lesley Wenselowski -Jason check wiring to shed- hot water timer")
+    assert n == "Peter and Lesley Wenselowski"
+    assert note == "Jason check wiring to shed- hot water timer"
+    # A single-name shorthand after a couple name is context, not part of the name.
+    n2, note2 = _name_note("Kelly Double and Troy McGillivray -Troy")
+    assert n2 == "Kelly Double and Troy McGillivray"
+    assert note2 == "Troy"
+
+
+def test_suffix_family_invoice_sent_keeps_entity_contact():
+    # Category 5: an invoice note on a business/hotel entity — only the note is
+    # stripped; the entity + its contact appositive ("Inn- Wayne Bond") survive.
+    n, note = _name_note("The Leeton Heritage Motor Inn- Wayne Bond- 2 invoices sent")
+    assert n == "The Leeton Heritage Motor Inn- Wayne Bond"
+    assert "2 invoices sent" in note
+
+
+def test_suffix_family_trailing_empty_delimiter():
+    # Category 6: a trailing bare " -" delimiter is dropped; no note, clean name.
+    for raw, name in [("Sarah and Barry Pitkin -", "Sarah and Barry Pitkin"), ("Wayne Giles -", "Wayne Giles")]:
+        n, note = _name_note(raw)
+        assert n == name and note == "", raw
+
+
+def test_suffix_family_conservative_on_entities_and_names():
+    # Category 7 + guards: company/trust names and hyphenated surnames are NOT
+    # rewritten unless a confident delimiter+keyword pattern exists.
+    cn = import_parser.parse_customer_name
+    # Trust/company entity with no hyphen-with-space and no family keyword -> untouched
+    # (manual-resolution case; the workbook has no source field naming "Jules").
+    horton = "C &J Horton PTY as Trustees for Horton Family Superrannuation Fund"
+    assert cn(horton)["name"] == horton
+    # A hyphenated surname (no spaces around the hyphen) is never split.
+    assert cn("Smith-Pole")["name"] == "Smith-Pole"
+    assert cn("Brenton Hoskins-Murphy -booked 4/11- AGREED WITH UPGRADE")["name"] == "Brenton Hoskins-Murphy"
+    # A real surname token after a plain space (no hyphen) is never stripped.
+    assert cn("Mary Pole")["name"] == "Mary Pole"
+    # A company name with a place suffix after a space-before-hyphen IS cleaned.
+    assert cn("Grow Nuts Pty Ltd -Griffith")["name"] == "Grow Nuts Pty Ltd"
+
+
 def test_parse_customer_name_strips_pillar_reference():
     cn = import_parser.parse_customer_name
     r = cn("Steve Olive pillar 111178023")
