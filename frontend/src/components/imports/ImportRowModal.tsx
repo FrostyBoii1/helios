@@ -154,15 +154,6 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const { data: registry } = useFieldRegistry()
   // Phase 3b-1: structured read-only view when the row carries parsed.details.
   const details = row.parsed?.details ?? null
-  // Land/legal parcel text stripped out of the Customer Name cell ("Lot 4 DP 588479")
-  // is preserved in details.notes.misfiled under source_column "Customer Name".
-  // Surface it right by the name fields so it is findable, not buried at the bottom.
-  // (Distributor approval/reference phrases now live in details.notes.review_notes
-  // and render in the neutral "Imported review notes" section, not here.)
-  // Display-only; the canonical data still lives in details.notes.misfiled.
-  const customerNameMisfiled = (details?.notes?.misfiled ?? []).filter(
-    (m) => m.source_column === 'Customer Name',
-  )
   // The GENERATED default internal notes (build_imported_notes mirror). Shown as the
   // editable textarea's value when there is no override; editing it sets an override.
   const internalNotesPreview = previewInternalNotes(details)
@@ -345,6 +336,10 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           edits={detailsEdits}
           onChange={handleDetailsChange}
           originalDetails={(row.original_parsed?.details as ParsedDetails | null) ?? null}
+          // A4: hide the "Imported review notes" / "Imported source notes" panels —
+          // the same preserved context is shown consolidated in the "On commit" Job
+          // internal-notes box (right) and verbatim in Raw cells (below).
+          hideImportedNotes
         />
       ) : (
         <div className="rounded-md border border-dashed border-line-strong bg-surface px-3 py-2">
@@ -526,29 +521,10 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
 
         {/* Name-cell notes is no longer a separate edit field — the "On commit"
             Job internal-notes textarea (right) is now the single edit surface. The
-            parser still stores customer_name_notes, which feeds the generated default. */}
-
-        {/* Land/legal parcel text stripped off the Customer Name cell, surfaced
-            read-only right by the name — the same entries also appear in the
-            "Imported source notes" list below. Neutral (preserved source text, not
-            an error). Never written back into customer_name. */}
-        {customerNameMisfiled.length > 0 && (
-          <div className="mb-3 rounded-md border border-line bg-elevated p-3">
-            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
-              Removed from customer name
-            </h4>
-            <p className="mb-1.5 text-xs text-faint">
-              Stripped from the Customer Name cell and preserved as imported source text (read-only).
-            </p>
-            <ul className="flex flex-col gap-1">
-              {customerNameMisfiled.map((m, i) => (
-                <li key={i} className="break-words text-sm text-fg/90">
-                  {m.text ?? ''}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+            parser still stores customer_name_notes, which feeds the generated default.
+            A4: the prior "Removed from customer name" block was dropped — that text
+            (Lot/DP descriptors, etc.) is preserved in the On-commit internal notes
+            and shown verbatim in Raw cells, so a separate panel only duplicated it. */}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {PARSED_TEXT_FIELDS.filter(

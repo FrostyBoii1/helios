@@ -201,18 +201,24 @@ def test_build_imported_notes_p2_mapping():
     assert "- HOUSE" in block                  # name-cell note
     assert "- dob 23/11/55" in block           # DOB-like leftover
     assert "- Lot 4 DP 588479" in block        # Lot/DP descriptor
-    # 4. Approval reference excluded.
-    assert "Jemena Approval number 000410056" not in block
-    assert "000410056" not in block
+    # 4. Approval REFERENCE NUMBER kept (owner R2: useful operational context).
+    assert "- Jemena Approval number 000410056" in block
+    assert "000410056" in block
     # 5. Bare no-panel placeholder excluded.
     assert "- -" not in block
 
 
-def test_build_imported_notes_excludes_approval_status_text():
-    # Distributor approval/status phrasing (any column) is kept out of internal notes.
-    for txt in ("Jemena Approval number 000410056", "ERGON APPROVED", "pending approval"):
+def test_build_imported_notes_excludes_bare_approval_keeps_reference():
+    # Bare approval/status phrasing (no reference number) is kept OUT of internal notes.
+    for txt in ("ERGON APPROVED", "pending approval", "Energex approved"):
         d = {"_v": 2, "notes": {"misfiled": [{"source_column": "X", "text": txt}]}}
         assert build_imported_notes(d) is None
+    # But an approval REFERENCE NUMBER is preserved verbatim (owner R2).
+    for txt in ("Jemena Approval number 000410056", "ENERGEX APPROVAL #000413493",
+                "Approval ID# 000416253"):
+        d = {"_v": 2, "notes": {"misfiled": [{"source_column": "X", "text": txt}]}}
+        block = build_imported_notes(d)
+        assert block is not None and txt in block
 
 
 def test_build_imported_notes_dedupes_identical_lines():
@@ -238,10 +244,14 @@ def test_build_imported_notes_none_when_nothing_useful():
 
 
 def test_p2_note_predicates():
-    # is_approval_context_note: explicit approval/approved wording only.
-    assert is_approval_context_note("Jemena Approval number 000410056")
+    # is_approval_context_note: a BARE approval/status marker (no reference number)
+    # is excludable context.
     assert is_approval_context_note("ERGON APPROVED")
     assert is_approval_context_note("approval pending")
+    # R2: an approval REFERENCE NUMBER is NOT excludable — it is useful context.
+    assert not is_approval_context_note("Jemena Approval number 000410056")
+    assert not is_approval_context_note("ENERGEX APPROVAL #000413493")
+    assert not is_approval_context_note("Approval ID# 000416253")
     # Useful, non-approval context is NOT treated as approval.
     for keep in ("HOUSE", "dob 23/11/55", "Lot 4 DP 588479", "FINALISE TO AGL",
                  "export limited", "pillar 111178023"):

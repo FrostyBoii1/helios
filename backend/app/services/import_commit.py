@@ -69,10 +69,12 @@ def build_customer_data(parsed: dict, raw: dict, *, batch_id: int, source_row_in
         note_lines.append("Other emails: " + ", ".join(pv["extra_emails"]))
     if pv["extra_phones"]:
         note_lines.append("Other phones: " + ", ".join(pv["extra_phones"]))
-    # Prefer the cleaned, reviewer-editable note; fall back to the raw extract.
-    extracted = _str(parsed.get("customer_name_notes")).strip() or _str(
-        parsed.get("name_extracted_notes")
-    ).strip()
+    # Use the cleaned, reviewer-editable note only. We deliberately do NOT fall back
+    # to the raw extract: when the cleaner emptied it, the removed text was pure
+    # approval-status / decommission / approval-ACTION-phrase junk (e.g. "DO
+    # APPROVAL" — R2/A3) whose meaning is carried by a label, and it must not be
+    # resurrected into the customer file.
+    extracted = _str(parsed.get("customer_name_notes")).strip()
     if extracted:
         note_lines.append("From name cell: " + extracted)
     note_lines.append(f"Imported from legacy workbook (batch {batch_id}, row {source_row_index}).")

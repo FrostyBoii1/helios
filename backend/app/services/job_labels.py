@@ -200,6 +200,8 @@ def auto_label_keys(
     Rules:
       * approval_state == "approved" -> approval_approved
       * approval_state == "pending"  -> approval_pending (note carries pending date)
+      * approval_state == "required" -> approval_required (an explicit name-cell
+        approval-ACTION phrase like "DO APPROVAL"; never downgraded to a heuristic)
       * else (no approval evidence) AND a NUMERIC panel count > 0 AND an inverter is
         present -> approval_required ("Needs approval"). A real solar+inverter job
         with no recorded approval still needs network approval. Deliberately
@@ -222,6 +224,11 @@ def auto_label_keys(
     elif state == "pending":
         pending = str(parsed.get("approval_pending_date") or "").strip()
         out.append(("approval_pending", f"pending {pending}" if pending else None))
+    elif state == "required":
+        # R2/A3: the parser read an explicit approval-ACTION phrase ("DO APPROVAL",
+        # "NEEDS APPROVAL", ...) in the name cell — this job needs network approval
+        # regardless of the panel/inverter heuristic below.
+        out.append(("approval_required", None))
     else:
         # No approval evidence: a solar (numeric panels > 0) + inverter job still
         # needs network approval. panel_count is set in details.system ONLY when the

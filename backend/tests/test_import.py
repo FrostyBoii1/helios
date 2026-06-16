@@ -390,6 +390,34 @@ def test_parse_approval_reference_means_approved():
     assert pa("approval expected 2025")["state"] == "none"
 
 
+def test_parse_approval_action_phrase_means_required():
+    # R2/A3: an explicit instruction to OBTAIN approval ("DO APPROVAL", "NEEDS
+    # APPROVAL", ...) classifies as approval_required ("Needs approval"), NOT
+    # approved. The owner's full keyword set is covered.
+    pa = import_parser.parse_approval
+    for txt in ("DO APPROVAL", "NEED APPROVAL", "NEEDS APPROVAL", "APPLY APPROVAL",
+                "ORGANISE APPROVAL", "ORGANIZE APPROVAL", "GET APPROVAL",
+                "approval needed", "approval required"):
+        assert pa(txt)["state"] == "required", txt
+    # An action phrase wins over a stray APPROVED word elsewhere (still not done).
+    assert pa("NEEDS APPROVAL")["state"] == "required"
+    # A past-tense "APPROVED" with no action verb stays approved.
+    assert pa("ESSENTIAL APPROVED")["state"] == "approved"
+    # A real reference number still means approved (no action verb).
+    assert pa("Jemena Approval # 000413493")["state"] == "approved"
+
+
+def test_clean_name_cell_notes_strips_action_phrase_keeps_context():
+    # R2/A3: the bare action phrase is dropped (its meaning is on the label); any
+    # surrounding operational context is preserved verbatim.
+    cn = import_parser.clean_name_cell_notes
+    assert cn("DO APPROVAL") == ""
+    assert cn("NEEDS APPROVAL JEMENA") == "JEMENA"
+    assert "TECHNAUS POWERCOR PORTAL" in cn("DO APPROVAL TECHNAUS POWERCOR PORTAL - BACKSTOP")
+    assert "do approval" not in cn("Jason Check Solax and phase and do approval").lower()
+    assert "Jason Check Solax and phase" in cn("Jason Check Solax and phase and do approval")
+
+
 # --------------------------------------------------------------------------- #
 # P3 parser fixes (batch 5846 owner review): non-name suffixes peeled off the
 # Customer Name cell + an email-only name is a blocking error. Each is a CATEGORY,
@@ -424,6 +452,30 @@ def test_parse_customer_name_strips_bare_trailing_date():
     assert "11/05/2003" in r2["extracted"]
     # no false strip: a plain name is untouched.
     assert cn("Pat Lee")["name"] == "Pat Lee"
+
+
+def test_parse_customer_name_strips_midcell_bare_date():
+    # R2/A1: a bare date glued to the name with MORE text after it (a licence / lot /
+    # state tail) is split off — the end-anchored bare-date rule misses these because
+    # the date no longer ends the cell. The date is PRESERVED, never inferred as DOB.
+    cn = import_parser.parse_customer_name
+    # The src-203 shape: "Naomi Carter- 18/4/75 - DL - 11878134 - Exp ... - NSW".
+    r = cn("Naomi Carter- 18/4/75 - DL - 11878134 - Exp 02/03/2028 - NSW")
+    assert r["name"] == "Naomi Carter"
+    assert "18/4/75" in r["extracted"]
+    assert "DL - 11878134" in r["extracted"]
+    # The src-308 shape: two-person name then a DOB then more text.
+    r2 = cn("Richard and Teresa Simmons- 28/02/1948 Richard - 16/07/1952 - teresa - NETWORK APPROVED")
+    assert r2["name"] == "Richard and Teresa Simmons"
+    assert "28/02/1948" in r2["extracted"]
+    # No structured DOB field is ever produced.
+    assert "dob" not in r and "date_of_birth" not in r
+    # Guard intact: a PENDING approval date stays adjacent to its keyword (not cut as
+    # a bare note), so parse_approval can still read the pending date.
+    r3 = cn("Pat Lee - ENERGEX PENDING 19/08/2026")
+    assert r3["name"] == "Pat Lee"
+    appr = import_parser.parse_approval(r3.get("approval_phrase") or "", r3["extracted"])
+    assert appr["state"] == "pending" and appr["pending_date"] == "19/08/2026"
 
 
 def test_parse_customer_name_strips_pillar_reference():

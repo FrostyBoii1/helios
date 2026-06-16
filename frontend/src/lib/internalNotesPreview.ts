@@ -3,7 +3,8 @@
 // MIRRORS the backend app/services/import_details.py `build_imported_notes` (P2):
 //   * heading "Uncategorised Data on Import"
 //   * bare bullets — the source-column label is NOT shown
-//   * approval / reference context is excluded (its state is structured separately)
+//   * bare approval/status markers are excluded (state is structured separately),
+//     but an approval REFERENCE NUMBER is kept (owner R2: useful context)
 //   * bare no-value / no-panel placeholders are excluded
 //   * identical lines are de-duplicated
 //
@@ -16,10 +17,16 @@
 import type { ParsedDetails } from '@/types/imports'
 
 const APPROVAL_CONTEXT = /\bapprov(?:al|als|ed|e|ing)?\b/i
+// A genuine approval REFERENCE NUMBER (#/No/Ref/Number + digits, or a 6+ digit
+// run) is useful context KEPT in internal notes — unlike a bare status marker.
+// Mirrors backend _APPROVAL_REF_NUMBER_RE (owner R2).
+const APPROVAL_REF_NUMBER = /(?:#|\bno\b\.?|\bref(?:erence)?\b\.?|\bnumber\b)\s*\.?\s*\d{3,}|\b\d{6,}\b/i
 const PANEL_PLACEHOLDERS = new Set(['n/a', 'na', 'nil', 'none', 'no panels', 'no panel'])
 
 function isApprovalContextNote(text: string): boolean {
-  return APPROVAL_CONTEXT.test(text)
+  if (!APPROVAL_CONTEXT.test(text)) return false
+  if (APPROVAL_REF_NUMBER.test(text)) return false // keep: a real reference number
+  return true
 }
 
 function isEmptyPanelPlaceholder(text: string): boolean {

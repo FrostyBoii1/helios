@@ -566,6 +566,33 @@ def test_auto_label_keys_approval_required_rule():
     # already approved / pending WIN — never downgraded to required.
     assert auto_label_keys({"approval_state": "approved"}, sysd(panel_count=10, inverter="x")) == [("approval_approved", None)]
     assert auto_label_keys({"approval_state": "pending"}, sysd(panel_count=10, inverter="x")) == [("approval_pending", None)]
+    # R2/A3: an explicit "required" state (a name-cell action phrase like "DO
+    # APPROVAL") -> approval_required even with NO panels/inverter (it never falls
+    # through to the panel+inverter heuristic).
+    assert auto_label_keys({"approval_state": "required"}, sysd()) == [("approval_required", None)]
+    assert auto_label_keys({"approval_state": "required"}, sysd(panel_count=0)) == [("approval_required", None)]
+
+
+def test_build_customer_data_drops_bare_actionphrase_extract():
+    # R2/A3: when the name-cell cleaner emptied the note (it was a pure action
+    # phrase like "DO APPROVAL"), build_customer_data must NOT resurrect the raw
+    # extract into Customer.notes — the action's meaning is on the approval label.
+    data = import_commit.build_customer_data(
+        {"customer_name": "Phillip Schuman", "customer_name_notes": None,
+         "name_extracted_notes": "DO APPROVAL"},
+        {}, batch_id=1, source_row_index=921,
+    )
+    notes = data["notes"] or ""
+    assert "DO APPROVAL" not in notes
+    assert "From name cell" not in notes
+    # A meaningful cleaned note IS still preserved.
+    data2 = import_commit.build_customer_data(
+        {"customer_name": "Caroline Nott",
+         "customer_name_notes": "TECHNAUS POWERCOR PORTAL - BACKSTOP",
+         "name_extracted_notes": "DO APPROVAL TECHNAUS POWERCOR PORTAL - BACKSTOP"},
+        {}, batch_id=1, source_row_index=1100,
+    )
+    assert "From name cell: TECHNAUS POWERCOR PORTAL - BACKSTOP" in (data2["notes"] or "")
 
 
 def _system_only_parsed(*, panel_count, inverter, approval_state="none"):
@@ -624,7 +651,8 @@ def test_commit_approved_pending_win_over_required(users, db_session: Session):
 def test_commit_seeds_internal_notes_from_all_preserved_context(users, db_session: Session):
     # P2 safety net: USEFUL preserved context (name-cell note + stripped Lot/DP
     # descriptor) seeds Job.internal_notes on commit under the new heading and with
-    # NO source-column labels; the stripped approval reference is EXCLUDED.
+    # NO source-column labels. R2: an approval REFERENCE NUMBER is now KEPT (useful
+    # operational context); a bare approval marker would still be excluded.
     parsed = _details_parsed()
     parsed["details"] = dict(parsed["details"])
     parsed["details"]["notes"] = {
@@ -636,7 +664,7 @@ def test_commit_seeds_internal_notes_from_all_preserved_context(users, db_sessio
     assert job.internal_notes.startswith("Uncategorised Data on Import")
     assert "- includes hot water timer" in job.internal_notes     # name-cell note, no label
     assert "- Lot 4 DP 588479" in job.internal_notes              # stripped Lot/DP, no label
-    assert "Jemena Approval # 000413493" not in job.internal_notes  # approval reference EXCLUDED
+    assert "- Jemena Approval # 000413493" in job.internal_notes  # R2: reference KEPT
     assert "Customer Name:" not in job.internal_notes              # source labels dropped
 
 
@@ -663,9 +691,10 @@ def test_seed_internal_notes_only_when_blank_never_overwrites_manual(db_session:
     j2 = SimpleNamespace(internal_notes="MANUAL: call before 9am", details=details)
     import_commit.seed_internal_notes(j2)
     assert j2.internal_notes == "MANUAL: call before 9am"
-    # blank but nothing useful preserved (only an excluded approval reference) -> stays None
+    # blank but nothing useful preserved (only an excluded BARE approval marker —
+    # no reference number) -> stays None.
     j3 = SimpleNamespace(internal_notes=None, details={"_v": 2, "notes": {
-        "review_notes": [{"source_column": "Customer Name", "text": "Jemena Approval # 000413493"}],
+        "review_notes": [{"source_column": "Customer Name", "text": "ESSENTIAL APPROVED"}],
     }})
     import_commit.seed_internal_notes(j3)
     assert j3.internal_notes is None

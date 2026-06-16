@@ -299,17 +299,32 @@ _APPROVAL_CONTEXT_RE = re.compile(r"\bapprov(?:al|als|ed|e|ing)?\b", re.IGNORECA
 # panels is unambiguous and is not internal-note context.
 _PANEL_PLACEHOLDER_VALUES = {"n/a", "na", "nil", "none", "no panels", "no panel"}
 
+# A genuine distributor approval REFERENCE number — a #/No/Ref/Number marker
+# followed by digits, or a standalone 6+ digit run (long enough not to be a year
+# or DOB). The owner (R2) wants this kept in internal notes as useful operational
+# context, UNLIKE a bare "ERGON APPROVED" status marker (which the label captures).
+_APPROVAL_REF_NUMBER_RE = re.compile(
+    r"(?:#|\bno\b\.?|\bref(?:erence)?\b\.?|\bnumber\b)\s*\.?\s*\d{3,}|\b\d{6,}\b",
+    re.IGNORECASE,
+)
+
 
 def is_approval_context_note(text: Any) -> bool:
-    """True when a preserved note is clearly network-approval / reference / status
-    context (e.g. "Jemena Approval number 000410056", "ERGON APPROVED").
+    """True when a preserved note is a BARE network-approval / status marker
+    ("ERGON APPROVED", "approval pending") whose STATE is captured structurally
+    (the approval label + ``details.approval``) — such text must not pollute the
+    internal-notes safety bucket.
 
-    Such text is NOT generic junk — its STATE is captured structurally (the
-    approval label + ``details.approval``), so it must not pollute the
-    internal-notes safety bucket (owner P2 rule 3). The approval reference itself
-    is to be structured properly in a later pass (P3/P4); here we only keep it out
-    of internal notes."""
-    return bool(_APPROVAL_CONTEXT_RE.search(_s(text)))
+    EXCEPTION (owner R2): a note carrying an approval REFERENCE NUMBER ("Jemena
+    Approval number 000410056") is useful operational context, so it is preserved
+    in internal notes and is NOT treated as excludable approval context. A generic
+    approval marker without a reference number stays excluded."""
+    t = _s(text)
+    if not _APPROVAL_CONTEXT_RE.search(t):
+        return False
+    if _APPROVAL_REF_NUMBER_RE.search(t):
+        return False  # keep: a real reference number is useful context
+    return True
 
 
 def is_empty_panel_placeholder(text: Any) -> bool:
@@ -344,8 +359,9 @@ def build_imported_notes(details: dict | None) -> str | None:
       * the heading is "Uncategorised Data on Import";
       * the EXACT source text is kept, but its source-column label is NOT rendered
         (no "Customer Name:" / "Name cell:" / "No of Panels:" prefixes);
-      * approval / reference / status context is EXCLUDED (it is structured
-        elsewhere — see ``is_approval_context_note``);
+      * bare approval / status markers are EXCLUDED (structured by the label — see
+        ``is_approval_context_note``), but an approval REFERENCE NUMBER is KEPT
+        (owner R2: it is useful operational context);
       * bare no-value / no-panel placeholders are EXCLUDED
         (see ``is_empty_panel_placeholder``);
       * identical lines are de-duplicated.

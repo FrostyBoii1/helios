@@ -49,6 +49,18 @@ APPROVAL_REFERENCE_RE = re.compile(
     r"\bapprov\w*\b.{0,12}?(?:(?:#|\bno\b\.?|\bref(?:erence)?\b\.?|\bnumber\b)\s*\.?\s*\d{3,}|\d{6,})",
     re.IGNORECASE,
 )
+# Approval-ACTION phrases in the name cell ("DO APPROVAL", "NEED/NEEDS APPROVAL",
+# "APPLY APPROVAL", "ORGANISE APPROVAL", "GET APPROVAL", or the reverse "approval
+# needed/required"): an explicit instruction to OBTAIN approval — the connection is
+# NOT yet approved. Distinct from a past-tense "APPROVED" (done) and from a
+# reference number (done): this classifies the job as approval_required ("Needs
+# approval"). The bare action phrase is then dropped from the preserved note (its
+# meaning is carried by the label), while surrounding context is kept.
+APPROVAL_ACTION_RE = re.compile(
+    r"\b(?:do|need|needs|apply|organi[sz]e|get|require|requires|arrange|chase)\s+(?:the\s+)?approval\b"
+    r"|\bapproval\s+(?:needed|required|to\s+do|outstanding)\b",
+    re.IGNORECASE,
+)
 DATE_RE = re.compile(r"([0-3]?\d[/\-][0-1]?\d[/\-]\d{2,4})")
 # Old-system removal / decommission markers. Operationally important: surfaced
 # as a parsed flag so staff see it after import instead of it being buried in
@@ -131,6 +143,14 @@ _EMAIL_TOKEN_RE = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 # keyword so parse_approval can read approval_pending_date. Guards the bare-date
 # stripper (the last entry of _NAME_SUFFIX_NOTE_RES) only.
 _APPROVAL_DATE_TAIL_RE = re.compile(r"(?i)\b(?:pending|approv\w*)\b[\s:\-]*$")
+# A bare date sitting MID-cell, glued to / following the name without a standard
+# stop-marker ("Naomi Carter- 18/4/75 - DL - 11878134 - ... - NSW"): the date and
+# everything after it are never part of the name. Used as an EXTRA name cut point —
+# the bare-date suffix rule above only fires when the date ends the cell, so a date
+# followed by more text (a licence/lot/state tail) would otherwise stay glued. The
+# date is preserved verbatim (never inferred as a DOB) and is guarded by
+# _APPROVAL_DATE_TAIL_RE so a PENDING / approval date is never cut here.
+_NAME_DATE_SPLIT_RE = re.compile(r"(?:\s*[-,;|]\s*|\s+)" + DATE_RE.pattern)
 # Australian address tail: a state code immediately followed by a 4-digit
 # postcode (or the rarer postcode-then-state). Anchored to the END so we only
 # structure an address when this reliable signal is present — everything before
@@ -341,6 +361,14 @@ def parse_customer_name(raw: str) -> dict[str, Any]:
     suffix_notes.reverse()
     # 3) Remaining trailing notes via the existing stop-marker split.
     idxs = [work.find(m) for m in NAME_STOP_MARKERS if work.find(m) > 0]
+    # A1: a bare date still sitting mid-cell (glued to / following the name without
+    # a standard stop-marker, e.g. "Naomi Carter- 18/4/75 - DL ...") is never part
+    # of the name — cut at the date's separator so the date + trailing text become a
+    # preserved note. Skip when the date is the approval PENDING date (it must stay
+    # adjacent to its keyword for parse_approval to read it).
+    dm = _NAME_DATE_SPLIT_RE.search(work)
+    if dm and dm.start() > 0 and not _APPROVAL_DATE_TAIL_RE.search(work[: dm.start(1)]):
+        idxs.append(dm.start())
     cut = min(idxs) if idxs else len(work)
     name = work[:cut].strip()
     extracted = work[cut:].strip(" -")
@@ -386,6 +414,11 @@ def clean_name_cell_notes(extracted: str) -> str:
     if not extracted:
         return ""
     cleaned = _APPROVAL_TOKEN_RE.sub(" ", extracted)
+    # A3: an approval-ACTION phrase ("DO APPROVAL", "NEEDS APPROVAL", ...) is
+    # classified as approval_required by parse_approval — drop the bare phrase here
+    # so it is not ALSO preserved as a note. Surrounding operational context (e.g.
+    # "TECHNAUS POWERCOR PORTAL", a contact name) is left intact.
+    cleaned = APPROVAL_ACTION_RE.sub(" ", cleaned)
     # Remove the decommission/remove-old-system marker text only; the flag is set
     # separately, and any other note content (incl. standalone dates) is kept.
     cleaned = DECOMMISSION_RE.sub(" ", cleaned)
@@ -413,12 +446,19 @@ def parse_approval(*texts: str) -> dict[str, Any]:
     """Approval state from any of the given texts (name-cell approval phrase,
     name-cell trailing notes, the Notes column).
 
-    Order matters: an explicit APPROVED word wins; then a PENDING word (with an
-    optional date); then a distributor approval REFERENCE number (e.g. "Jemena
-    Approval # 000413493") which also means approved. No evidence -> "none" (the
-    caller assigns no approval label). DOB/other digit runs do not trip the
-    reference rule — it needs a #/No/Ref marker or a long (6+ digit) number."""
+    Order matters: an approval-ACTION phrase ("DO APPROVAL", "NEEDS APPROVAL", ...)
+    means approval is still OUTSTANDING -> "required" and is checked first; then an
+    explicit APPROVED word; then a PENDING word (with an optional date); then a
+    distributor approval REFERENCE number (e.g. "Jemena Approval # 000413493") which
+    also means approved. No evidence -> "none" (the caller assigns no approval
+    label). DOB/other digit runs do not trip the reference rule — it needs a
+    #/No/Ref marker or a long (6+ digit) number."""
     blob = " ".join(t for t in texts if t)
+    # A3: an explicit instruction to OBTAIN approval ("DO APPROVAL", "NEEDS
+    # APPROVAL", ...) means the connection is NOT yet approved -> approval_required.
+    # Checked first so a name-cell action phrase is never mis-read as approved.
+    if APPROVAL_ACTION_RE.search(blob):
+        return {"state": "required", "pending_date": None}
     if APPROVAL_APPROVED_RE.search(blob):
         return {"state": "approved", "pending_date": None}
     pend = APPROVAL_PENDING_RE.search(blob)
