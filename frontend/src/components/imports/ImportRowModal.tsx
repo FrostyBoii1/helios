@@ -47,6 +47,16 @@ const STRUCTURED_OWNED_FLAT_KEYS = new Set<string>([
   'msb_state',
 ])
 
+// Human labels for the parser's approval_state. "required" reads as "Needs
+// approval" — matching the approval_required label name — so the review UI shows
+// the same wording staff see on the committed job.
+const APPROVAL_STATE_LABELS: Record<string, string> = {
+  none: 'None',
+  required: 'Needs approval',
+  pending: 'Pending approval',
+  approved: 'Approved',
+}
+
 interface ImportRowModalProps {
   batchId: number
   rowId: number
@@ -157,8 +167,10 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   // The GENERATED default internal notes (build_imported_notes mirror). Shown as the
   // editable textarea's value when there is no override; editing it sets an override.
   const internalNotesPreview = previewInternalNotes(details)
-  // Approval signal recorded by the parser (none/pending/approved). The "Needs
-  // approval" auto-label is derived on the backend at commit, not projected here.
+  // Approval signal recorded by the parser (none/required/pending/approved). The
+  // parser now derives "required" (Needs approval) for a numeric-panel + inverter
+  // job with no explicit approval evidence — matching the commit-time auto-label —
+  // so the review UI reflects the same state BEFORE commit.
   const importApprovalState = asString(row.parsed?.approval_state).trim().toLowerCase() || 'none'
 
   const [text, setText] = useState<Record<string, string>>({})
@@ -361,7 +373,9 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">On commit</h3>
             <span className="inline-flex items-center gap-1.5 text-xs text-faint">
               Approval (from import):
-              <span className="font-medium capitalize text-fg">{importApprovalState}</span>
+              <span className="font-medium text-fg">
+                {APPROVAL_STATE_LABELS[importApprovalState] ?? importApprovalState}
+              </span>
             </span>
           </div>
           <div className="mb-1 flex items-center justify-between gap-2">

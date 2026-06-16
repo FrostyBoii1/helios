@@ -340,6 +340,29 @@ def is_empty_panel_placeholder(text: Any) -> bool:
     return stripped in _PANEL_PLACEHOLDER_VALUES
 
 
+def needs_approval_from_panels(details: dict | None) -> bool:
+    """True when a system has a NUMERIC panel count > 0 AND an inverter — a real
+    solar+inverter job that still needs network approval when there is no explicit
+    approval evidence. Pure; reads only ``details.system``.
+
+    The numeric ``panel_count`` is populated by ``build_details`` ONLY when the
+    parser coerced a real count, so battery-only / inverter-only / no-panel /
+    non-numeric-panel jobs have no numeric ``panel_count`` and return False — no
+    extra check needed.
+
+    This is the SINGLE source of truth for the "Needs approval" heuristic, shared by
+    the parser (which derives the review-time ``approval_state``) and
+    ``job_labels.auto_label_keys`` (the commit-time label), so the import-review UI
+    and the committed label can never disagree. It is intentionally a heuristic on
+    the imported sheet — later, stronger evidence (an explicit approval phrase now,
+    or NAS-detected approval documents later) takes precedence and is never
+    downgraded by this rule."""
+    system = (details or {}).get("system") or {}
+    panel_count = system.get("panel_count")
+    inverter = str(system.get("inverter") or "").strip()
+    return isinstance(panel_count, int) and panel_count > 0 and bool(inverter)
+
+
 def build_imported_notes(details: dict | None) -> str | None:
     """Readable SAFETY-NET summary of USEFUL preserved imported context, for
     seeding ``Job.internal_notes`` on commit when it is blank. Returns None when

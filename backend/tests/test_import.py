@@ -110,6 +110,48 @@ def test_parser_flags_issues():
     assert any(i["kind"] == "date_day_mismatch" for i in r4.issues)
 
 
+def test_parse_rows_derives_needs_approval_from_panels_inverter():
+    """R2: parse_rows derives approval_state='required' (Needs approval) for a
+    numeric-panel + inverter job with no explicit approval evidence — matching the
+    commit-time auto-label — without overriding approved/pending/action-phrase, and
+    without firing for battery-only / no-panel / inverter-only / non-numeric / zero."""
+    def _row(ref, name, panels, inverter):
+        cells = [""] * len(HEADERS)
+        cells[0], cells[2], cells[3] = ref, name, "1 Test St"
+        cells[10] = "42041234567"           # NMI (healthy job, distributor matches)
+        cells[12], cells[14] = panels, inverter  # No of Panels, Inverter
+        return cells
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "COMPLETED"
+    ws.append(HEADERS)
+    ws.append(_row("SC9001", "Solar Sam", "12", "Goodwe 5kw"))                  # -> required (derived)
+    ws.append(_row("SC9002", "Amy Jones - ESSENTIAL APPROVED", "10", "Goodwe 5kw"))  # approved kept
+    ws.append(_row("SC9003", "Pete Smith - PENDING 19/08/2026", "10", "Goodwe 5kw"))  # pending kept
+    ws.append(_row("SC9004", "Andy Brown - DO APPROVAL", "10", "Goodwe 5kw"))   # required (action phrase)
+    ws.append(_row("SC9005", "Bob Battery", "", "Goodwe 5kw"))                  # inverter-only -> none
+    ws.append(_row("SC9006", "Ned NoPanel", "-", "Goodwe 5kw"))                 # non-numeric panels -> none
+    ws.append(_row("SC9007", "Zoe Zero", "0", "Goodwe 5kw"))                    # zero panels -> none
+    ws.append(_row("SC9008", "Pam PanelsOnly", "10", ""))                      # no inverter -> none
+    buf = BytesIO()
+    wb.save(buf)
+    rows = {r.legacy_reference: r for r in import_parser.parse_rows(_ws_from_bytes(buf.getvalue()))}
+
+    assert rows["SC9001"].parsed["approval_state"] == "required"   # numeric panels + inverter
+    assert rows["SC9002"].parsed["approval_state"] == "approved"   # explicit approved not overridden
+    assert rows["SC9003"].parsed["approval_state"] == "pending"    # explicit pending not overridden
+    assert rows["SC9004"].parsed["approval_state"] == "required"   # explicit action phrase kept
+    for ref in ("SC9005", "SC9006", "SC9007", "SC9008"):
+        assert rows[ref].parsed["approval_state"] == "none", ref
+
+    # The derived review state and the commit-time label agree for the same row
+    # (shared needs_approval_from_panels predicate — they cannot diverge).
+    from app.services.job_labels import auto_label_keys
+    p = rows["SC9001"].parsed
+    assert ("approval_required", None) in auto_label_keys(p, p.get("details"))
+
+
 # --------------------------------------------------------------------------- #
 # Name-cell trailing notes + decommission detection (pure helpers)
 # --------------------------------------------------------------------------- #

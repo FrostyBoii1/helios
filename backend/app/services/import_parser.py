@@ -612,7 +612,7 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
     Raises ValueError if the COMPLETED-style header cannot be located.
     """
     # Deferred import avoids a parser<->details import cycle.
-    from app.services.import_details import build_details
+    from app.services.import_details import build_details, needs_approval_from_panels
 
     header_row = find_header_row(ws)
     if header_row is None:
@@ -766,5 +766,16 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
         # Phase 2a: registry-shaped structured candidate alongside the flat keys
         # (the flat keys stay for back-compat; commit-to-live is unchanged).
         parsed["details"] = build_details(parsed, raw)
+
+        # Derive the review-time "Needs approval" state so the import-review UI shows
+        # the SAME approval_required the commit-time safety net (auto_label_keys)
+        # assigns: a numeric-panel + inverter job with no explicit approval evidence
+        # still needs network approval. Only UPGRADES from "none" — explicit
+        # approved / pending / required (action phrase) evidence is never overridden.
+        # Uses the shared needs_approval_from_panels predicate so review and commit
+        # can't diverge. (Later NAS approval evidence can still upgrade this to
+        # approved/pending through the same approval-state/label model.)
+        if parsed["approval_state"] == "none" and needs_approval_from_panels(parsed["details"]):
+            parsed["approval_state"] = "required"
 
         yield ParsedRow(r, klass, ref, raw, parsed, current_context or None, issues)

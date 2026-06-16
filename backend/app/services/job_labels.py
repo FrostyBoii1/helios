@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import JobLabelSource
 from app.models.job_label import JobLabelAssignment, JobLabelDefinition
+from app.services.import_details import needs_approval_from_panels
 
 
 def list_label_definitions(
@@ -229,16 +230,15 @@ def auto_label_keys(
         # "NEEDS APPROVAL", ...) in the name cell — this job needs network approval
         # regardless of the panel/inverter heuristic below.
         out.append(("approval_required", None))
-    else:
-        # No approval evidence: a solar (numeric panels > 0) + inverter job still
-        # needs network approval. panel_count is set in details.system ONLY when the
-        # parser coerced a numeric count, so battery-only / inverter-only / no-panel
-        # / non-numeric-panel jobs are excluded without any extra check.
-        system = details.get("system") or {}
-        panel_count = system.get("panel_count")
-        inverter = str(system.get("inverter") or "").strip()
-        if isinstance(panel_count, int) and panel_count > 0 and inverter:
-            out.append(("approval_required", None))
+    elif needs_approval_from_panels(details):
+        # No explicit approval evidence, but a numeric-panel + inverter solar job
+        # still needs network approval. Uses the SAME shared predicate the parser
+        # uses to derive the review-time approval_state, so the import-review UI and
+        # this commit-time label can never disagree. Battery-only / inverter-only /
+        # no-panel / non-numeric-panel jobs are excluded by the predicate. (For rows
+        # parsed AFTER the review-time derivation landed, state is already "required"
+        # and this branch is a redundant safety net.)
+        out.append(("approval_required", None))
 
     flags = details.get("flags") or {}
     if flags.get("removes_old_system"):

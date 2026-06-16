@@ -17,6 +17,7 @@ from app.services.import_details import (
     build_imported_notes,
     is_approval_context_note,
     is_empty_panel_placeholder,
+    needs_approval_from_panels,
     render_legacy_blobs,
 )
 
@@ -262,6 +263,25 @@ def test_p2_note_predicates():
     # Substantive panel/context text is NOT a placeholder.
     for keep in ("existing system - battery only", "6.6kw", "HOUSE", "Lot 4 DP 588479"):
         assert not is_empty_panel_placeholder(keep)
+
+
+def test_needs_approval_from_panels_predicate():
+    # The shared "Needs approval" heuristic: numeric panel_count > 0 AND inverter.
+    def sysd(**s):
+        return {"_v": 2, "system": s}
+    # Qualifies: numeric panels > 0 + inverter present.
+    assert needs_approval_from_panels(sysd(panel_count=10, inverter="Goodwe 5kw")) is True
+    assert needs_approval_from_panels(sysd(panel_count=1, inverter="Solis 5kw")) is True
+    # Excluded: no inverter / inverter-only / no numeric panels / zero / non-numeric.
+    assert needs_approval_from_panels(sysd(panel_count=10)) is False          # no inverter
+    assert needs_approval_from_panels(sysd(inverter="Goodwe 5kw")) is False    # inverter only
+    assert needs_approval_from_panels(sysd(panel_count=0, inverter="x")) is False  # zero panels
+    assert needs_approval_from_panels(sysd(inverter="x")) is False             # battery-only style
+    assert needs_approval_from_panels(sysd()) is False                         # empty system
+    assert needs_approval_from_panels({"_v": 2}) is False                      # no system section
+    assert needs_approval_from_panels(None) is False
+    # A non-numeric panel_count (build_details never coerces "-"/"existing") -> False.
+    assert needs_approval_from_panels(sysd(panel_count="existing", inverter="x")) is False
 
 
 def test_legacy_present_only_when_populated():
