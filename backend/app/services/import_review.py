@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.enums import ImportBatchStatus, ImportRowClass, ImportRowReviewStatus
 from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.schemas.import_staging import PARSED_EDIT_FIELDS
+from app.services.customers import get_customer
 from app.services.import_field_registry import allowed_details_paths
 
 APPROVABLE_CLASSES = (ImportRowClass.JOB.value, ImportRowClass.AMBIGUOUS.value)
@@ -30,6 +31,12 @@ _OVERRIDE_LOCKED_STATES = frozenset({
     ImportRowReviewStatus.COMMITTED.value,
     ImportRowReviewStatus.REVERSED.value,
 })
+
+# B2-1: customer resolution, like internal_notes_override, may only be changed
+# while the row is still PENDING — once approved/committed/reversed it is locked
+# (reopen to change). Mirrors the override lock so review and resolution can't
+# drift after a row is finalized.
+_RESOLUTION_LOCKED_STATES = _OVERRIDE_LOCKED_STATES
 
 
 def _now() -> datetime:
@@ -175,6 +182,83 @@ def set_review_status(
     row.reviewed_at = _now()
     if notes is not None:
         row.review_notes = notes
+    _mark_reviewing(batch)
+    return row
+
+
+# --------------------------------------------------------------------------- #
+# B2-1: manual same-customer resolution (storage only — no commit effect yet)
+# --------------------------------------------------------------------------- #
+def _ensure_resolution_editable(row: ImportRow) -> None:
+    """Guard: resolution may only change while the row is pending and uncommitted."""
+    if row.committed_customer_id is not None or row.committed_job_id is not None:
+        raise ValueError("This row is already committed — its customer resolution is locked.")
+    if row.review_status in _RESOLUTION_LOCKED_STATES:
+        raise ValueError(
+            "Customer resolution can only be changed while the row is pending — "
+            "reopen the row to edit."
+        )
+
+
+def _stamp_resolution(row: ImportRow, *, actor_id: int) -> None:
+    row.resolved_by_id = actor_id
+    row.resolved_at = _now()
+
+
+def set_resolution_existing(
+    db: Session,
+    batch: ImportBatch,
+    row: ImportRow,
+    *,
+    customer_id: int,
+    actor_id: int,
+    reason: str | None = None,
+) -> ImportRow:
+    """Resolve the row to an EXISTING live customer (B2-1, storage only).
+
+    Raises ValueError if the row is locked or the target customer does not exist /
+    is soft-deleted. Never silently falls back to "new".
+    """
+    _ensure_resolution_editable(row)
+    customer = get_customer(db, customer_id)  # excludes soft-deleted (deleted_at)
+    if customer is None:
+        raise ValueError(f"Customer {customer_id} was not found or has been deleted.")
+    row.customer_resolution_mode = "existing"
+    row.resolved_customer_id = customer.id
+    row.customer_resolution_reason = reason
+    _stamp_resolution(row, actor_id=actor_id)
+    _mark_reviewing(batch)
+    return row
+
+
+def set_resolution_new(
+    db: Session,
+    batch: ImportBatch,
+    row: ImportRow,
+    *,
+    actor_id: int,
+    reason: str | None = None,
+) -> ImportRow:
+    """Resolve the row to explicitly create a NEW customer (B2-1, storage only)."""
+    _ensure_resolution_editable(row)
+    row.customer_resolution_mode = "new"
+    row.resolved_customer_id = None
+    row.customer_resolution_reason = reason
+    _stamp_resolution(row, actor_id=actor_id)
+    _mark_reviewing(batch)
+    return row
+
+
+def clear_resolution(
+    db: Session, batch: ImportBatch, row: ImportRow, *, actor_id: int
+) -> ImportRow:
+    """Clear the row's resolution back to unresolved (B2-1, storage only)."""
+    _ensure_resolution_editable(row)
+    row.customer_resolution_mode = None
+    row.resolved_customer_id = None
+    row.customer_resolution_reason = None
+    row.resolved_by_id = None
+    row.resolved_at = None
     _mark_reviewing(batch)
     return row
 

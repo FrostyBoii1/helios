@@ -9,6 +9,33 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Section B2-1: persisted same-customer resolution state (storage/API only)
+
+- **What:** Foundation for manual same-customer resolution. Adds five nullable
+  columns to `import_rows` — `resolved_customer_id` (FK customers, indexed),
+  `customer_resolution_mode` (null/`new`/`existing`), `customer_resolution_reason`,
+  `resolved_by_id` (FK users), `resolved_at` — plus a review-service API to set the
+  resolution to an **existing** live customer, set it to **new**, or **clear** it.
+  New admin-only endpoint `POST /imports/{batch}/rows/{row}/resolve-customer`
+  (`mode` = existing/new/clear). Editable only while the row is **pending**; locked
+  once approved/committed (reopen to change). Validates the target customer exists
+  and is not soft-deleted; never silently falls back from existing→new.
+- **Why:** record an explicit, auditable reviewer decision so multi-job customers
+  (e.g. two Phillip Schuman rows) can later be committed under one customer —
+  without any auto-merge.
+- **Files:** `backend/app/models/import_staging.py`, migration
+  `c7d8e9f0a1b2_import_row_customer_resolution.py`,
+  `backend/app/schemas/import_staging.py`, `backend/app/services/import_review.py`,
+  `backend/app/api/v1/endpoints/imports.py`, `backend/tests/test_import_resolution.py`.
+- **Temporary or permanent:** Permanent. **One additive migration** (all columns
+  nullable; existing rows read as unresolved = current behaviour; no backfill).
+- **Risks / follow-up:** **Storage only — does NOT affect commit-to-live, commit-
+  preview, or reverse yet.** Honouring the resolution at commit (create-vs-attach,
+  preview create-vs-attach counts, and a reverse that soft-deletes only the job for
+  an attached row) is **Section B2-2**, which is required before resolution has any
+  live effect. Frontend candidate actions are **Section B2-3**. The mode/customer
+  invariant is service-enforced (no DB CHECK, matching existing migration style).
+
 ## 2026-06-16 — Section C: conservative NMI "Same" carry-forward
 
 - **What:** At parse time, an NMI cell reading `Same` / `as above` / `ditto`

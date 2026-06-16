@@ -125,7 +125,14 @@ timestamps + `deleted_at`.
 (pre-edit snapshot), `context_text`, `review_status` (`ImportRowReviewStatus`:
 pending/approved/rejected/skipped/committed/reversed), `review_notes`,
 `reviewer_id`, `reviewed_at`, **`committed_customer_id` / `committed_job_id`**
-(set by commit; preserved as audit after reverse), timestamps.
+(set by commit; preserved as audit after reverse), timestamps. **B2-1 manual
+same-customer resolution (storage only):** `resolved_customer_id` FK →
+customers.id (indexed), `customer_resolution_mode` (null = unresolved → new
+customer at commit / `new` = explicit new / `existing` = attach to
+`resolved_customer_id`), `customer_resolution_reason`, `resolved_by_id` FK →
+users.id, `resolved_at`. These record a reviewer's pre-commit intent only; the
+mode/customer invariant is enforced in the review service, and commit-to-live /
+commit-preview / reverse do **not** read them yet (Section B2-2).
 
 **import_issues** — first-class data-quality flags per row. Columns: `id`,
 `row_id` FK, `batch_id` FK, `kind`, `severity` (`ImportIssueSeverity`:

@@ -91,6 +91,25 @@ class ImportRow(IntPkMixin, TimestampMixin, Base):
     )
     committed_job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True)
 
+    # ----- B2-1: manual same-customer resolution intent (STORAGE ONLY) ------- #
+    # The reviewer's explicit pre-commit choice for THIS row's customer:
+    #   * customer_resolution_mode NULL      -> unresolved; commit creates a new
+    #                                           customer (current default behaviour);
+    #   * customer_resolution_mode "new"     -> reviewer explicitly chose a new
+    #                                           customer (resolved_customer_id NULL);
+    #   * customer_resolution_mode "existing"-> attach the job to the EXISTING
+    #                                           customer in resolved_customer_id.
+    # B2-1 is storage only: commit-to-live / commit-preview / reverse do NOT read
+    # these yet (that is B2-2). The review service enforces the mode/customer
+    # invariant and only allows edits while the row is pending.
+    resolved_customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id"), nullable=True, index=True
+    )
+    customer_resolution_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    customer_resolution_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     batch: Mapped["ImportBatch"] = relationship(back_populates="rows")
     issues: Mapped[list["ImportIssue"]] = relationship(
         back_populates="row", cascade="all, delete-orphan"

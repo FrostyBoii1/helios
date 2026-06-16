@@ -88,10 +88,15 @@ These are stubbed/absent and represent the next phases:
   **(C — built)** a conservative NMI **"Same"** rule carries a previous real NMI
   forward only on a strong adjacent-row + same-base-property match, else keeps the
   review issue. **Section C is parse-time only** — existing staged batches need a
-  **fresh re-ingest/reparse** to pick it up. **(B2/B3 — proposed)** actual
-  multi-client linking/merge (exact-name auto-link, near-name manual resolution)
-  so multiple jobs/properties for one client share a customer file, instead of
-  always creating a new customer.
+  **fresh re-ingest/reparse** to pick it up. **(B2-1 — built, storage/API only)**
+  an import row can store an explicit manual same-customer resolution (attach to an
+  existing live customer, or new), editable while pending and locked at approval —
+  but it does **not** affect commit-to-live / commit-preview / reverse yet.
+  **(B2-2 — required next)** honour the resolution at commit (create-vs-attach), in
+  commit-preview, and in reverse (soft-delete only the job for an attached row);
+  **B2-2 is required before resolution has any live effect.** **(B2-3)** the
+  candidate-panel resolution UI. **(B3 — proposed)** auto-link/merge and
+  pending-row-to-pending-row resolution.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.
@@ -158,10 +163,12 @@ parser/review refinements are done. Reasonable next steps, in order:
 
 1. **Finish Section D** (Jobs list labels/filter/columns) — in progress; then run
    the pre-staging audit → stage → commit → push (see §7).
-2. **Import matching — B2/B3 (linking/merge)** — B1 advisory candidates and the
-   conservative NMI **"Same"** rule (C) have landed; the remaining work is actual
-   multi-client linking (exact-name auto-link, near-name manual resolution) behind
-   an explicit review/manual-resolution step — **no silent merges**.
+2. **Import matching — Section B2-2 (next)** — B1 advisory candidates, the NMI
+   **"Same"** rule (C), and B2-1 (persisted same-customer resolution, storage/API
+   only) have landed. B2-2 makes commit-to-live honour the resolution
+   (create-vs-attach), updates commit-preview, and makes reverse soft-delete only
+   the job for an attached row; then B2-3 wires the candidate-panel UI. Still
+   **no silent merges** — auto-link/merge is B3.
 3. **NAS file integration** (baseline priority #8) — link each job/customer to its
    NAS folder, list/upload/preview with permission gating; later, **document
    classification** feeding approval state. Heavier (storage mounts, path safety) —

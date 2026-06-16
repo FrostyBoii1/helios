@@ -22,6 +22,7 @@ from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.models.user import User
 from app.schemas.import_staging import (
     BulkApproveResult,
+    CustomerResolutionRequest,
     FieldRegistryRead,
     ImportBatchList,
     ImportBatchRead,
@@ -327,6 +328,45 @@ def get_row_match_candidates(
     confidence band. Does NOT merge, link, resolve, or write anything."""
     row = _row_or_404(db, batch_id, row_id)
     return [MatchCandidateRead(**c) for c in import_matching.find_candidates(db, row)]
+
+
+@router.post("/{batch_id}/rows/{row_id}/resolve-customer", response_model=ImportRowRead)
+def resolve_row_customer(
+    batch_id: int,
+    row_id: int,
+    payload: CustomerResolutionRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> ImportRowRead:
+    """Section B2-1 (storage only): set or clear this row's manual same-customer
+    resolution intent.
+
+    ``mode="existing"`` attaches the job to ``customer_id`` (must be an existing,
+    non-deleted customer); ``mode="new"`` explicitly resolves to a new customer;
+    ``mode="clear"`` clears it. Editable only while the row is pending (locked once
+    approved/committed). Admin only. Does NOT affect commit-to-live, commit-preview,
+    or reverse yet — that is Section B2-2.
+    """
+    batch = _get_batch(db, batch_id)
+    row = _row_or_404(db, batch_id, row_id)
+    try:
+        if payload.mode == "existing":
+            if payload.customer_id is None:
+                raise ValueError("customer_id is required when mode is 'existing'.")
+            import_review.set_resolution_existing(
+                db, batch, row, customer_id=payload.customer_id,
+                actor_id=admin.id, reason=payload.reason,
+            )
+        elif payload.mode == "new":
+            import_review.set_resolution_new(db, batch, row, actor_id=admin.id, reason=payload.reason)
+        else:  # "clear"
+            import_review.clear_resolution(db, batch, row, actor_id=admin.id)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    db.commit()
+    db.refresh(row)
+    return ImportRowRead.model_validate(row)
 
 
 @router.patch("/{batch_id}/rows/{row_id}", response_model=ImportRowRead)

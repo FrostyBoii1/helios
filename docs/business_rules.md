@@ -140,6 +140,14 @@ explains intent; protect important explicit decisions with tests, not docs alone
   allowing only clear leading dwelling prefixes like `House` / `Unit` / `Flat`.
   Otherwise it stays "Same" and keeps its `nmi_unmatched` review warning. **Prefer
   false negatives over false positives** — never cross-link two properties' meters.
+- **Same-customer resolution is explicit, manual, and recorded before commit
+  (Section B2-1).** A reviewer may store an intent on an import row to either
+  create a new customer or attach the job to an **existing live customer** — never
+  an auto-merge, never a silent combine, and (for now) never another pending import
+  row. The intent is editable only while the row is **pending** and locked once
+  approved (reopen to change). In B2-1 this intent is **storage only**: it does not
+  change commit-to-live, commit-preview, or reverse — honouring it at commit is
+  Section B2-2.
 - **Preserved import context appears once.** It lives in On Commit / Job Internal
   Notes — there are no duplicate "Imported review/source" panels, and the customer
   file does not show an imported-source panel. Raw workbook cells stay inspectable

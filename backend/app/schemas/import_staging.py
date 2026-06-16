@@ -69,6 +69,14 @@ class ImportRowRead(BaseModel):
     reviewed_at: datetime | None = None
     committed_customer_id: int | None = None
     committed_job_id: int | None = None
+    # B2-1: manual same-customer resolution intent (storage only; read-only here).
+    # mode: null = unresolved (new customer at commit), "new" = explicit new,
+    # "existing" = attach to resolved_customer_id. Does not affect commit yet (B2-2).
+    resolved_customer_id: int | None = None
+    customer_resolution_mode: str | None = None
+    customer_resolution_reason: str | None = None
+    resolved_by_id: int | None = None
+    resolved_at: datetime | None = None
     issues: list[ImportIssueRead] = []
 
 
@@ -170,6 +178,26 @@ class ReviewActionRequest(BaseModel):
     """Optional note for reject/skip/reopen actions."""
 
     notes: str | None = None
+
+
+class CustomerResolutionRequest(BaseModel):
+    """Set or clear a row's manual same-customer resolution (B2-1, storage only).
+
+    ``mode``:
+      * "existing" -> attach this row's job to ``customer_id`` (required; must be
+        an existing, non-deleted customer);
+      * "new"      -> explicitly resolve to a NEW customer (``customer_id`` ignored);
+      * "clear"    -> clear the resolution back to unresolved.
+
+    Editable only while the row is pending (the review service enforces the lock).
+    Does NOT affect commit-to-live, preview, or reverse yet (that is B2-2).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["existing", "new", "clear"]
+    customer_id: int | None = None
+    reason: str | None = None
 
 
 class IssueResolveRequest(BaseModel):
