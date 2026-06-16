@@ -133,6 +133,13 @@ explains intent; protect important explicit decisions with tests, not docs alone
 - **Approval references** ("Jemena Approval number 000410056") are preserved into
   Job Internal Notes; a bare approval **status** marker is not (its state lives on
   the approval label — see *Labels & approval*).
+- **NMI "Same" carries forward only when the site is clearly identical.** An NMI
+  written as `Same` / `as above` / `ditto` may copy the previous **real** NMI
+  forward **only** when the immediately previous job/ambiguous row has a plausible
+  real NMI **and** the two addresses normalize to the **same base property** —
+  allowing only clear leading dwelling prefixes like `House` / `Unit` / `Flat`.
+  Otherwise it stays "Same" and keeps its `nmi_unmatched` review warning. **Prefer
+  false negatives over false positives** — never cross-link two properties' meters.
 - **Preserved import context appears once.** It lives in On Commit / Job Internal
   Notes — there are no duplicate "Imported review/source" panels, and the customer
   file does not show an imported-source panel. Raw workbook cells stay inspectable

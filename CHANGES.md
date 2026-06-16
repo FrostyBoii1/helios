@@ -9,6 +9,29 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-16 — Section C: conservative NMI "Same" carry-forward
+
+- **What:** At parse time, an NMI cell reading `Same` / `as above` / `ditto`
+  carries the **previous related row's** real NMI forward **only** when the
+  immediately previous job/ambiguous row has a plausible real NMI **and** both
+  addresses normalize to the same base property (allowing one clear leading
+  dwelling prefix — `House 2 -`, `Unit B -`, `Flat 1/`). Otherwise it stays
+  "Same" and keeps its `nmi_unmatched` review warning. The carry resets at a
+  divider (section boundary), not at blank rows. Conservative — **prefer false
+  negatives over false positives**; never cross-link two properties' meters. The
+  resolved value flows only through `parsed["nmi_raw"]` (→ `build_details` →
+  commit); the raw cell keeps "Same" plus `nmi_same_carried` / `nmi_same_original`
+  audit markers. Independent of customer/name matching.
+- **Why:** the legacy workbook abbreviates a secondary dwelling's meter as
+  "Same"; this fills the real NMI safely without guessing across properties.
+- **Files:** `backend/app/services/import_parser.py`,
+  `backend/tests/test_import_nmi_same.py`.
+- **Temporary or permanent:** Permanent. **No migration.** Parse-time only — no
+  commit-to-live change except via the parsed NMI value.
+- **Risks / follow-up:** Affects **future** parses only; applying it to
+  already-staged batches needs a fresh re-ingest/reparse. "Same" is preserved as
+  context, not yet written into committed internal notes (optional follow-up).
+
 ## 2026-06-16 — Job labels, import parser/review refinements, dev reset tools (incl. commits 199cbf7, b5ad78e, 05bb381, 2255179)
 
 - **What:**
@@ -46,9 +69,10 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
   (+ catalogue seed). Parser/note refinements affect **future** parses only —
   applying them to already-staged/committed rows requires a re-ingest + recommit.
 - **Risks / follow-up:** Reset tools are destructive (gated, dev/non-prod only).
-  **In progress / proposed:** Section D (Jobs list labels/filter/columns) is in
-  progress; multi-client / similar-name matching (B) and conservative NMI "Same"
-  (C) are diagnosed/proposed, not implemented; future NAS document classification.
+  **Since landed:** Section D (Jobs list labels/filter/columns, `c2746a0`),
+  Section B1 advisory same-customer match candidates (`5a80cdd`), and conservative
+  NMI "Same" (C — see entry above). **Still proposed:** B2/B3 multi-client
+  linking/merge and future NAS document classification.
 
 ## 2026-06-14 — Spreadsheet import pipeline: parse → review → commit → reverse (commits f938100 → a60fe83)
 

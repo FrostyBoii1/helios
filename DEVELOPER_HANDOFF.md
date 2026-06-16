@@ -82,12 +82,16 @@ These are stubbed/absent and represent the next phases:
   now embeds Suburb/State + label chips and a single-label filter, with the
   customer-embedded jobs table widened (no scrollbar on desktop). Status-column
   cleanup is deliberately deferred (no `JobStatus` changes yet).
-- **Proposed, not implemented — import matching:** **(B)** multi-client /
-  similar-name matching so multiple jobs/properties for the same client link to
-  one customer file (exact-name auto-link, near-name manual resolution) instead of
-  always creating a new customer; **(C)** a conservative NMI **"Same"** rule
-  (only infer a meter from a strong adjacent-row + address match, else keep as a
-  review issue). Both are diagnosed/specified; neither is built.
+- **Import matching:** **(B1 — built, advisory only)** a read-only same-customer
+  candidate engine surfaces possible same-customer rows/customers (with reasons +
+  a confidence band) in the import row drawer; no merge/link/auto-action.
+  **(C — built)** a conservative NMI **"Same"** rule carries a previous real NMI
+  forward only on a strong adjacent-row + same-base-property match, else keeps the
+  review issue. **Section C is parse-time only** — existing staged batches need a
+  **fresh re-ingest/reparse** to pick it up. **(B2/B3 — proposed)** actual
+  multi-client linking/merge (exact-name auto-link, near-name manual resolution)
+  so multiple jobs/properties for one client share a customer file, instead of
+  always creating a new customer.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.
@@ -154,11 +158,10 @@ parser/review refinements are done. Reasonable next steps, in order:
 
 1. **Finish Section D** (Jobs list labels/filter/columns) — in progress; then run
    the pre-staging audit → stage → commit → push (see §7).
-2. **Import matching (B/C)** — multi-client / similar-name matching (one customer
-   file for multiple jobs/properties; exact-name auto-link, near-name manual
-   resolution) and the conservative NMI **"Same"** rule. Both are diagnosed/
-   specified; implement behind an explicit review/manual-resolution step — **no
-   silent merges**.
+2. **Import matching — B2/B3 (linking/merge)** — B1 advisory candidates and the
+   conservative NMI **"Same"** rule (C) have landed; the remaining work is actual
+   multi-client linking (exact-name auto-link, near-name manual resolution) behind
+   an explicit review/manual-resolution step — **no silent merges**.
 3. **NAS file integration** (baseline priority #8) — link each job/customer to its
    NAS folder, list/upload/preview with permission gating; later, **document
    classification** feeding approval state. Heavier (storage mounts, path safety) —

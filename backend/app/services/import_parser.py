@@ -285,6 +285,65 @@ def infer_distributor(nmi_raw: str) -> tuple[str | None, str | None]:
     return None, None
 
 
+# --------------------------------------------------------------------------- #
+# Section C: conservative "NMI = Same" carry-forward
+# --------------------------------------------------------------------------- #
+# A workbook NMI written as "Same" / "same" / "ditto" means "same meter as the
+# adjacent related job". We carry the previous related row's NMI forward ONLY
+# when the two addresses clearly normalise to the SAME base property — allowing
+# a leading secondary-dwelling prefix like "House 2 -" / "Unit B -". Conservative
+# by construction: prefer leaving "Same" unresolved (a false negative) over ever
+# cross-linking two different properties' meters (a false positive).
+
+_NMI_SAME_RE = re.compile(
+    r'^\s*"?\s*(?:same(?:\s+as\s+above)?|as\s+above|ditto)\s*"?\s*$',
+    re.IGNORECASE,
+)
+
+# A clear leading dwelling prefix = keyword + a unit identifier (a number like
+# "2"/"2a", or a single letter like "B") + a separator (-, comma, colon, slash).
+# Requiring the unit-id AND separator avoids stripping a street that merely
+# begins with one of these words (e.g. "House Road").
+_DWELLING_PREFIX_RE = re.compile(
+    r'^\s*(?:house|unit|flat|apartment|apt|villa|townhouse|lot|shop|suite)\s+'
+    r'(?:\d+[a-z]?|[a-z])\s*[-,:/]\s*',
+    re.IGNORECASE,
+)
+
+
+def _is_nmi_same(nmi: str | None) -> bool:
+    """True when the NMI cell literally says Same / as above / ditto (a pointer
+    to the previous row's meter, not a meter id of its own)."""
+    return bool(nmi and _NMI_SAME_RE.match(nmi))
+
+
+def _is_real_nmi(nmi: str | None) -> bool:
+    """True when a value is a plausible real meter id we can carry forward — not
+    blank, not a placeholder ('-', 'N/A'), and not itself a 'Same' marker."""
+    if not nmi:
+        return False
+    text = nmi.strip()
+    if not text or text.upper() in {"-", "N/A", "NA"} or _is_nmi_same(text):
+        return False
+    alnum = re.sub(r"[^A-Za-z0-9]", "", text)
+    return len(alnum) >= 6 and any(c.isdigit() for c in alnum)
+
+
+def _address_base(addr: str | None) -> str:
+    """Normalise an address for same-property comparison: strip ONE leading
+    dwelling prefix, lowercase, and collapse all punctuation/whitespace to single
+    spaces. No middle-word removal and no fuzzy matching — exact base only."""
+    stripped = _DWELLING_PREFIX_RE.sub("", (addr or "").strip())
+    return re.sub(r"[^a-z0-9]+", " ", stripped.lower()).strip()
+
+
+def _same_base_property(a: str | None, b: str | None) -> bool:
+    """True only when two addresses normalise to the exact same non-empty base
+    property (after stripping a leading House/Unit-style dwelling prefix)."""
+    base_a = _address_base(a)
+    return bool(base_a) and base_a == _address_base(b)
+
+
 def parse_msb(raw: str) -> str:
     t = raw.strip().lower()
     if t in {"", "no", "requested"}:
@@ -671,6 +730,12 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
         return norm_cell(ws.cell(row, c).value) if c else ""
 
     current_context = ""
+    # Section C: the immediately preceding job/ambiguous row's resolved NMI +
+    # address, so an NMI of "Same" can carry the previous meter forward when the
+    # site is clearly the same property. Reset at a divider (a section boundary);
+    # blank rows are incidental spacing and do not reset it.
+    prev_nmi: str | None = None
+    prev_address: str | None = None
     for r in range(header_row + 1, ws.max_row + 1):
         raw = {key: get(r, key) for key in cm}
         extra = {h: norm_cell(ws.cell(r, c).value) for h, c in unmapped_cols.items()}
@@ -687,6 +752,10 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
             continue
         if klass == "divider":
             current_context = ref or name_info["name"]
+            # A divider is an explicit section boundary: the "previous related
+            # row" context does not carry an NMI across it.
+            prev_nmi = None
+            prev_address = None
             yield ParsedRow(r, klass, ref, raw, {}, current_context or None, [])
             continue
 
@@ -694,6 +763,21 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
         phones = parse_phones(get(r, "phone"))
         emails = parse_emails(get(r, "email"))
         nmi_raw = get(r, "nmi")
+        nmi_address = get(r, "address")
+        # Section C: an NMI written as "Same" carries the previous related row's
+        # meter forward ONLY when the address is clearly the same base property
+        # (allowing a leading House/Unit dwelling prefix). If anything is unclear
+        # — no real previous NMI, or a different/uncertain address — it stays
+        # "Same" and keeps its nmi_unmatched review warning (prefer a false
+        # negative over cross-linking two properties' meters).
+        nmi_same_original: str | None = None
+        if (
+            _is_nmi_same(nmi_raw)
+            and _is_real_nmi(prev_nmi)
+            and _same_base_property(nmi_address, prev_address)
+        ):
+            nmi_same_original = nmi_raw
+            nmi_raw = prev_nmi
         dist_inferred, _prefix = infer_distributor(nmi_raw)
         dist_raw = get(r, "distributor")
         # Include the name-cell approval phrase (e.g. "ESSENTIAL APPROVED",
@@ -747,6 +831,11 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
             "distributor_inferred": dist_inferred,
             "retailer_raw": get(r, "retailer") or None,
             "nmi_raw": nmi_raw or None,
+            # Section C: marks an NMI that was carried forward from the previous
+            # same-property row because the cell said "Same". The original token
+            # is preserved as context; the raw cell still holds "Same" verbatim.
+            "nmi_same_carried": nmi_same_original is not None,
+            "nmi_same_original": nmi_same_original,
             "meter_no": get(r, "meter_no") or None,
             "no_of_panels": get(r, "no_of_panels") or None,
             "panel_raw": panel_raw or None,
@@ -813,5 +902,11 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
         # approved/pending through the same approval-state/label model.)
         if parsed["approval_state"] == "none" and needs_approval_from_panels(parsed["details"]):
             parsed["approval_state"] = "required"
+
+        # Section C: this job/ambiguous row becomes the "previous related row"
+        # for the next iteration. Store the RESOLVED nmi so chained secondary
+        # dwellings (House 2, then House 3) all carry the same meter forward.
+        prev_nmi = nmi_raw or None
+        prev_address = nmi_address or None
 
         yield ParsedRow(r, klass, ref, raw, parsed, current_context or None, issues)
