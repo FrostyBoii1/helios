@@ -9,6 +9,38 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-18 — D: reverse-then-recommit via an explicit "Prepare recommit" (no migration)
+
+- **What:** a reversed import row is no longer permanently terminal. A new admin action
+  **Prepare recommit** (`POST /imports/{batch}/rows/{row}/prepare-recommit`) returns a
+  reversed row to **pending** so it can be committed again as a **brand-new** Customer/Job.
+  It stamps the prior `committed_customer_id`/`committed_job_id` into a
+  `RECORD_IMPORT_RECOMMIT_PREPARED` activity, then clears the committed links, detaches any
+  group, and resets customer resolution. The old soft-deleted Job/Customer are **never**
+  restored; a recommit creates new records (new case number) through the **unchanged**
+  commit/preview engine, so preview == commit is preserved structurally.
+- **Why:** recover a mistakenly-reversed row (or re-commit after a fix) without re-ingesting
+  the whole workbook, while keeping the soft-delete-only / no-resurrection data model.
+- **Guard model (owner-approved C+E):** the generic `/reopen` **still 409s** for
+  committed/reversed rows — Prepare recommit is a separate, explicitly-audited path, and is
+  rejected (409) on any non-reversed row. Grouped rows **detach by default**: prepare never
+  dissolves a still-committed group or reclaims primary; the reviewer must explicitly
+  re-resolve / re-group before approving. A stale resolution pointing at a since-deleted
+  customer is still blocked by commit (`resolved_customer_deleted`), never silently created.
+- **No migration (owner decision 3):** `review_status` is a string column and `committed_*`
+  / `customer_group_id` are nullable, so the transition + link-clearing are plain updates;
+  the prior-id lineage lives in the append-only activity (no first-class columns added).
+- **Files:** `backend/app/models/enums.py` (new `RECORD_IMPORT_RECOMMIT_PREPARED`),
+  `backend/app/services/import_review.py` (`prepare_recommit`),
+  `backend/app/api/v1/endpoints/imports.py` (endpoint),
+  `frontend/src/lib/imports.ts`, `frontend/src/hooks/useImports.ts`,
+  `frontend/src/components/imports/PrepareRecommitModal.tsx` (new),
+  `frontend/src/components/imports/CommitReverseSection.tsx` (+ tests + docs).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** clearing the (previously immutable-after-reverse) committed links is
+  sanctioned ONLY inside this dedicated action and the prior ids are preserved in audit.
+  Recommit mints a new case number — the old one is permanently retired.
+
 ## 2026-06-18 — H: read-only candidate customer preview in the import review modal
 
 - **What:** In the "Possible same customer" panel (`MatchCandidatesPanel`), each candidate

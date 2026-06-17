@@ -118,8 +118,13 @@ explains intent; protect important explicit decisions with tests, not docs alone
   imported Customer/Job is pristine** (unedited since import, no tasks/documents/
   non-import activity, status unchanged, customer owns only that one job). It
   sets the row `reversed`, preserves the commit links as audit, and logs one
-  `RECORD_IMPORT_REVERSED` activity. Reversed rows are terminal (no re-open /
-  re-commit yet).
+  `RECORD_IMPORT_REVERSED` activity. **A reversed row is re-committable only via an
+  explicit "Prepare recommit" (Section D)** — it stamps the prior committed ids into a
+  `RECORD_IMPORT_RECOMMIT_PREPARED` activity, clears the committed links, detaches any
+  group, resets resolution, and returns the row to **pending**, so a later commit creates
+  **brand-new** Customer/Job records (the old soft-deleted records are never restored).
+  The **generic reopen stays blocked** for reversed rows — Prepare recommit is the only
+  path out.
 - **Parsed customer name is clean; nothing is lost.** Operational/source suffixes
   in the name cell — booked/prescreened dates, vm / on fb / pole / agreed, SV
   submitted, export/system notes, invoice-sent notes, free-form admin notes, a

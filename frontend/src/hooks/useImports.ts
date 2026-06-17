@@ -18,6 +18,7 @@ import {
   getRowMatchCandidates,
   listBatches,
   listRows,
+  prepareRecommit,
   removeGroupRow,
   resolveIssue,
   resolveRowCustomer,
@@ -140,6 +141,16 @@ export function useReverseRow(batchId: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (rowId: number) => reverseRow(batchId, rowId),
+    onSuccess: () => invalidateBatch(qc, batchId),
+  })
+}
+
+// Section D: prepare a reversed row for recommit. On success the row returns to
+// Pending, so invalidating the batch re-renders the drawer into the normal review UI.
+export function usePrepareRecommit(batchId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (rowId: number) => prepareRecommit(batchId, rowId),
     onSuccess: () => invalidateBatch(qc, batchId),
   })
 }

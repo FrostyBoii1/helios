@@ -140,7 +140,8 @@ These are stubbed/absent and represent the next phases:
   (only approved + eligible rows commit — grouped rows are never auto-approved), with the
   primary re-promoted to the lowest-index eligible member; reverse re-promotes a grouped
   primary and clears the group's committed link when the last grouped job is reversed;
-  committed/reversed rows can't be reopened via the review-status flow; a grouped
+  committed/reversed rows can't be reopened via the generic review-status flow (a reversed
+  row uses Section D "Prepare recommit" instead — see §5a); a grouped
   candidate can't be silently stolen (server hard-reject) — the modal offers "Join this
   group" using the candidate's `customer_group_id`; the match-candidates cache is
   invalidated on any batch change. **(Group read-model UI — built)** every cached
@@ -262,7 +263,18 @@ own commit; see CHANGES.md):
 - **C3a/C3b — scoped reverse**: `GET …/reverse-check` + `POST …/reverse`
   (per-row) soft-delete the created Customer + Job **only** while pristine
   (re-checked server-side), set the row `reversed`, log `RECORD_IMPORT_REVERSED`;
-  UI confirm modal + read-only "Reversed" state.
+  UI confirm modal + "Reversed" state with a **Prepare recommit** action.
+- **D — reverse-then-recommit (built)**: `POST …/rows/{id}/prepare-recommit`
+  (admin; 409 unless the row is `reversed`) is the ONLY sanctioned exit from the
+  terminal `reversed` state — the generic `/reopen` still 409s for committed/reversed
+  rows. `prepare_recommit` stamps the prior `committed_*` ids into a
+  `RECORD_IMPORT_RECOMMIT_PREPARED` activity, clears the committed links, detaches any
+  group (without dissolving a still-committed group or reclaiming primary), resets
+  resolution, and returns the row to `pending`. It never approves, commits, or touches
+  the soft-deleted Job/Customer; a recommit then flows through the **unchanged**
+  commit/preview engine and creates **brand-new** records (no migration — `details`
+  live in the existing string-enum/activity columns). UI: a "Prepare recommit" button +
+  confirm modal on the reversed row banner (extra group-detach warning for grouped rows).
 - **Case-year guard**: a row whose derived case-number year is outside
   `2020 … current year + 1` is excluded (`invalid_case_year`) from both preview
   and commit — protects against malformed source dates minting `SCS-202-…`.

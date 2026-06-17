@@ -87,6 +87,10 @@ class ActivityType(str, enum.Enum):
     # One per job whose import was reversed (Phase C3) — the created Customer/Job
     # were soft-deleted because they were still pristine.
     RECORD_IMPORT_REVERSED = "record_import_reversed"
+    # Section D: a reversed row was explicitly prepared for recommit — its committed
+    # links were cleared (prior ids preserved in this entry's meta) and it returned to
+    # Pending. The old soft-deleted records are NOT restored; a recommit creates new ones.
+    RECORD_IMPORT_RECOMMIT_PREPARED = "record_import_recommit_prepared"
 
 
 # --------------------------------------------------------------------------- #
@@ -136,7 +140,7 @@ class ImportRowReviewStatus(str, enum.Enum):
     REJECTED = "rejected"
     SKIPPED = "skipped"
     COMMITTED = "committed"  # set by the commit phase (C1)
-    REVERSED = "reversed"    # set by the reverse phase (C3); terminal for now
+    REVERSED = "reversed"    # set by reverse (C3); terminal except via D prepare_recommit
 
 
 class ImportIssueSeverity(str, enum.Enum):

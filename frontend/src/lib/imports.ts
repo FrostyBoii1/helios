@@ -195,4 +195,12 @@ export function reverseRow(batchId: number, rowId: number): Promise<ReverseResul
   return apiFetch<ReverseResult>(`/imports/${batchId}/rows/${rowId}/reverse`, { method: 'POST', body: {} })
 }
 
+// Section D: prepare a REVERSED row to be committed again — clears the committed links
+// (prior ids preserved in an audit Activity), detaches any group, resets resolution, and
+// returns the row to Pending. The old soft-deleted records are NOT restored. 409 unless
+// the row is reversed (the generic /reopen stays blocked for reversed rows).
+export function prepareRecommit(batchId: number, rowId: number): Promise<ImportRow> {
+  return apiFetch<ImportRow>(`/imports/${batchId}/rows/${rowId}/prepare-recommit`, { method: 'POST', body: {} })
+}
+
 export type { RowAction, ImportRowReviewStatus }

@@ -15,7 +15,12 @@ from typing import Any
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.enums import ImportBatchStatus, ImportRowClass, ImportRowReviewStatus
+from app.models.enums import (
+    ActivityType,
+    ImportBatchStatus,
+    ImportRowClass,
+    ImportRowReviewStatus,
+)
 from app.models.import_staging import (
     ImportBatch,
     ImportCustomerGroup,
@@ -23,6 +28,7 @@ from app.models.import_staging import (
     ImportRow,
 )
 from app.schemas.import_staging import PARSED_EDIT_FIELDS
+from app.services.activity import log_activity
 from app.services.customers import get_customer
 from app.services.import_field_registry import allowed_details_paths
 
@@ -182,9 +188,10 @@ def set_review_status(
             raise ValueError("Only job/ambiguous rows can be approved")
         if has_unresolved_error(row):
             raise ValueError("Resolve all error-severity issues before approving")
-    # D (stabilization): committed and reversed rows are terminal — they own (or owned)
-    # live records, so they cannot be reopened to pending through the normal review
-    # path. A reverse-then-recommit flow is a separate, larger guarded design.
+    # Committed and reversed rows are terminal for the GENERIC reopen — they own (or
+    # owned) live records, so they cannot be reopened to pending through the normal
+    # review path. A reversed row's only sanctioned exit is the dedicated
+    # ``prepare_recommit`` (Section D); this generic guard deliberately stays in place.
     if new_status == ImportRowReviewStatus.PENDING and row.review_status in (
         ImportRowReviewStatus.COMMITTED.value,
         ImportRowReviewStatus.REVERSED.value,
@@ -195,6 +202,80 @@ def set_review_status(
     row.reviewed_at = _now()
     if notes is not None:
         row.review_notes = notes
+    _mark_reviewing(batch)
+    return row
+
+
+def prepare_recommit(
+    db: Session, batch: ImportBatch, row: ImportRow, *, actor_id: int
+) -> ImportRow:
+    """Section D: prepare a REVERSED row to be committed again as a BRAND-NEW
+    Customer/Job. This is the ONLY sanctioned exit from the terminal REVERSED state —
+    the generic reopen (``set_review_status`` -> PENDING) stays a hard block for
+    committed/reversed rows.
+
+    Owner-approved C+E behaviour:
+      * stamps the prior ``committed_customer_id``/``committed_job_id`` into an audit
+        Activity BEFORE clearing them — the old live records stay soft-deleted and are
+        NEVER restored;
+      * clears ``committed_customer_id`` + ``committed_job_id`` so ``classify_row`` no
+        longer treats the row as ``already_committed``;
+      * DETACHES the row from any group (clears ``customer_group_id`` + 'group' mode)
+        WITHOUT touching the group's structure — it never re-promotes/dissolves a group
+        that still has committed members, and never reclaims primary (decision 5);
+      * resets ALL customer resolution to unresolved, so the reviewer must explicitly
+        re-resolve (Use this customer / new / re-group) before approving;
+      * returns the row to PENDING (NOT approved, NOT committed).
+
+    The old soft-deleted Job/Customer are NEVER mutated. On the next normal
+    approve+commit the row creates fresh live records via the unchanged commit engine;
+    a stale resolution pointing at a since-deleted customer is re-validated and blocked
+    by commit, never silently created.
+    """
+    if row.review_status != ImportRowReviewStatus.REVERSED.value:
+        raise ValueError("Only reversed rows can be prepared for recommit.")
+
+    prior_customer_id = row.committed_customer_id
+    prior_job_id = row.committed_job_id
+
+    # Audit FIRST: preserve the prior committed ids before they are cleared (decision 4).
+    # No migration (decision 3) — the lineage lives in this append-only Activity's meta.
+    log_activity(
+        db,
+        activity_type=ActivityType.RECORD_IMPORT_RECOMMIT_PREPARED,
+        description=(
+            "Reversed import prepared for recommit; the row returns to Pending and will "
+            "create a NEW Customer/Job on commit. The reversed records stay soft-deleted."
+        ),
+        actor_id=actor_id,
+        customer_id=prior_customer_id,
+        job_id=prior_job_id,
+        meta={
+            "batch_id": row.batch_id,
+            "row_id": row.id,
+            "prior_committed_customer_id": prior_customer_id,
+            "prior_committed_job_id": prior_job_id,
+        },
+    )
+
+    # Clear the committed links (sanctioned ONLY inside this dedicated action).
+    row.committed_customer_id = None
+    row.committed_job_id = None
+    # Detach this row from any group WITHOUT reconciling the group (deliberately NOT
+    # _leave_group: a still-committed group must keep its members/primary/shared
+    # customer). Then wipe ALL resolution so the reviewer re-resolves from scratch.
+    _clear_group_fields(row)
+    row.customer_resolution_mode = None
+    row.resolved_customer_id = None
+    row.customer_resolution_reason = None
+    row.resolved_by_id = None
+    row.resolved_at = None
+
+    # Back to PENDING — NOT approved, NOT committed. The override/resolution locks lift
+    # naturally now that committed_* are null and the status is no longer REVERSED.
+    row.review_status = ImportRowReviewStatus.PENDING.value
+    row.reviewer_id = actor_id
+    row.reviewed_at = _now()
     _mark_reviewing(batch)
     return row
 

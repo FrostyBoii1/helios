@@ -592,6 +592,29 @@ def reopen_row(
     return _action(batch_id, row_id, ImportRowReviewStatus.PENDING, None, db, admin)
 
 
+@router.post("/{batch_id}/rows/{row_id}/prepare-recommit", response_model=ImportRowRead)
+def prepare_recommit_row(
+    batch_id: int, row_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)
+) -> ImportRowRead:
+    """Section D: prepare a REVERSED row to be committed again as a NEW Customer/Job.
+
+    The ONLY sanctioned exit from the terminal REVERSED state — the generic /reopen
+    stays a 409 for committed/reversed rows. Clears the committed links (stamping the
+    prior ids into an audit Activity first), detaches any group, resets resolution, and
+    returns the row to Pending. Admin only. Does NOT approve, commit, or touch the
+    soft-deleted Job/Customer. 409 if the row is not reversed.
+    """
+    batch = _get_batch(db, batch_id)
+    row = _row_or_404(db, batch_id, row_id)
+    try:
+        import_review.prepare_recommit(db, batch, row, actor_id=admin.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    db.commit()
+    db.refresh(row)
+    return ImportRowRead.model_validate(row)
+
+
 @router.patch("/{batch_id}/issues/{issue_id}", response_model=ImportIssueRead)
 def resolve_issue(
     batch_id: int,
