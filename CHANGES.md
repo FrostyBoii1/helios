@@ -9,6 +9,19 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Section B3-1: "Recommended" marker on strong same-customer candidates (frontend only)
+
+- **What:** In the import modal's "Possible same customer" panel, **strong**
+  candidates now show a subtle **★ Recommended** badge (derived from the existing
+  B1 confidence band). Cosmetic only — it does **not** auto-select, write resolution,
+  or change preview/commit/reverse/grouping; the reviewer still confirms explicitly
+  via "Use this customer". Medium/weak candidates stay plain advisory; reasons remain
+  visible; all B2-3 actions are unchanged.
+- **Why:** guide reviewers to high-confidence matches without any silent/auto merge.
+- **Files (frontend only):** `frontend/src/components/imports/MatchCandidatesPanel.tsx`.
+- **Temporary or permanent:** Permanent. No backend/type change (uses the
+  confidence already returned by the B1 match-candidates endpoint).
+
 ## 2026-06-17 — Section B2-3: import-modal UI for same-customer resolution (frontend only)
 
 - **What:** The B1 "Possible same customer" panel in the import row modal is now

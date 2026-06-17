@@ -1,4 +1,4 @@
-// Section B1/B2-3 — "Possible same customer" panel for the import row modal.
+// Section B1/B2-3/B3-1 — "Possible same customer" panel for the import row modal.
 // B1 surfaced advisory candidates (read-only, with reasons + a confidence band).
 // B2-3 makes live-customer candidates ACTIONABLE: when `onUseCustomer` is provided
 // (an editable/pending row), a candidate that resolves to an existing live customer
@@ -6,6 +6,11 @@
 // committed yet have no live customer and stay advisory — pending-row linking is not
 // supported yet (that is future work). With no action props it renders as the
 // original advisory panel.
+//
+// B3-1 adds a purely cosmetic "Recommended" marker on STRONG candidates (derived
+// from the existing B1 confidence band — no new state/decision system). Recommended
+// is NOT auto-selected: it never writes resolution and never changes preview/commit/
+// reverse — the reviewer still confirms explicitly via "Use this customer".
 
 import { Link } from 'react-router-dom'
 
@@ -75,6 +80,16 @@ export function MatchCandidatesPanel({
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${CONF_DOT[c.confidence]}`} />
                 <span className="font-medium text-fg">{c.name || '(no name)'}</span>
                 <span className="text-[10px] uppercase tracking-wide text-faint">{c.confidence}</span>
+                {/* B3-1: cosmetic "Recommended" marker on strong candidates only.
+                    Advisory — it never auto-selects; the reviewer still confirms. */}
+                {c.confidence === 'strong' && (
+                  <span
+                    className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200"
+                    title="High-confidence match — recommended, but never auto-selected. Confirm explicitly with “Use this customer”."
+                  >
+                    ★ Recommended
+                  </span>
+                )}
                 {liveId != null ? (
                   <Link
                     to={`/customers/${liveId}`}

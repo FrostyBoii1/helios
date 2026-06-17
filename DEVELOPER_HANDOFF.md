@@ -99,9 +99,10 @@ These are stubbed/absent and represent the next phases:
   pre-existing customer**. **(B2-3 — built)** the import row modal now exposes the
   resolution UI: a pending row's "Possible same customer" candidates get a "Use this
   customer" action (live customers only), plus Create-new / Clear / existing-customer
-  search and a resolution banner; locked rows show it read-only. **(B3 — proposed)**
-  auto-link/merge and pending-row-to-pending-row
-  resolution.
+  search and a resolution banner; locked rows show it read-only. **(B3-1 — built)**
+  strong candidates show a cosmetic **★ Recommended** badge (from the B1 confidence
+  band) — advisory only, never auto-selected. **(B3 — proposed)** auto-link/merge and
+  pending-row-to-pending-row resolution (grouping storage/commit/preview/reverse).
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.
