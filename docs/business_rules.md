@@ -141,11 +141,14 @@ explains intent; protect important explicit decisions with tests, not docs alone
   Otherwise it stays "Same" and keeps its `nmi_unmatched` review warning. **Prefer
   false negatives over false positives** — never cross-link two properties' meters.
 - **Same-customer resolution is explicit, manual, and recorded before commit
-  (Section B2-1/B2-2).** A reviewer may store an intent on an import row to either
-  create a new customer or attach the job to an **existing live customer** — never
-  an auto-merge, never a silent combine, and never another pending import row. The
-  intent is editable only while the row is **pending** and locked once approved
-  (reopen to change).
+  (Section B2-1/B2-2/B2-3).** A reviewer may store an intent on an import row to
+  either create a new customer or attach the job to an **existing live customer** —
+  never an auto-merge, never a silent combine, and never another pending import row.
+  The intent is editable only while the row is **pending** and locked once approved
+  (reopen to change). The reviewer makes this choice **in the import row modal**
+  (Section B2-3): the "Possible same customer" candidate suggestions are **advisory**
+  — they remain read-only hints, and a customer is attached only by an explicit
+  "Use this customer" / search selection or "Create new customer".
 - **A resolved "existing" row attaches its job to that customer at commit
   (Section B2-2).** Commit creates a **new Job under the resolved existing
   customer** and does **not** create or mutate a customer; the provenance activity

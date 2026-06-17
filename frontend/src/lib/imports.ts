@@ -3,6 +3,7 @@
 import { apiFetch } from '@/lib/api'
 import type {
   BulkApproveResult,
+  CustomerResolutionRequest,
   FieldRegistry,
   ImportBatch,
   ImportBatchList,
@@ -63,6 +64,19 @@ export function getRowMatchCandidates(
 
 export function editRow(batchId: number, rowId: number, edit: ImportRowEdit): Promise<ImportRow> {
   return apiFetch<ImportRow>(`/imports/${batchId}/rows/${rowId}`, { method: 'PATCH', body: edit })
+}
+
+// Section B2-3: set or clear the row's manual same-customer resolution
+// (mode existing/new/clear). Returns the updated row.
+export function resolveRowCustomer(
+  batchId: number,
+  rowId: number,
+  payload: CustomerResolutionRequest,
+): Promise<ImportRow> {
+  return apiFetch<ImportRow>(`/imports/${batchId}/rows/${rowId}/resolve-customer`, {
+    method: 'POST',
+    body: payload,
+  })
 }
 
 type RowAction = 'approve' | 'reject' | 'skip' | 'reopen'

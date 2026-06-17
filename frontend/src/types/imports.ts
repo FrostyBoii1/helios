@@ -161,7 +161,25 @@ export interface ImportRow {
   reviewed_at: string | null
   committed_customer_id: number | null
   committed_job_id: number | null
+  // B2-1/B2-2: manual same-customer resolution intent. mode: null = unresolved
+  // (a new customer is created at commit), 'new' = explicit new, 'existing' =
+  // attach the job to resolved_customer_id. Editable only while pending.
+  resolved_customer_id: number | null
+  customer_resolution_mode: CustomerResolutionMode | null
+  customer_resolution_reason: string | null
+  resolved_by_id: number | null
+  resolved_at: string | null
   issues: ImportIssue[]
+}
+
+// Stored resolution mode on a row (null = unresolved). The resolve REQUEST also
+// accepts 'clear' to reset back to unresolved.
+export type CustomerResolutionMode = 'existing' | 'new'
+
+export interface CustomerResolutionRequest {
+  mode: 'existing' | 'new' | 'clear'
+  customer_id?: number | null
+  reason?: string | null
 }
 
 export interface ImportRowList {

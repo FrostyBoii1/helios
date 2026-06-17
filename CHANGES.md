@@ -9,6 +9,31 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Section B2-3: import-modal UI for same-customer resolution (frontend only)
+
+- **What:** The B1 "Possible same customer" panel in the import row modal is now
+  actionable (on a pending row). A reviewer can:
+  - **Use this customer** on a candidate that resolves to an existing live customer
+    (live-customer candidates, and batch-row candidates whose sibling is already
+    committed) → calls the B2-1 resolve endpoint with `mode=existing`;
+  - **Create new customer** (`mode=new`) and **Clear resolution** (`mode=clear`);
+  - **Search existing customers** (reuses `GET /customers?q=`) to attach to any live
+    customer not surfaced as a candidate.
+  A resolution **banner** shows the current state ("Will attach this job to existing
+  customer: …" / "Will create a new customer."), with the reason and a customer link.
+  Pending batch-row candidates (no live customer yet) stay **advisory only**
+  ("pending — can't select yet"). Controls are shown only while the row is pending;
+  locked rows (approved/committed/reversed) show the resolution read-only.
+- **Why:** make the B2-1/B2-2 backend resolution reachable to reviewers, so they can
+  consolidate multi-job customers during import review.
+- **Files (frontend only):** `frontend/src/components/imports/CustomerResolutionSection.tsx`
+  (new), `MatchCandidatesPanel.tsx`, `ImportRowModal.tsx`, `hooks/useImports.ts`,
+  `lib/imports.ts`, `types/imports.ts`.
+- **Temporary or permanent:** Permanent. **No backend change** (uses the existing
+  B2-1 resolve endpoint + B2-2 commit/preview/reverse). No migration.
+- **Risks / follow-up:** Resolving to a **pending** import row (a batch-row candidate
+  without a live customer) is intentionally not selectable yet — that's future work.
+
 ## 2026-06-17 — Section B2-2: wire same-customer resolution into commit / preview / reverse
 
 - **What:** The B2-1 resolution intent now has live effect.

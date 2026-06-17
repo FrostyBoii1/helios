@@ -96,8 +96,11 @@ These are stubbed/absent and represent the next phases:
   target **fails** the row, never a silent fallback); commit-preview shows
   attach-vs-create + `would_attach_jobs` and excludes an invalid resolution; and
   **reverse of an attached row soft-deletes only the imported Job, never the
-  pre-existing customer**. **(B2-3 — next)** the candidate-panel resolution UI
-  (frontend). **(B3 — proposed)** auto-link/merge and pending-row-to-pending-row
+  pre-existing customer**. **(B2-3 — built)** the import row modal now exposes the
+  resolution UI: a pending row's "Possible same customer" candidates get a "Use this
+  customer" action (live customers only), plus Create-new / Clear / existing-customer
+  search and a resolution banner; locked rows show it read-only. **(B3 — proposed)**
+  auto-link/merge and pending-row-to-pending-row
   resolution.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
@@ -165,11 +168,11 @@ parser/review refinements are done. Reasonable next steps, in order:
 
 1. **Finish Section D** (Jobs list labels/filter/columns) — in progress; then run
    the pre-staging audit → stage → commit → push (see §7).
-2. **Import matching — Section B2-3 (next)** — B1 advisory candidates, the NMI
-   **"Same"** rule (C), B2-1 (persisted resolution), and B2-2 (resolution wired
-   into commit/preview/reverse) have landed. B2-3 wires the candidate-panel
-   resolution UI (frontend: choose attach-to-existing / new / clear). Still
-   **no silent merges** — auto-link/merge is B3.
+2. **Import matching — Section B3 (next)** — B1 advisory candidates, the NMI
+   **"Same"** rule (C), B2-1 (persisted resolution), B2-2 (resolution wired into
+   commit/preview/reverse), and B2-3 (the import-modal resolution UI) have all
+   landed. B3 is the remaining work: auto-link/merge for identical names and
+   pending-row-to-pending-row resolution. Still **no silent merges**.
 3. **NAS file integration** (baseline priority #8) — link each job/customer to its
    NAS folder, list/upload/preview with permission gating; later, **document
    classification** feeding approval state. Heavier (storage mounts, path safety) —

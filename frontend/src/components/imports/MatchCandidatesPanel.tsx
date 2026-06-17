@@ -1,7 +1,11 @@
-// Section B1 — ADVISORY "Possible same customer" panel for the import row modal.
-// Read-only: it surfaces candidate customers/rows with reasons + a confidence band
-// so a reviewer can spot continuity issues. It performs NO merge/link/resolve and
-// has NO action controls — matching is intentionally not enabled yet (B2/B3).
+// Section B1/B2-3 — "Possible same customer" panel for the import row modal.
+// B1 surfaced advisory candidates (read-only, with reasons + a confidence band).
+// B2-3 makes live-customer candidates ACTIONABLE: when `onUseCustomer` is provided
+// (an editable/pending row), a candidate that resolves to an existing live customer
+// gets a "Use this customer" action. Batch-row candidates whose sibling hasn't been
+// committed yet have no live customer and stay advisory — pending-row linking is not
+// supported yet (that is future work). With no action props it renders as the
+// original advisory panel.
 
 import { Link } from 'react-router-dom'
 
@@ -18,11 +22,30 @@ const CONF_DOT: Record<string, string> = {
   weak: 'bg-slate-400',
 }
 
-export function MatchCandidatesPanel({ batchId, rowId }: { batchId: number; rowId: number }) {
+interface MatchCandidatesPanelProps {
+  batchId: number
+  rowId: number
+  // B2-3 (optional): when provided AND editable, a live-customer candidate shows a
+  // "Use this customer" action. Omit (or editable=false) for an advisory panel.
+  editable?: boolean
+  resolvedCustomerId?: number | null
+  onUseCustomer?: (customerId: number) => void
+  busy?: boolean
+}
+
+export function MatchCandidatesPanel({
+  batchId,
+  rowId,
+  editable = false,
+  resolvedCustomerId = null,
+  onUseCustomer,
+  busy = false,
+}: MatchCandidatesPanelProps) {
   const { data, isLoading } = useRowMatchCandidates(batchId, rowId)
   const candidates = data ?? []
   // Nothing to show: no candidates (or still loading) — stay out of the way.
   if (isLoading || candidates.length === 0) return null
+  const actionable = editable && typeof onUseCustomer === 'function'
 
   return (
     <section className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] p-3">
@@ -31,35 +54,67 @@ export function MatchCandidatesPanel({ batchId, rowId }: { batchId: number; rowI
           Possible same customer ({candidates.length})
         </h3>
         <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-200/80">
-          Advisory · no action yet
+          {actionable ? 'Pick to attach' : 'Advisory'}
         </span>
       </div>
       <p className="mb-2 text-xs text-amber-200/70">
-        This row may belong to an existing customer or another row in this batch. Review
-        only — automatic matching/linking is not enabled yet.
+        {actionable
+          ? 'Attach this job to an existing customer, or leave it to create a new one. Only existing live customers can be selected.'
+          : 'This row may belong to an existing customer or another row in this batch. Review only.'}
       </p>
       <ul className="flex flex-col gap-1.5">
-        {candidates.map((c, i) => (
-          <li key={i} className={`rounded border px-2 py-1.5 text-xs ${CONF_BOX[c.confidence]}`}>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${CONF_DOT[c.confidence]}`} />
-              <span className="font-medium text-fg">{c.name || '(no name)'}</span>
-              <span className="text-[10px] uppercase tracking-wide text-faint">{c.confidence}</span>
-              {c.kind === 'live_customer' && c.customer_id != null ? (
-                <Link
-                  to={`/customers/${c.customer_id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-brand-400 hover:underline"
-                >
-                  existing customer #{c.customer_id}
-                </Link>
-              ) : (
-                <span className="text-faint">batch row #{c.source_row_index}</span>
-              )}
-            </div>
-            <div className="mt-0.5 break-words text-faint">{c.reasons.join(' · ')}</div>
-          </li>
-        ))}
+        {candidates.map((c, i) => {
+          // customer_id is set for live_customer candidates and for batch-row
+          // candidates whose sibling has already been committed (a live customer).
+          const liveId = c.customer_id
+          const selected = liveId != null && liveId === resolvedCustomerId
+          const selectable = actionable && liveId != null && !selected
+          return (
+            <li key={i} className={`rounded border px-2 py-1.5 text-xs ${CONF_BOX[c.confidence]}`}>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${CONF_DOT[c.confidence]}`} />
+                <span className="font-medium text-fg">{c.name || '(no name)'}</span>
+                <span className="text-[10px] uppercase tracking-wide text-faint">{c.confidence}</span>
+                {liveId != null ? (
+                  <Link
+                    to={`/customers/${liveId}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-brand-400 hover:underline"
+                  >
+                    existing customer #{liveId}
+                  </Link>
+                ) : (
+                  <span className="text-faint">batch row #{c.source_row_index}</span>
+                )}
+                {/* B2-3 action / state (only on an editable row). */}
+                {actionable && (
+                  <span className="ml-auto">
+                    {selected ? (
+                      <span className="font-medium text-emerald-300">Selected ✓</span>
+                    ) : selectable ? (
+                      <button
+                        type="button"
+                        onClick={() => onUseCustomer!(liveId!)}
+                        disabled={busy}
+                        className="rounded border border-brand-500/40 bg-brand-500/10 px-2 py-0.5 font-medium text-brand-200 hover:bg-brand-500/20 disabled:opacity-50"
+                      >
+                        Use this customer
+                      </button>
+                    ) : (
+                      <span
+                        className="text-faint"
+                        title="This batch row hasn't been committed yet, so it has no live customer to attach to."
+                      >
+                        pending — can’t select yet
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+              <div className="mt-0.5 break-words text-faint">{c.reasons.join(' · ')}</div>
+            </li>
+          )
+        })}
       </ul>
     </section>
   )

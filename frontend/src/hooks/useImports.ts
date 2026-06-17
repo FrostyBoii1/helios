@@ -15,12 +15,13 @@ import {
   listBatches,
   listRows,
   resolveIssue,
+  resolveRowCustomer,
   reverseRow,
   rowAction,
   uploadBatch,
   type RowAction,
 } from '@/lib/imports'
-import type { ImportRowEdit, ListRowsParams } from '@/types/imports'
+import type { CustomerResolutionRequest, ImportRowEdit, ListRowsParams } from '@/types/imports'
 
 const keys = {
   all: ['imports'] as const,
@@ -158,6 +159,17 @@ export function useResolveIssue(batchId: number) {
   return useMutation({
     mutationFn: ({ issueId, note }: { issueId: number; note?: string }) =>
       resolveIssue(batchId, issueId, note),
+    onSuccess: () => invalidateBatch(qc, batchId),
+  })
+}
+
+// Section B2-3: set/clear a row's manual same-customer resolution. invalidateBatch
+// refetches the row + commit-preview so attach-vs-create reflects the new state.
+export function useResolveRowCustomer(batchId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ rowId, payload }: { rowId: number; payload: CustomerResolutionRequest }) =>
+      resolveRowCustomer(batchId, rowId, payload),
     onSuccess: () => invalidateBatch(qc, batchId),
   })
 }
