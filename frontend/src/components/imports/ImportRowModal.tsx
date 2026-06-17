@@ -302,6 +302,10 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const committed = row.review_status === 'committed'
   const reversed = row.review_status === 'reversed'
   const locked = committed || reversed
+  // J / C (stabilization): only a PENDING row offers active review + resolution
+  // controls. Approved/rejected/skipped are finalized — they show the selected
+  // state + Reopen only, and a read-only resolution.
+  const isPending = row.review_status === 'pending'
   // An already-approved row shows a neutral "Approved" state instead of a
   // clickable Approve button (re-clicking is harmless but confusing).
   const approved = row.review_status === 'approved'
@@ -344,7 +348,7 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           this job to an existing customer, create a new one, or clear the choice.
           Locked rows show the resolution read-only. */}
       {(row.row_class === 'job' || row.row_class === 'ambiguous') && (
-        <CustomerResolutionSection batchId={batchId} row={row} editable={notesEditable} />
+        <CustomerResolutionSection batchId={batchId} row={row} editable={isPending} />
       )}
       {/* Phase 3b-1: registry-driven structured read-only view. Falls back to the
           flat fields below (with a hint) for rows staged before structured parsing. */}
@@ -440,44 +444,40 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
         </div>
       )}
 
-      {/* Review actions — committed/reversed rows are locked (live records). */}
+      {/* Review actions. Committed/reversed rows are locked (live records). A pending
+          row picks an outcome (Approve / Reject / Skip, no Reopen); a finalized row
+          (approved / rejected / skipped) shows its selected state + Reopen only. */}
       {locked ? (
         <CommitReverseSection batchId={batchId} row={row} />
-      ) : (
+      ) : isPending ? (
         <>
           <section className="flex flex-wrap items-center gap-2">
-            {approved ? (
-              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-300">
-                ✓ Approved
-              </span>
-            ) : (
-              <button
-                onClick={() => handleAction('approve')}
-                disabled={busy || approveDisabledReason != null}
-                title={approveDisabledReason ?? undefined}
-                className="btn-primary disabled:opacity-50"
-              >
-                Approve
-              </button>
-            )}
             <button
-              onClick={() => handleAction('reject')}
-              disabled={busy}
-              className="btn-secondary"
+              onClick={() => handleAction('approve')}
+              disabled={busy || approveDisabledReason != null}
+              title={approveDisabledReason ?? undefined}
+              className="btn-primary disabled:opacity-50"
             >
+              Approve
+            </button>
+            <button onClick={() => handleAction('reject')} disabled={busy} className="btn-secondary">
               Reject
             </button>
             <button onClick={() => handleAction('skip')} disabled={busy} className="btn-secondary">
               Skip
             </button>
-            <button onClick={() => handleAction('reopen')} disabled={busy} className="btn-secondary">
-              Reopen
-            </button>
           </section>
-          {!approved && approveDisabledReason && (
+          {approveDisabledReason && (
             <p className="-mt-3 text-xs text-amber-300">{approveDisabledReason}</p>
           )}
         </>
+      ) : (
+        <section className="flex flex-wrap items-center gap-2">
+          <ReviewStatusBadge status={row.review_status} />
+          <button onClick={() => handleAction('reopen')} disabled={busy} className="btn-secondary">
+            Reopen
+          </button>
+        </section>
       )}
         </aside>
 

@@ -9,6 +9,42 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — B2/B3 stabilization (Phase 2): candidate dedup + status-aware modal
+
+- **What:** Four import-review stabilization fixes (no schema change):
+  - **Candidate dedup (B):** `import_matching.find_candidates` collapses candidates
+    that resolve to the same live `customer_id` (the direct live-customer candidate +
+    any committed batch rows pointing at it) into ONE canonical candidate — live
+    identity preferred, strongest confidence kept, reasons merged/de-duped. Pending
+    batch rows (no `customer_id`) are NOT collapsed. `score` / `build_signature` /
+    `matching_core` untouched.
+  - **Status-aware display (C):** committed rows show a final committed summary and
+    reversed rows a historical summary instead of the active "Possible same customer"
+    candidate/group controls; the candidate panel + active resolution/group controls
+    render only on a **pending** row; approved/rejected/skipped show the chosen
+    resolution read-only with a "reopen to change" hint. Display-only — no audit
+    fields cleared/mutated.
+  - **Status-aware review buttons (J):** a pending row shows Approve / Reject / Skip
+    only (no Reopen); approved/rejected/skipped show the selected status + Reopen
+    only; committed/reversed keep the commit/reverse UI.
+  - **Search UX (G):** "Search existing customers" stays pending-only and non-grouped;
+    it now fetches only at 2+ characters (no `q=""` fetch-and-discard), with a 2-char
+    hint, a loading state, and a "No customers found" empty state.
+- **Why:** B2/B3 manual-testing continuity issues — duplicate same-customer
+  candidates, and stale pending-style controls on committed/reversed rows.
+- **Files:** `backend/app/services/import_matching.py`,
+  `backend/tests/test_import_matching.py`,
+  `frontend/src/components/imports/CustomerResolutionSection.tsx`,
+  `frontend/src/components/imports/ImportRowModal.tsx`,
+  `frontend/src/hooks/useCustomers.ts`.
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** Browser verification was **blocked** — the owner-cleared dev
+  DB has no import rows, so the review modal can't be opened; a **manual browser test
+  is required after a re-import**. Backend dedup is covered by tests; frontend
+  typecheck + build pass. Out of scope (separate slices): group approve/reopen,
+  reversed-row recommit, multi-address/contact, parser fixes, read-only customer
+  preview.
+
 ## 2026-06-17 — Section B4-0: extract shared matching core (no behaviour change)
 
 - **What:** Moved the pure, DB-free scoring core out of `import_matching.py` into a

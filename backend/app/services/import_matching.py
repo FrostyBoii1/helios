@@ -93,6 +93,53 @@ def _customer_signature(c: Customer) -> Signature:
 _COMMITTABLE = (ImportRowClass.JOB.value, ImportRowClass.AMBIGUOUS.value)
 
 
+def _collapse_same_customer(cands: list[dict]) -> list[dict]:
+    """Collapse candidates that resolve to the SAME live customer into one entry.
+
+    A candidate carries a live ``customer_id`` when it is a live customer OR a
+    COMMITTED batch row (its ``committed_customer_id``). When a customer already has
+    several committed import jobs, each committed sibling would otherwise surface as
+    its own candidate pointing at the same customer; this collapses them (plus the
+    direct live-customer candidate) into a single canonical candidate per
+    ``customer_id``: it keeps a ``live_customer`` identity when one is present (else
+    the strongest-confidence committed batch row), takes the strongest confidence,
+    and unions the reasons. Pending batch rows (``customer_id`` is None) are NOT
+    collapsed — each remains its own candidate. Pure; order-stable by first sight.
+    """
+    canonical: dict[int, dict] = {}
+    order: list[int] = []
+    passthrough: list[dict] = []
+    for c in cands:
+        cid = c.get("customer_id")
+        if cid is None:
+            passthrough.append(c)
+            continue
+        cur = canonical.get(cid)
+        if cur is None:
+            canonical[cid] = dict(c)
+            order.append(cid)
+            continue
+        # Prefer a live_customer identity; else keep the stronger-confidence row.
+        cur_live = cur["kind"] == "live_customer"
+        c_live = c["kind"] == "live_customer"
+        if c_live and not cur_live:
+            merged = dict(c)
+        elif cur_live and not c_live:
+            merged = dict(cur)
+        else:
+            merged = dict(cur if CONF_RANK[cur["confidence"]] <= CONF_RANK[c["confidence"]] else c)
+        merged["confidence"] = (
+            cur["confidence"] if CONF_RANK[cur["confidence"]] <= CONF_RANK[c["confidence"]] else c["confidence"]
+        )
+        reasons = list(cur["reasons"])
+        for r in c["reasons"]:
+            if r not in reasons:
+                reasons.append(r)
+        merged["reasons"] = reasons
+        canonical[cid] = merged
+    return passthrough + [canonical[cid] for cid in order]
+
+
 def find_candidates(db: Session, row: ImportRow) -> list[dict]:
     """Advisory same-customer candidates for ``row`` — other batch rows + live
     customers — sorted strong→weak then by name, capped. Read-only."""
@@ -157,5 +204,8 @@ def find_candidates(db: Session, row: ImportRow) -> list[dict]:
                     "reasons": reasons,
                 })
 
+    # B (stabilization): collapse duplicate candidates for the same live customer
+    # (a customer with several committed import jobs → one canonical candidate).
+    out = _collapse_same_customer(out)
     out.sort(key=lambda x: (CONF_RANK[x["confidence"]], (x["name"] or "").lower()))
     return out[:MAX_CANDIDATES]

@@ -27,7 +27,12 @@ import {
   useSetGroupPrimary,
 } from '@/hooks/useImports'
 import { MatchCandidatesPanel } from '@/components/imports/MatchCandidatesPanel'
-import type { CustomerGroupRead, CustomerResolutionRequest, ImportRow } from '@/types/imports'
+import type {
+  CustomerGroupRead,
+  CustomerResolutionMode,
+  CustomerResolutionRequest,
+  ImportRow,
+} from '@/types/imports'
 
 interface Props {
   batchId: number
@@ -57,6 +62,13 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
   const resolvedId = row.resolved_customer_id
   const groupId = row.customer_group_id
   const grouped = mode === 'group' && groupId != null
+  // C (stabilization): committed rows have live records and reversed rows are
+  // terminal — show a final / historical summary, never the active "possible same
+  // customer" review controls. Active controls render only while `editable`
+  // (the parent passes editable only for a pending row).
+  const committed = row.review_status === 'committed'
+  const reversed = row.review_status === 'reversed'
+  const finalized = committed || reversed
   const busy =
     resolveMutation.isPending ||
     createGroup.isPending ||
@@ -101,6 +113,18 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
     } catch (err) {
       setError(describe(err, fallback))
     }
+  }
+
+  // C: committed/reversed rows show a final / historical summary only.
+  if (finalized) {
+    return (
+      <FinalizedResolutionSummary
+        committed={committed}
+        mode={mode}
+        resolvedName={resolvedName}
+        committedCustomerId={row.committed_customer_id}
+      />
+    )
   }
 
   return (
@@ -170,19 +194,28 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
         )
       )}
 
+      {/* Approved / rejected / skipped: resolution is read-only until reopened. */}
+      {!editable && (
+        <p className="text-xs text-faint">Reopen the row to change the customer resolution.</p>
+      )}
+
       {error && <p className="text-xs text-red-300">{error}</p>}
 
-      {/* Candidates — attach (B2) and group (B3) actions. */}
-      <MatchCandidatesPanel
-        batchId={batchId}
-        rowId={row.id}
-        editable={editable}
-        resolvedCustomerId={resolvedId}
-        onUseCustomer={(customerId) => run({ mode: 'existing', customer_id: customerId })}
-        onGroupWithRow={groupWith}
-        groupMemberRowIds={group?.member_row_ids ?? []}
-        busy={busy}
-      />
+      {/* Candidates — attach (B2) and group (B3) actions. Shown only while the row is
+          review-editable (pending); committed/reversed render a final summary above,
+          and an approved/closed row shows its chosen resolution read-only. */}
+      {editable && (
+        <MatchCandidatesPanel
+          batchId={batchId}
+          rowId={row.id}
+          editable={editable}
+          resolvedCustomerId={resolvedId}
+          onUseCustomer={(customerId) => run({ mode: 'existing', customer_id: customerId })}
+          onGroupWithRow={groupWith}
+          groupMemberRowIds={group?.member_row_ids ?? []}
+          busy={busy}
+        />
+      )}
 
       {/* Explicit B2 choices — hidden when this row is grouped. */}
       {editable && !grouped && (
@@ -213,6 +246,55 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
           onPick={(customerId) => run({ mode: 'existing', customer_id: customerId })}
         />
       )}
+    </section>
+  )
+}
+
+// C: committed/reversed rows — a final / historical summary instead of the active
+// "possible same customer" review controls.
+function FinalizedResolutionSummary({
+  committed,
+  mode,
+  resolvedName,
+  committedCustomerId,
+}: {
+  committed: boolean
+  mode: CustomerResolutionMode | null
+  resolvedName: string
+  committedCustomerId: number | null
+}) {
+  if (!committed) {
+    return (
+      <section className="flex flex-col gap-2">
+        <div className="rounded-md border border-line bg-elevated px-3 py-2">
+          <p className="text-sm font-medium text-muted">↩ Reversed</p>
+          <p className="mt-0.5 text-xs text-faint">
+            This import was reversed; its committed customer/job were soft-deleted. The
+            customer resolution is historical and read-only.
+          </p>
+        </div>
+      </section>
+    )
+  }
+  const label =
+    mode === 'existing'
+      ? 'Attached to an existing customer'
+      : mode === 'group'
+        ? 'Committed as part of a customer group'
+        : 'New customer created'
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+        <p className="text-sm font-medium text-emerald-200">✓ Committed — {label}</p>
+        {committedCustomerId != null && (
+          <p className="mt-0.5 text-xs text-emerald-200/80">
+            Customer:{' '}
+            <Link to={`/customers/${committedCustomerId}`} className="underline">
+              {resolvedName || `#${committedCustomerId}`}
+            </Link>
+          </p>
+        )}
+      </div>
     </section>
   )
 }
@@ -312,7 +394,8 @@ function CustomerSearch({
   const [query, setQuery] = useState('')
   const trimmed = query.trim()
   const active = trimmed.length >= 2
-  const { data, isFetching } = useCustomers({ q: active ? trimmed : '', limit: 8 })
+  // G: only fetch once the 2-char minimum is met (no q="" fetch-and-discard).
+  const { data, isFetching } = useCustomers({ q: trimmed, limit: 8 }, { enabled: active })
   const results = active ? (data?.items ?? []) : []
 
   return (
@@ -323,11 +406,13 @@ function CustomerSearch({
         placeholder="Search by name / email / phone…"
         className="input w-full text-sm"
       />
-      {active && (
+      {!active ? (
+        <p className="mt-1 px-1 text-xs text-faint">Type at least 2 characters to search.</p>
+      ) : (
         <ul className="mt-1 flex max-h-48 flex-col gap-1 overflow-y-auto">
           {isFetching && <li className="px-1 text-xs text-faint">Searching…</li>}
           {!isFetching && results.length === 0 && (
-            <li className="px-1 text-xs text-faint">No matches.</li>
+            <li className="px-1 text-xs text-faint">No customers found.</li>
           )}
           {results.map((c) => (
             <li

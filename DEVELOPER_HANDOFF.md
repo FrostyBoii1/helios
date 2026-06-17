@@ -115,8 +115,14 @@ These are stubbed/absent and represent the next phases:
   'new' reverse unchanged. **(B3-4 — built)** the import modal exposes the grouping
   UI: a pending batch-row candidate gets "Group as same customer", a group banner
   (members + Primary + commit note) with set-primary / remove / dissolve, and an
-  "In group ✓" state — distinct from B2's "Use this customer". **(B4 — proposed)**
-  auto-link/merge for identical names; existing-customer merge.
+  "In group ✓" state — distinct from B2's "Use this customer". **(Phase 2
+  stabilization — built)** same-customer candidates dedupe by live `customer_id` (one
+  candidate per customer, reasons merged); committed/reversed rows show a
+  final/historical summary instead of active candidate/group controls; review buttons
+  are status-aware (pending → Approve/Reject/Skip; finalized → status + Reopen);
+  "Search existing customers" is pending-only, 2+ chars, with loading / no-results
+  guidance. **(B4 — proposed)** auto-link/merge for identical names; existing-customer
+  merge.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

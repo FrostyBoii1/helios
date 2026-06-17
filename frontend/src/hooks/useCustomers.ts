@@ -17,10 +17,11 @@ const keys = {
   detail: (id: number) => ['customers', 'detail', id] as const,
 }
 
-export function useCustomers(params: ListCustomersParams) {
+export function useCustomers(params: ListCustomersParams, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: keys.list(params),
     queryFn: () => listCustomers(params),
+    enabled: options?.enabled ?? true,
   })
 }
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.models.customer import Customer
 from app.models.enums import ImportBatchStatus, ImportRowClass, ImportRowReviewStatus
 from app.models.import_staging import ImportBatch, ImportRow
 from app.services.import_matching import build_signature as sig, find_candidates, score
@@ -143,3 +144,95 @@ def test_find_candidates_is_read_only(db_session: Session):
     find_candidates(db_session, rows[0])
     # no pending writes were introduced by the advisory query
     assert not db_session.new and not db_session.dirty and not db_session.deleted
+
+
+# --------------------------------------------------------------------------- #
+# B (stabilization): duplicate same-customer candidates collapse to one
+# --------------------------------------------------------------------------- #
+def test_committed_duplicates_collapse_to_one_live_customer(db_session: Session):
+    """A live customer plus its committed import rows surface as ONE candidate;
+    reasons merge across the duplicates; a pending sibling (no committed customer)
+    stays its own candidate."""
+    cust = Customer(full_name="Stuart White", address_line1="1 Test St")
+    db_session.add(cust)
+    db_session.flush()
+    b = ImportBatch(
+        source_filename="dup.xlsx", sheet_name="COMPLETED",
+        status=ImportBatchStatus.REVIEWING.value,
+    )
+    db_session.add(b)
+    db_session.flush()
+
+    def _row(idx, status, committed_cid):
+        r = ImportRow(
+            batch_id=b.id, source_row_index=idx, row_class=ImportRowClass.JOB.value,
+            legacy_reference=f"SC{idx}", raw={},
+            parsed={
+                "customer_name": "Stuart White",
+                "phones": [{"number": "0400555111"}],
+                "emails": [],
+                "address": "1 Test St",
+            },
+            review_status=status, committed_customer_id=committed_cid,
+        )
+        db_session.add(r)
+        db_session.flush()
+        return r
+
+    # Two COMMITTED rows both resolve to the live customer (match target on phone).
+    _row(2, ImportRowReviewStatus.COMMITTED.value, cust.id)
+    _row(3, ImportRowReviewStatus.COMMITTED.value, cust.id)
+    # A PENDING sibling (no committed_customer_id) — must remain a separate candidate.
+    pending = _row(4, ImportRowReviewStatus.PENDING.value, None)
+    # The row we surface candidates for.
+    target = _row(5, ImportRowReviewStatus.PENDING.value, None)
+
+    cands = find_candidates(db_session, target)
+
+    # Every candidate pointing at the live customer collapses to exactly one.
+    for_cust = [c for c in cands if c["customer_id"] == cust.id]
+    assert len(for_cust) == 1
+    assert for_cust[0]["kind"] == "live_customer"  # live identity preferred
+    # Reasons merged across the committed rows (shared phone) and the live customer
+    # (address match), de-duplicated.
+    reasons = for_cust[0]["reasons"]
+    assert "exact name" in reasons
+    # "shared phone" can ONLY come from the committed batch rows (the live customer has
+    # no phone), yet the canonical candidate is the live_customer — proving the merge.
+    assert "shared phone" in reasons
+    assert "address match" in reasons         # shared by the committed rows and the live customer
+    assert len(reasons) == len(set(reasons))  # no duplicate reasons
+    # The pending sibling (customer_id None) is NOT collapsed.
+    pend = [c for c in cands if c["customer_id"] is None and c["row_id"] == pending.id]
+    assert len(pend) == 1
+
+
+def test_pending_duplicates_are_not_collapsed(db_session: Session):
+    """Two PENDING rows for the same person stay as two candidates (no customer_id
+    to collapse on) — collapsing only applies to committed/live customers."""
+    b = ImportBatch(
+        source_filename="pend.xlsx", sheet_name="COMPLETED",
+        status=ImportBatchStatus.REVIEWING.value,
+    )
+    db_session.add(b)
+    db_session.flush()
+
+    def _row(idx):
+        r = ImportRow(
+            batch_id=b.id, source_row_index=idx, row_class=ImportRowClass.JOB.value,
+            legacy_reference=f"PC{idx}", raw={},
+            parsed={"customer_name": "Jamie Green", "phones": [{"number": "0400777222"}],
+                    "emails": [], "address": "2 Pend St"},
+            review_status=ImportRowReviewStatus.PENDING.value, committed_customer_id=None,
+        )
+        db_session.add(r)
+        db_session.flush()
+        return r
+
+    r2 = _row(2)
+    r3 = _row(3)
+    target = _row(4)
+
+    cands = find_candidates(db_session, target)
+    pending_ids = {c["row_id"] for c in cands if c["customer_id"] is None}
+    assert r2.id in pending_ids and r3.id in pending_ids  # both kept, not collapsed
