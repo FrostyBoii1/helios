@@ -7,12 +7,15 @@ require an explicit typed confirmation phrase.
 
 NEVER touches users, roles, permissions, config, label DEFINITIONS, or migrations.
 
-  * clear_imports     — import_issues -> import_rows -> import_batches only.
+  * clear_imports     — import_issues, then break the import_rows<->import_customer_groups
+                        FK cycle (null customer_group_id, delete import_customer_groups),
+                        then import_rows -> import_batches.
   * clear_live_crm    — job_label_assignments, activities, tasks, documents, jobs,
-                        customers; FIRST detaches committed import rows (nulls the
-                        committed_* links + reverts review_status committed ->
-                        approved so they stay re-committable), preserving ALL import
-                        batch/row/issue content.
+                        customers; FIRST detaches every import->customer/job link
+                        (committed_* on rows + revert to approved; B2
+                        resolved_customer_id; B3-3 group committed_customer_id) so the
+                        customers can be deleted, preserving ALL import
+                        batch/row/issue/group content.
 
 Pure DB work; the caller (endpoint) owns the transaction/commit.
 """
@@ -27,7 +30,12 @@ from app.models.activity import Activity
 from app.models.customer import Customer
 from app.models.document import Document
 from app.models.enums import ImportRowReviewStatus
-from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
+from app.models.import_staging import (
+    ImportBatch,
+    ImportCustomerGroup,
+    ImportIssue,
+    ImportRow,
+)
 from app.models.job import Job
 from app.models.job_label import JobLabelAssignment
 from app.models.task import Task
@@ -52,6 +60,7 @@ def reset_counts(db: Session) -> dict[str, Any]:
     return {
         "imports": {
             "import_issues": _count(db, ImportIssue),
+            "import_customer_groups": _count(db, ImportCustomerGroup),
             "import_rows": _count(db, ImportRow),
             "import_batches": _count(db, ImportBatch),
         },
@@ -70,27 +79,45 @@ def reset_counts(db: Session) -> dict[str, Any]:
 
 
 def clear_imports(db: Session) -> dict[str, int]:
-    """HARD-delete import staging data ONLY (child -> parent FK order). Touches no
-    live CRM, users, roles, or label definitions. Caller commits."""
+    """HARD-delete import staging data ONLY, in FK-safe order. Touches no live CRM,
+    users, roles, or label definitions. Caller commits.
+
+    import_rows and import_customer_groups reference each OTHER (B3-2): a row points
+    at its group via ``customer_group_id``, and the group points back at its primary
+    row via ``primary_row_id``. Break the cycle before deleting: clear the rows'
+    group pointer, delete the groups, then delete the rows (and their issues/batches).
+    """
+    issues = db.execute(delete(ImportIssue)).rowcount
+    # Null the rows -> group FK so the groups can be deleted, then delete groups
+    # before rows (groups.primary_row_id references rows).
+    db.execute(update(ImportRow).values(customer_group_id=None))
+    groups = db.execute(delete(ImportCustomerGroup)).rowcount
+    rows = db.execute(delete(ImportRow)).rowcount
+    batches = db.execute(delete(ImportBatch)).rowcount
     return {
-        "import_issues": db.execute(delete(ImportIssue)).rowcount,
-        "import_rows": db.execute(delete(ImportRow)).rowcount,
-        "import_batches": db.execute(delete(ImportBatch)).rowcount,
+        "import_issues": issues,
+        "import_customer_groups": groups,
+        "import_rows": rows,
+        "import_batches": batches,
     }
 
 
 def clear_live_crm(db: Session) -> dict[str, int]:
     """HARD-delete live CRM business data ONLY.
 
-    Step 1 — DETACH: committed import rows reference live jobs/customers via NO-ACTION
-    FKs, so first null committed_customer_id/committed_job_id and revert review_status
-    committed -> approved. This preserves ALL import batch/row/issue content and makes
-    those rows re-committable; it never deletes import data.
+    Step 1 — DETACH every import->customer/job link (all are NO-ACTION FKs) so the
+    live rows can be deleted while ALL import batch/row/issue/group CONTENT is
+    preserved and stays re-committable:
+      * committed import rows: null committed_customer_id/committed_job_id and revert
+        review_status committed -> approved (B1/C);
+      * manual same-customer resolutions: null import_rows.resolved_customer_id and
+        clear the 'existing' mode back to unresolved (B2);
+      * pending-row groups: null import_customer_groups.committed_customer_id (B3-3).
     Step 2 — DELETE (child -> parent FK order): job_label_assignments, activities,
     tasks, documents, jobs, customers.
 
-    Touches no import batches/rows/issues content, users, roles, or label definitions.
-    Caller commits.
+    Touches no import batches/rows/issues/groups CONTENT, users, roles, or label
+    definitions. Caller commits.
     """
     detached = db.execute(
         update(ImportRow)
@@ -106,8 +133,24 @@ def clear_live_crm(db: Session) -> dict[str, int]:
             review_status=ImportRowReviewStatus.APPROVED.value,
         )
     ).rowcount
+    # B2: detach manual "existing customer" resolutions (the target customer is about
+    # to be deleted) — revert the row to unresolved so it stays valid + re-committable.
+    resolution_detached = db.execute(
+        update(ImportRow)
+        .where(ImportRow.resolved_customer_id.isnot(None))
+        .values(resolved_customer_id=None, customer_resolution_mode=None)
+    ).rowcount
+    # B3-3: detach committed pending-row groups from their (to-be-deleted) customer;
+    # the group content is preserved and re-committable.
+    groups_detached = db.execute(
+        update(ImportCustomerGroup)
+        .where(ImportCustomerGroup.committed_customer_id.isnot(None))
+        .values(committed_customer_id=None)
+    ).rowcount
     return {
         "import_rows_detached": detached,
+        "import_rows_resolution_detached": resolution_detached,
+        "import_groups_detached": groups_detached,
         "job_label_assignments": db.execute(delete(JobLabelAssignment)).rowcount,
         "activities": db.execute(delete(Activity)).rowcount,
         "tasks": db.execute(delete(Task)).rowcount,

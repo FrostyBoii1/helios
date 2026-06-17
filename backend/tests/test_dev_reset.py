@@ -23,7 +23,12 @@ from app.models.enums import (
     JobLabelSource,
     JobStatus,
 )
-from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
+from app.models.import_staging import (
+    ImportBatch,
+    ImportCustomerGroup,
+    ImportIssue,
+    ImportRow,
+)
 from app.models.job import Job
 from app.models.job_label import JobLabelAssignment, JobLabelDefinition
 from app.models.role import Role
@@ -72,7 +77,7 @@ def _seed(db: Session) -> dict:
 
 
 _CRM = (Customer, Job, Task, Activity, Document, JobLabelAssignment)
-_IMPORT = (ImportBatch, ImportRow, ImportIssue)
+_IMPORT = (ImportBatch, ImportRow, ImportIssue, ImportCustomerGroup)
 _PROTECTED = (User, Role, JobLabelDefinition)
 
 
@@ -95,6 +100,48 @@ def test_clear_imports_deletes_only_import_tables(db_session: Session):
     # the live job/customer still exist
     assert db_session.get(Job, ids["job_id"]) is not None
     assert db_session.get(Customer, ids["customer_id"]) is not None
+
+
+def test_clear_imports_handles_grouped_rows(db_session: Session):
+    """clear_imports must break the import_rows <-> import_customer_groups FK cycle
+    (B3-2): a row points at its group (customer_group_id) and the group points back
+    at its primary row (primary_row_id). Without ordering this raises a
+    ForeignKeyViolation; clear_imports nulls the link + deletes groups before rows."""
+    cust = Customer(full_name="Reset Group Customer")
+    db_session.add(cust)
+    db_session.flush()
+    batch = ImportBatch(
+        source_filename="grp.xlsx", sheet_name="COMPLETED",
+        status=ImportBatchStatus.REVIEWING.value,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    r1 = ImportRow(batch_id=batch.id, source_row_index=2, row_class=ImportRowClass.JOB.value,
+                   parsed={"customer_name": "A"}, review_status=ImportRowReviewStatus.PENDING.value)
+    r2 = ImportRow(batch_id=batch.id, source_row_index=3, row_class=ImportRowClass.JOB.value,
+                   parsed={"customer_name": "B"}, review_status=ImportRowReviewStatus.PENDING.value)
+    db_session.add_all([r1, r2])
+    db_session.flush()
+    grp = ImportCustomerGroup(batch_id=batch.id, primary_row_id=r1.id)
+    db_session.add(grp)
+    db_session.flush()
+    r1.customer_group_id = grp.id  # the mutual FK cycle: rows <-> group
+    r2.customer_group_id = grp.id
+    db_session.flush()
+
+    customers_before = _count(db_session, Customer)
+
+    deleted = dev_reset.clear_imports(db_session)
+    db_session.flush()
+
+    # the FK cycle was broken: groups + rows + batches all cleared, no FK violation
+    assert _count(db_session, ImportCustomerGroup) == 0
+    assert _count(db_session, ImportRow) == 0
+    assert _count(db_session, ImportBatch) == 0
+    assert deleted["import_customer_groups"] >= 1
+    # live CRM untouched by the imports reset
+    assert _count(db_session, Customer) == customers_before
+    assert db_session.get(Customer, cust.id) is not None
 
 
 def test_clear_live_crm_deletes_crm_and_detaches_imports(db_session: Session):
@@ -127,6 +174,50 @@ def test_clear_live_crm_deletes_crm_and_detaches_imports(db_session: Session):
 
     # protected tables UNCHANGED
     assert {m.__name__: _count(db_session, m) for m in _PROTECTED} == prot_before
+
+
+def test_clear_live_crm_detaches_grouped_committed_customer(db_session: Session):
+    """clear_live_crm must detach a committed pending-row group (B3-3) and an
+    'existing'-resolved row (B2) from a customer BEFORE deleting it — else
+    DELETE customers FK-violates and import content would be lost."""
+    cust = Customer(full_name="Grouped Committed Customer")
+    db_session.add(cust)
+    db_session.flush()
+    batch = ImportBatch(
+        source_filename="lc.xlsx", sheet_name="COMPLETED",
+        status=ImportBatchStatus.REVIEWING.value,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    primary = ImportRow(batch_id=batch.id, source_row_index=2, row_class=ImportRowClass.JOB.value,
+                        parsed={"customer_name": "A"}, review_status=ImportRowReviewStatus.PENDING.value)
+    resolved = ImportRow(batch_id=batch.id, source_row_index=3, row_class=ImportRowClass.JOB.value,
+                         parsed={"customer_name": "B"}, review_status=ImportRowReviewStatus.PENDING.value,
+                         customer_resolution_mode="existing", resolved_customer_id=cust.id)
+    db_session.add_all([primary, resolved])
+    db_session.flush()
+    # a committed group pointing at the customer (B3-3)
+    grp = ImportCustomerGroup(batch_id=batch.id, primary_row_id=primary.id, committed_customer_id=cust.id)
+    db_session.add(grp)
+    db_session.flush()
+    primary.customer_group_id = grp.id
+    db_session.flush()
+
+    deleted = dev_reset.clear_live_crm(db_session)
+    db_session.flush()
+
+    # the customer was DELETABLE (no FK violation) and is gone
+    assert db_session.get(Customer, cust.id) is None
+    assert _count(db_session, Customer) == 0
+    # import CONTENT preserved — group + row survive, just detached from the customer
+    grp_after = db_session.get(ImportCustomerGroup, grp.id)
+    assert grp_after is not None and grp_after.committed_customer_id is None
+    row_after = db_session.get(ImportRow, resolved.id)
+    assert row_after is not None
+    assert row_after.resolved_customer_id is None
+    assert row_after.customer_resolution_mode is None
+    assert deleted["import_groups_detached"] >= 1
+    assert deleted["import_rows_resolution_detached"] >= 1
 
 
 # --------------------------------------------------------------------------- #
