@@ -91,7 +91,7 @@ class ImportRow(IntPkMixin, TimestampMixin, Base):
     )
     committed_job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True)
 
-    # ----- B2-1: manual same-customer resolution intent (STORAGE ONLY) ------- #
+    # ----- B2: manual same-customer resolution intent ----------------------- #
     # The reviewer's explicit pre-commit choice for THIS row's customer:
     #   * customer_resolution_mode NULL      -> unresolved; commit creates a new
     #                                           customer (current default behaviour);
@@ -99,9 +99,10 @@ class ImportRow(IntPkMixin, TimestampMixin, Base):
     #                                           customer (resolved_customer_id NULL);
     #   * customer_resolution_mode "existing"-> attach the job to the EXISTING
     #                                           customer in resolved_customer_id.
-    # B2-1 is storage only: commit-to-live / commit-preview / reverse do NOT read
-    # these yet (that is B2-2). The review service enforces the mode/customer
-    # invariant and only allows edits while the row is pending.
+    # These fields ARE read by import commit / commit-preview / reverse (B2-2 onward):
+    # an 'existing' resolution attaches the job to that live customer, while 'new'/NULL
+    # creates one. The review service enforces the mode/customer invariant and only
+    # allows edits while the row is pending (locked once approved/committed/reversed).
     resolved_customer_id: Mapped[int | None] = mapped_column(
         ForeignKey("customers.id"), nullable=True, index=True
     )
@@ -110,13 +111,15 @@ class ImportRow(IntPkMixin, TimestampMixin, Base):
     resolved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # ----- B3-2: pending-row grouping (STORAGE ONLY) ------------------------- #
-    # Membership in an ImportCustomerGroup: a set of pending rows the reviewer
-    # marked as ONE future customer (created in B3-3). Mutually exclusive with
-    # resolved_customer_id — a row is unresolved/new, OR resolved to an existing
-    # customer ('existing'), OR grouped ('group', customer_group_id set,
-    # resolved_customer_id NULL). Inert at commit/preview/reverse until B3-3; the
-    # review service enforces the mutual exclusion + lock rules.
+    # ----- B3: pending-row grouping ----------------------------------------- #
+    # Membership in an ImportCustomerGroup: a set of import rows the reviewer marked
+    # as ONE future/live customer with multiple jobs (the group commits to a single
+    # Customer at B3-3). Mutually exclusive with resolved_customer_id — a row is
+    # unresolved/new, OR resolved to an existing customer ('existing'), OR grouped
+    # ('group', customer_group_id set, resolved_customer_id NULL). This grouping IS
+    # read by import commit / commit-preview / reverse (B3-3 onward); the review
+    # service enforces the mutual exclusion + lock rules. Grouping is a concept
+    # distinct from the same-customer resolution above.
     customer_group_id: Mapped[int | None] = mapped_column(
         ForeignKey("import_customer_groups.id"), nullable=True, index=True
     )
@@ -156,15 +159,18 @@ class ImportIssue(IntPkMixin, TimestampMixin, Base):
 
 
 class ImportCustomerGroup(IntPkMixin, TimestampMixin, Base):
-    """B3-2: a reviewer-defined group of pending import rows that should become ONE
-    future customer (with multiple jobs).
+    """A reviewer-defined group of import rows that become ONE future/live customer
+    with multiple jobs.
 
-    ``primary_row_id`` is the row that will CREATE the customer at commit (B3-3); the
-    other members attach their jobs to that customer. STORAGE ONLY — commit-to-live /
-    commit-preview / reverse do NOT read this yet (that is B3-3). Membership and the
-    mode/customer mutual-exclusion + lock rules are enforced by the import review
-    service. FK columns only (no ORM relationships) to avoid a rows<->groups circular
-    relationship config; the service queries members by ``import_rows.customer_group_id``.
+    ``primary_row_id`` is the row that CREATES the customer at commit (B3-3); the other
+    members attach their jobs to that customer. This grouping IS read by import commit /
+    commit-preview / reverse (B3-3 onward): preview predicts "1 customer + N jobs",
+    commit creates the shared customer and attaches dependents, and reverse re-promotes
+    the primary / clears ``committed_customer_id`` as members are reversed. Membership
+    and the mode/customer mutual-exclusion + lock rules are enforced by the import review
+    service. This is staged import-workflow state, NOT a Customer model relation: FK
+    columns only (no ORM relationships) to avoid a rows<->groups circular relationship
+    config; the service queries members by ``import_rows.customer_group_id``.
     """
 
     __tablename__ = "import_customer_groups"
