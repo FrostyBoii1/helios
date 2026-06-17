@@ -16,7 +16,12 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.enums import ImportBatchStatus, ImportRowClass, ImportRowReviewStatus
-from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
+from app.models.import_staging import (
+    ImportBatch,
+    ImportCustomerGroup,
+    ImportIssue,
+    ImportRow,
+)
 from app.schemas.import_staging import PARSED_EDIT_FIELDS
 from app.services.customers import get_customer
 from app.services.import_field_registry import allowed_details_paths
@@ -223,6 +228,7 @@ def set_resolution_existing(
     customer = get_customer(db, customer_id)  # excludes soft-deleted (deleted_at)
     if customer is None:
         raise ValueError(f"Customer {customer_id} was not found or has been deleted.")
+    _leave_group(db, row)  # B3-2: switching to an existing customer detaches any group
     row.customer_resolution_mode = "existing"
     row.resolved_customer_id = customer.id
     row.customer_resolution_reason = reason
@@ -241,6 +247,7 @@ def set_resolution_new(
 ) -> ImportRow:
     """Resolve the row to explicitly create a NEW customer (B2-1, storage only)."""
     _ensure_resolution_editable(row)
+    _leave_group(db, row)  # B3-2: switching to "new" detaches any group
     row.customer_resolution_mode = "new"
     row.resolved_customer_id = None
     row.customer_resolution_reason = reason
@@ -254,6 +261,7 @@ def clear_resolution(
 ) -> ImportRow:
     """Clear the row's resolution back to unresolved (B2-1, storage only)."""
     _ensure_resolution_editable(row)
+    _leave_group(db, row)  # B3-2: clearing also detaches any group
     row.customer_resolution_mode = None
     row.resolved_customer_id = None
     row.customer_resolution_reason = None
@@ -261,6 +269,228 @@ def clear_resolution(
     row.resolved_at = None
     _mark_reviewing(batch)
     return row
+
+
+# --------------------------------------------------------------------------- #
+# B3-2: pending-row grouping (storage only — no commit effect yet)
+# --------------------------------------------------------------------------- #
+GROUPABLE_CLASSES = APPROVABLE_CLASSES  # job/ambiguous
+
+
+def get_group(db: Session, batch_id: int, group_id: int) -> ImportCustomerGroup | None:
+    return db.scalar(
+        select(ImportCustomerGroup).where(
+            ImportCustomerGroup.id == group_id, ImportCustomerGroup.batch_id == batch_id
+        )
+    )
+
+
+def list_groups(db: Session, batch_id: int) -> list[ImportCustomerGroup]:
+    return list(
+        db.scalars(
+            select(ImportCustomerGroup)
+            .where(ImportCustomerGroup.batch_id == batch_id)
+            .order_by(ImportCustomerGroup.id)
+        ).all()
+    )
+
+
+def group_member_rows(db: Session, group_id: int) -> list[ImportRow]:
+    """Members of a group, in source order.
+
+    Flushes first so PENDING membership writes made earlier in the same request
+    (e.g. a row's customer_group_id just set/cleared) are visible to this SELECT
+    REGARDLESS of the session's autoflush setting. Production get_db()/SessionLocal
+    uses autoflush=False, so the reconcile / dict-building / unlock logic must not
+    rely on implicit autoflush (the test session is autoflush=True, which would
+    otherwise mask this)."""
+    db.flush()
+    return list(
+        db.scalars(
+            select(ImportRow)
+            .where(ImportRow.customer_group_id == group_id)
+            .order_by(ImportRow.source_row_index)
+        ).all()
+    )
+
+
+def _clear_group_fields(row: ImportRow) -> None:
+    """Detach a row from its group and reset 'group' resolution back to unresolved.
+    (A row resolved to existing/new keeps that mode; only 'group' is cleared.)"""
+    row.customer_group_id = None
+    if row.customer_resolution_mode == "group":
+        row.customer_resolution_mode = None
+        row.customer_resolution_reason = None
+        row.resolved_by_id = None
+        row.resolved_at = None
+
+
+def _leave_group(db: Session, row: ImportRow) -> None:
+    """Remove a row from any group, then reconcile that group: auto-dissolve if it
+    drops below 2 members, or auto-promote a new primary if the primary left. The
+    caller sets the row's NEW mode (existing/new/null) afterwards."""
+    gid = row.customer_group_id
+    if gid is None:
+        return
+    row.customer_group_id = None
+    group = db.get(ImportCustomerGroup, gid)
+    if group is None:
+        return
+    members = group_member_rows(db, gid)  # autoflush -> excludes the leaving row
+    if len(members) < 2:
+        for m in members:
+            _clear_group_fields(m)  # lone member reverts to unresolved
+        db.flush()  # clear member FKs before deleting the group (mutual FK)
+        db.delete(group)
+    elif group.primary_row_id == row.id:
+        group.primary_row_id = members[0].id  # auto-promote lowest source_row_index
+
+
+def _validate_groupable(db: Session, batch: ImportBatch, row: ImportRow) -> None:
+    if row.row_class not in GROUPABLE_CLASSES:
+        raise ValueError(
+            f"Only job/ambiguous rows can be grouped (row {row.id} is {row.row_class})."
+        )
+    _ensure_resolution_editable(row)  # pending + uncommitted (same lock as resolution)
+
+
+def _ensure_group_unlocked(db: Session, group: ImportCustomerGroup) -> None:
+    """A group's structure may change only while ALL members are pending."""
+    for m in group_member_rows(db, group.id):
+        if (
+            m.committed_customer_id is not None
+            or m.committed_job_id is not None
+            or m.review_status in _RESOLUTION_LOCKED_STATES
+        ):
+            raise ValueError(
+                "This group is locked — a member has been approved/committed. "
+                "Reopen the member to change the group."
+            )
+
+
+def _set_group_membership(
+    db: Session, group: ImportCustomerGroup, row: ImportRow, *, actor_id: int
+) -> None:
+    _leave_group(db, row)  # detach from any PRIOR group first
+    row.customer_group_id = group.id
+    row.customer_resolution_mode = "group"
+    row.resolved_customer_id = None  # mutual exclusion with B2 existing-resolution
+    _stamp_resolution(row, actor_id=actor_id)
+
+
+def create_group(
+    db: Session,
+    batch: ImportBatch,
+    *,
+    primary_row_id: int,
+    member_row_ids: list[int],
+    actor_id: int,
+    reason: str | None = None,
+) -> ImportCustomerGroup:
+    """Create a group from the primary row + the given members (>= 2 rows total)."""
+    ids = list(dict.fromkeys([primary_row_id, *member_row_ids]))  # unique, primary first
+    if len(ids) < 2:
+        raise ValueError("A group needs at least 2 rows.")
+    rows: list[ImportRow] = []
+    for rid in ids:
+        r = get_row(db, batch.id, rid)
+        if r is None:
+            raise ValueError(f"Row {rid} is not in this batch.")
+        _validate_groupable(db, batch, r)
+        rows.append(r)
+    group = ImportCustomerGroup(
+        batch_id=batch.id, primary_row_id=primary_row_id, created_by_id=actor_id, reason=reason
+    )
+    db.add(group)
+    db.flush()  # assign group.id
+    for r in rows:
+        _set_group_membership(db, group, r, actor_id=actor_id)
+    _mark_reviewing(batch)
+    return group
+
+
+def add_to_group(
+    db: Session, batch: ImportBatch, group: ImportCustomerGroup, *, row_id: int, actor_id: int
+) -> ImportCustomerGroup:
+    _ensure_group_unlocked(db, group)
+    row = get_row(db, batch.id, row_id)
+    if row is None:
+        raise ValueError(f"Row {row_id} is not in this batch.")
+    _validate_groupable(db, batch, row)
+    _set_group_membership(db, group, row, actor_id=actor_id)
+    _mark_reviewing(batch)
+    return group
+
+
+def remove_from_group(
+    db: Session, batch: ImportBatch, group: ImportCustomerGroup, *, row_id: int, actor_id: int
+) -> ImportCustomerGroup | None:
+    """Remove a member. Returns the group, or None if it auto-dissolved (< 2 left)."""
+    _ensure_group_unlocked(db, group)
+    row = get_row(db, batch.id, row_id)
+    if row is None or row.customer_group_id != group.id:
+        raise ValueError(f"Row {row_id} is not a member of this group.")
+    _clear_group_fields(row)
+    members = group_member_rows(db, group.id)  # autoflush -> excludes the removed row
+    if len(members) < 2:
+        for m in members:
+            _clear_group_fields(m)
+        db.flush()  # clear member FKs before deleting the group
+        db.delete(group)
+        _mark_reviewing(batch)
+        return None
+    if group.primary_row_id == row_id:
+        group.primary_row_id = members[0].id  # auto-promote lowest source_row_index
+    _mark_reviewing(batch)
+    return group
+
+
+def set_group_primary(
+    db: Session, batch: ImportBatch, group: ImportCustomerGroup, *, primary_row_id: int, actor_id: int
+) -> ImportCustomerGroup:
+    _ensure_group_unlocked(db, group)
+    member_ids = {m.id for m in group_member_rows(db, group.id)}
+    if primary_row_id not in member_ids:
+        raise ValueError("The primary must be a member of the group.")
+    group.primary_row_id = primary_row_id
+    _mark_reviewing(batch)
+    return group
+
+
+def dissolve_group(
+    db: Session, batch: ImportBatch, group: ImportCustomerGroup, *, actor_id: int
+) -> None:
+    """Dissolve a group: clear every member's group fields, then delete the group."""
+    _ensure_group_unlocked(db, group)
+    for m in group_member_rows(db, group.id):
+        _clear_group_fields(m)
+    db.flush()  # clear member FKs before deleting the group (mutual FK)
+    db.delete(group)
+    _mark_reviewing(batch)
+
+
+def group_to_dict(db: Session, group: ImportCustomerGroup) -> dict:
+    """Assemble a CustomerGroupRead-shaped dict (id, primary, members) for the API."""
+    members = group_member_rows(db, group.id)
+    return {
+        "id": group.id,
+        "batch_id": group.batch_id,
+        "primary_row_id": group.primary_row_id,
+        "committed_customer_id": group.committed_customer_id,
+        "created_by_id": group.created_by_id,
+        "created_at": group.created_at,
+        "reason": group.reason,
+        "member_row_ids": [m.id for m in members],
+        "members": [
+            {
+                "row_id": m.id,
+                "source_row_index": m.source_row_index,
+                "customer_name": (m.parsed or {}).get("customer_name"),
+                "is_primary": m.id == group.primary_row_id,
+            }
+            for m in members
+        ],
+    }
 
 
 def resolve_issue(

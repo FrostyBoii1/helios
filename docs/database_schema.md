@@ -134,7 +134,17 @@ users.id, `resolved_at`. The mode/customer invariant is enforced in
 the review service. **Section B2-2 wires these into commit/preview/reverse:** an
 `existing` row attaches its job to `resolved_customer_id` (no new customer); a
 missing/soft-deleted target fails the row; reverse of an attached row soft-deletes
-only the Job, never the resolved customer.
+only the Job, never the resolved customer. **B3-2 adds `customer_group_id` FK →
+import_customer_groups.id (indexed)** — membership in a pending-row group
+(`customer_resolution_mode='group'`); mutually exclusive with `resolved_customer_id`.
+
+**import_customer_groups** (B3-2) — a reviewer-defined group of pending rows that
+should become **one future customer**. Columns: `id`, `batch_id` FK, `primary_row_id`
+FK → import_rows.id (the row that creates the customer in B3-3), `committed_customer_id`
+FK → customers.id (**unused until B3-3**), `created_by_id` FK → users.id, `reason`,
+timestamps. **Storage only** — commit/preview/reverse do **not** read it yet (B3-3).
+The review service enforces same-batch / job-ambiguous / pending-lock / primary∈members
+and the ≥2-member (auto-dissolve) + auto-promote-primary rules.
 
 **import_issues** — first-class data-quality flags per row. Columns: `id`,
 `row_id` FK, `batch_id` FK, `kind`, `severity` (`ImportIssueSeverity`:

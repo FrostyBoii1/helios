@@ -22,6 +22,11 @@ from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.models.user import User
 from app.schemas.import_staging import (
     BulkApproveResult,
+    CustomerGroupAddRowRequest,
+    CustomerGroupCreateRequest,
+    CustomerGroupMutationResult,
+    CustomerGroupRead,
+    CustomerGroupSetPrimaryRequest,
     CustomerResolutionRequest,
     FieldRegistryRead,
     ImportBatchList,
@@ -367,6 +372,148 @@ def resolve_row_customer(
     db.commit()
     db.refresh(row)
     return ImportRowRead.model_validate(row)
+
+
+# --------------------------------------------------------------------------- #
+# Section B3-2: pending-row groups (admin-only, storage only — inert at commit)
+# --------------------------------------------------------------------------- #
+def _group_or_404(db: Session, batch_id: int, group_id: int):
+    _get_batch(db, batch_id)
+    group = import_review.get_group(db, batch_id, group_id)
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import customer group not found")
+    return group
+
+
+def _group_read(db: Session, group) -> CustomerGroupRead:
+    return CustomerGroupRead(**import_review.group_to_dict(db, group))
+
+
+@router.post("/{batch_id}/customer-groups", response_model=CustomerGroupRead, status_code=status.HTTP_201_CREATED)
+def create_customer_group(
+    batch_id: int,
+    payload: CustomerGroupCreateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> CustomerGroupRead:
+    """B3-2 (storage only): group >= 2 pending rows into one future customer.
+
+    Members are set to ``customer_resolution_mode = "group"``; a row's prior
+    existing/new resolution is replaced. Admin only. Inert at commit/preview/reverse
+    until B3-3.
+    """
+    batch = _get_batch(db, batch_id)
+    try:
+        group = import_review.create_group(
+            db, batch,
+            primary_row_id=payload.primary_row_id,
+            member_row_ids=payload.member_row_ids,
+            actor_id=admin.id,
+            reason=payload.reason,
+        )
+        result = _group_read(db, group)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    db.commit()
+    return result
+
+
+@router.get("/{batch_id}/customer-groups", response_model=list[CustomerGroupRead])
+def list_customer_groups(
+    batch_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)
+) -> list[CustomerGroupRead]:
+    _get_batch(db, batch_id)
+    return [_group_read(db, g) for g in import_review.list_groups(db, batch_id)]
+
+
+@router.get("/{batch_id}/customer-groups/{group_id}", response_model=CustomerGroupRead)
+def get_customer_group(
+    batch_id: int, group_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)
+) -> CustomerGroupRead:
+    return _group_read(db, _group_or_404(db, batch_id, group_id))
+
+
+@router.post("/{batch_id}/customer-groups/{group_id}/rows", response_model=CustomerGroupRead)
+def add_group_row(
+    batch_id: int,
+    group_id: int,
+    payload: CustomerGroupAddRowRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> CustomerGroupRead:
+    batch = _get_batch(db, batch_id)
+    group = _group_or_404(db, batch_id, group_id)
+    try:
+        import_review.add_to_group(db, batch, group, row_id=payload.row_id, actor_id=admin.id)
+        result = _group_read(db, group)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    db.commit()
+    return result
+
+
+@router.delete("/{batch_id}/customer-groups/{group_id}/rows/{row_id}", response_model=CustomerGroupMutationResult)
+def remove_group_row(
+    batch_id: int,
+    group_id: int,
+    row_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> CustomerGroupMutationResult:
+    """Remove a member. If the group drops below 2 members it auto-dissolves
+    (``dissolved: true``, ``group: null``)."""
+    batch = _get_batch(db, batch_id)
+    group = _group_or_404(db, batch_id, group_id)
+    try:
+        survived = import_review.remove_from_group(db, batch, group, row_id=row_id, actor_id=admin.id)
+        result = CustomerGroupMutationResult(
+            dissolved=survived is None,
+            group=_group_read(db, survived) if survived is not None else None,
+        )
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    db.commit()
+    return result
+
+
+@router.patch("/{batch_id}/customer-groups/{group_id}", response_model=CustomerGroupRead)
+def set_customer_group_primary(
+    batch_id: int,
+    group_id: int,
+    payload: CustomerGroupSetPrimaryRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> CustomerGroupRead:
+    batch = _get_batch(db, batch_id)
+    group = _group_or_404(db, batch_id, group_id)
+    try:
+        import_review.set_group_primary(
+            db, batch, group, primary_row_id=payload.primary_row_id, actor_id=admin.id
+        )
+        result = _group_read(db, group)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    db.commit()
+    return result
+
+
+@router.delete("/{batch_id}/customer-groups/{group_id}", response_model=CustomerGroupMutationResult)
+def dissolve_customer_group(
+    batch_id: int, group_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)
+) -> CustomerGroupMutationResult:
+    batch = _get_batch(db, batch_id)
+    group = _group_or_404(db, batch_id, group_id)
+    try:
+        import_review.dissolve_group(db, batch, group, actor_id=admin.id)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    db.commit()
+    return CustomerGroupMutationResult(dissolved=True, group=None)
 
 
 @router.patch("/{batch_id}/rows/{row_id}", response_model=ImportRowRead)

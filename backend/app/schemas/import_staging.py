@@ -77,6 +77,8 @@ class ImportRowRead(BaseModel):
     customer_resolution_reason: str | None = None
     resolved_by_id: int | None = None
     resolved_at: datetime | None = None
+    # B3-2: membership in a pending-row group (mode == "group"); storage only.
+    customer_group_id: int | None = None
     issues: list[ImportIssueRead] = []
 
 
@@ -178,6 +180,60 @@ class ReviewActionRequest(BaseModel):
     """Optional note for reject/skip/reopen actions."""
 
     notes: str | None = None
+
+
+class CustomerGroupCreateRequest(BaseModel):
+    """Create a pending-row group (B3-2). `primary_row_id` is included as a member
+    automatically; `member_row_ids` are the other rows. A group needs >= 2 rows."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    primary_row_id: int
+    member_row_ids: list[int] = []
+    reason: str | None = None
+
+
+class CustomerGroupAddRowRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    row_id: int
+
+
+class CustomerGroupSetPrimaryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    primary_row_id: int
+
+
+class CustomerGroupMember(BaseModel):
+    row_id: int
+    source_row_index: int
+    customer_name: str | None = None
+    is_primary: bool
+
+
+class CustomerGroupRead(BaseModel):
+    """A pending-row group (B3-2, storage only). Does not affect commit/preview/
+    reverse until B3-3."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    batch_id: int
+    primary_row_id: int
+    # Unused in B3-2 (set by B3-3 when the primary commits).
+    committed_customer_id: int | None = None
+    created_by_id: int | None = None
+    created_at: datetime
+    reason: str | None = None
+    member_row_ids: list[int] = []
+    members: list[CustomerGroupMember] = []
+
+
+class CustomerGroupMutationResult(BaseModel):
+    """Result of a group mutation that MAY dissolve the group (e.g. remove-row
+    dropping it below 2 members). `group` is null when the group was dissolved."""
+
+    dissolved: bool
+    group: CustomerGroupRead | None = None
 
 
 class CustomerResolutionRequest(BaseModel):

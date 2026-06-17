@@ -9,6 +9,36 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Section B3-2: pending-row grouping storage + API (storage only)
+
+- **What:** Foundation for grouping pending import rows into one **future** customer.
+  - New table **`import_customer_groups`** (`batch_id`, `primary_row_id`,
+    `committed_customer_id` [unused until B3-3], `created_by_id`, `reason`,
+    timestamps) + **`import_rows.customer_group_id`** FK.
+  - `customer_resolution_mode` gains a `'group'` value (a row is **exactly one** of:
+    unresolved/new, `existing` [B2 attach], or `group` — `resolved_customer_id` and
+    `customer_group_id` are never both set; the B2 setters now detach any group).
+  - Admin-only API under `/imports/{batch}/customer-groups`: **create** (≥2 rows),
+    **list/get**, **add row**, **remove row** (auto-dissolves below 2; auto-promotes a
+    new primary — lowest `source_row_index` — if the primary is removed),
+    **set primary**, **dissolve**.
+  - Validations: same batch, job/ambiguous class, pending (locked once any member is
+    approved/committed/reversed — reopen to change), primary ∈ members.
+- **Why:** record the reviewer's "these rows are one customer" intent so B3-3 can
+  create one customer + multiple jobs — without any auto-grouping/merge.
+- **Files:** `backend/app/models/import_staging.py`, migration
+  `d8e9f0a1b2c3_import_customer_groups.py`, `backend/app/schemas/import_staging.py`,
+  `backend/app/services/import_review.py`, `backend/app/api/v1/endpoints/imports.py`,
+  `backend/tests/test_import_groups.py`.
+- **Temporary or permanent:** Permanent. **One additive migration** (new table +
+  nullable column; no backfill). Mutual-exclusion invariant is service-enforced (no
+  DB CHECK, matching B2-1 style).
+- **Risks / follow-up:** **STORAGE ONLY — inert at commit/preview/reverse.** A
+  grouped row still commits as its **own new customer** in B3-2 (proven by test);
+  **B3-3** makes grouped rows create one customer + multiple jobs (primary creates /
+  dependents attach), updates preview ("1 customer + N jobs"), and adds group-aware
+  reverse. No frontend UI yet (B3-4).
+
 ## 2026-06-17 — Section B3-1: "Recommended" marker on strong same-customer candidates (frontend only)
 
 - **What:** In the import modal's "Possible same customer" panel, **strong**

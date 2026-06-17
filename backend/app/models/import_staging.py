@@ -110,6 +110,17 @@ class ImportRow(IntPkMixin, TimestampMixin, Base):
     resolved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # ----- B3-2: pending-row grouping (STORAGE ONLY) ------------------------- #
+    # Membership in an ImportCustomerGroup: a set of pending rows the reviewer
+    # marked as ONE future customer (created in B3-3). Mutually exclusive with
+    # resolved_customer_id — a row is unresolved/new, OR resolved to an existing
+    # customer ('existing'), OR grouped ('group', customer_group_id set,
+    # resolved_customer_id NULL). Inert at commit/preview/reverse until B3-3; the
+    # review service enforces the mutual exclusion + lock rules.
+    customer_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_customer_groups.id"), nullable=True, index=True
+    )
+
     batch: Mapped["ImportBatch"] = relationship(back_populates="rows")
     issues: Mapped[list["ImportIssue"]] = relationship(
         back_populates="row", cascade="all, delete-orphan"
@@ -142,3 +153,34 @@ class ImportIssue(IntPkMixin, TimestampMixin, Base):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<ImportIssue {self.id} row={self.row_id} {self.kind}/{self.severity}>"
+
+
+class ImportCustomerGroup(IntPkMixin, TimestampMixin, Base):
+    """B3-2: a reviewer-defined group of pending import rows that should become ONE
+    future customer (with multiple jobs).
+
+    ``primary_row_id`` is the row that will CREATE the customer at commit (B3-3); the
+    other members attach their jobs to that customer. STORAGE ONLY — commit-to-live /
+    commit-preview / reverse do NOT read this yet (that is B3-3). Membership and the
+    mode/customer mutual-exclusion + lock rules are enforced by the import review
+    service. FK columns only (no ORM relationships) to avoid a rows<->groups circular
+    relationship config; the service queries members by ``import_rows.customer_group_id``.
+    """
+
+    __tablename__ = "import_customer_groups"
+
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("import_batches.id"), nullable=False, index=True
+    )
+    primary_row_id: Mapped[int] = mapped_column(
+        ForeignKey("import_rows.id"), nullable=False, index=True
+    )
+    # Set by B3-3 when the primary commits (the created live customer). NULL until then.
+    committed_customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id"), nullable=True
+    )
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<ImportCustomerGroup {self.id} batch={self.batch_id} primary={self.primary_row_id}>"
