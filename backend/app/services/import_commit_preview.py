@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.customer import Customer
 from app.models.enums import ImportRowClass, ImportRowReviewStatus
-from app.models.import_staging import ImportBatch, ImportRow
+from app.models.import_staging import ImportBatch, ImportCustomerGroup, ImportRow
 from app.models.job import Job
 from app.services.case_number import build_case_number
 from app.services.customers import get_customer
@@ -56,6 +56,32 @@ def _str(value: Any) -> str:
 
 def _has_unresolved_error(row: ImportRow) -> bool:
     return any(i.severity == "error" and not i.resolved for i in row.issues)
+
+
+def commit_sort_key(
+    row: ImportRow,
+    *,
+    groups: dict[int, ImportCustomerGroup],
+    rows_by_id: dict[int, ImportRow],
+    current_year: int,
+) -> tuple:
+    """Chronological order that keeps each group CONTIGUOUS and PRIMARY-FIRST (B3-3).
+
+    A group is positioned by its primary's source date; within the group the primary
+    sorts first, then dependents by source order. Ungrouped rows keep their original
+    (undated-last, date, source_index) order — the first three tuple elements match
+    the pre-B3-3 key, so ungrouped ordering is unchanged. Used by BOTH preview and
+    commit so the two agree.
+    """
+    gid = row.customer_group_id
+    grp = groups.get(gid) if gid is not None else None
+    if grp is not None:
+        anchor = rows_by_id.get(grp.primary_row_id) or row  # position by the primary
+        asrc, _ = case_year_source(anchor.parsed or {}, current_year=current_year)
+        within = 0 if row.id == grp.primary_row_id else 1
+        return (asrc is None, asrc or date.min, anchor.source_row_index, within, row.source_row_index)
+    src, _ = case_year_source(row.parsed or {}, current_year=current_year)
+    return (src is None, src or date.min, row.source_row_index, 0, row.source_row_index)
 
 
 def case_year_source(parsed: dict, *, current_year: int) -> tuple[date | None, int]:
@@ -191,6 +217,12 @@ EXCLUSION_REASONS = (
     "invalid_case_year",
     # B2-2: row resolved to an existing customer that is now missing/soft-deleted.
     "resolved_customer_invalid",
+    # B3-3: a grouped DEPENDENT whose group's primary won't create a customer this
+    # commit (primary not eligible / not yet committed).
+    "group_primary_unavailable",
+    # B3-3: a grouped DEPENDENT whose group already committed a customer that is now
+    # missing/soft-deleted.
+    "group_customer_invalid",
 )
 
 
@@ -243,30 +275,59 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
         else:
             excluded[reason] += 1
 
-    # B2-2: among otherwise-eligible rows, a resolution to an EXISTING customer
-    # that is now missing/soft-deleted cannot commit (it would fail at commit
-    # time, never silently create a new customer). Exclude it here so preview and
-    # commit agree. attach_customer maps row.id -> the live target customer for
-    # the rows that DO attach. Read-only.
-    attach_customer: dict[int, Customer] = {}
+    # Among otherwise-eligible rows, validate B2 'existing' resolutions and B3
+    # group memberships so PREVIEW and COMMIT agree. Read-only.
+    #   * B2-2: an 'existing' resolution to a missing/soft-deleted customer is
+    #     excluded (resolved_customer_invalid).
+    #   * B3-3: a grouped PRIMARY creates the group's customer; a grouped DEPENDENT
+    #     is valid only if the group already committed a LIVE customer, or its
+    #     primary is eligible this commit. Otherwise it is excluded.
+    groups = {
+        g.id: g
+        for g in db.scalars(
+            select(ImportCustomerGroup).where(ImportCustomerGroup.batch_id == batch.id)
+        ).all()
+    }
+    rows_by_id = {r.id: r for r in rows}
+    eligible_ids = {r.id for r in eligible}
+    attach_customer: dict[int, Customer] = {}        # B2 'existing' -> live customer
+    group_role: dict[int, tuple[str, int, int]] = {}  # row.id -> (action, group_id, primary_row_id)
+    group_dep_customer: dict[int, Customer] = {}     # dep on an already-committed group customer
     still_eligible: list[ImportRow] = []
     for row in eligible:
-        if (row.customer_resolution_mode or None) == "existing":
+        mode = row.customer_resolution_mode or None
+        if mode == "existing":
             target = get_customer(db, row.resolved_customer_id)
             if target is None:
                 excluded["resolved_customer_invalid"] += 1
                 continue
             attach_customer[row.id] = target
+        elif mode == "group":
+            g = groups.get(row.customer_group_id)
+            if g is None:
+                excluded["group_primary_unavailable"] += 1
+                continue
+            if row.id == g.primary_row_id:
+                group_role[row.id] = ("group_primary", g.id, g.primary_row_id)
+            elif g.committed_customer_id is not None:
+                cust = get_customer(db, g.committed_customer_id)
+                if cust is None:
+                    excluded["group_customer_invalid"] += 1
+                    continue
+                group_role[row.id] = ("group_dependent", g.id, g.primary_row_id)
+                group_dep_customer[row.id] = cust
+            elif g.primary_row_id in eligible_ids:
+                group_role[row.id] = ("group_dependent", g.id, g.primary_row_id)
+            else:
+                excluded["group_primary_unavailable"] += 1
+                continue
         still_eligible.append(row)
     eligible = still_eligible
 
-    # Chronological order: dated rows first (by source date), undated rows last,
-    # each tie-broken by original sheet order (D2).
-    def sort_key(row: ImportRow) -> tuple[bool, date, int]:
-        src, _year = case_year_source(row.parsed or {}, current_year=current_year)
-        return (src is None, src or date.min, row.source_row_index)
-
-    eligible.sort(key=sort_key)
+    # Chronological order, group-contiguous + primary-first (shared with commit).
+    eligible.sort(
+        key=lambda r: commit_sort_key(r, groups=groups, rows_by_id=rows_by_id, current_year=current_year)
+    )
 
     # Predicted case numbers: start each year from the CURRENT live count and walk
     # the eligible rows in chronological order. Pure prediction — no reservation.
@@ -293,7 +354,18 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
         predicted = build_case_number(year, base_counts[year] + running[year])
 
         if len(samples) < sample_limit:
+            # customer_action: create | attach (B2 existing) | group_primary |
+            # group_dependent. resolved_customer_* shows the live target for an
+            # attach / a dependent on an already-committed group customer.
+            role = group_role.get(row.id)
             target = attach_customer.get(row.id)
+            if role is not None:
+                action, grp_id, prim = role
+                disp = group_dep_customer.get(row.id)
+            elif target is not None:
+                action, grp_id, prim, disp = "attach", None, None, target
+            else:
+                action, grp_id, prim, disp = "create", None, None, None
             samples.append(
                 {
                     "row_id": row.id,
@@ -310,23 +382,25 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
                         batch_id=batch.id,
                         source_row_index=row.source_row_index,
                     ),
-                    # B2-2: attach vs create. resolved_customer_* set only on attach.
-                    "customer_action": "attach" if target is not None else "create",
-                    "resolved_customer_id": target.id if target is not None else None,
-                    "resolved_customer_name": target.full_name if target is not None else None,
+                    "customer_action": action,
+                    "resolved_customer_id": disp.id if disp is not None else None,
+                    "resolved_customer_name": disp.full_name if disp is not None else None,
+                    "group_id": grp_id,
+                    "primary_row_id": prim,
                 }
             )
 
-    attach_count = len(attach_customer)
+    # would_create.customers = pure-new rows + each group's primary (the group's one
+    # customer). Attaches (B2 existing) + grouped dependents create no customer.
+    creates = sum(1 for r in eligible if r.id not in attach_customer and r.id not in group_role)
+    group_primaries = sum(1 for r in eligible if group_role.get(r.id, ("",))[0] == "group_primary")
     return {
         "batch_id": batch.id,
         "total_rows": len(rows),
         "eligible_count": len(eligible),
         "excluded": excluded,
-        # would_create.customers counts only rows that create a NEW customer;
-        # attaching rows create a job under an existing customer (no new customer).
-        "would_create": {"customers": len(eligible) - attach_count, "jobs": len(eligible)},
-        "would_attach_jobs": attach_count,
+        "would_create": {"customers": creates + group_primaries, "jobs": len(eligible)},
+        "would_attach_jobs": len(attach_customer),
         "predicted_case_numbers_by_year": by_year,
         "sample_limit": sample_limit,
         "sample_truncated": len(eligible) > len(samples),

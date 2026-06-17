@@ -161,17 +161,24 @@ explains intent; protect important explicit decisions with tests, not docs alone
   not blocked by that customer having other jobs or being modified. Legacy-reference
   de-duplication still applies; two rows may attach to the same customer if their
   legacy references differ.
-- **Pending rows may be grouped into one future customer (Section B3-2, storage
-  only).** A reviewer may mark **≥2 pending rows in the same batch** as one group
-  (`customer_resolution_mode='group'`); the group has one **primary** row that will
-  create the customer, and the others will attach jobs to it **in B3-3**. Grouping is
-  explicit and manual — never auto-grouped. A row is exactly one of: unresolved/new,
-  resolved to an existing customer, or grouped. Group structure is editable only
-  while **all** members are pending (locked once any is approved/committed/reversed);
-  removing a member below 2 auto-dissolves the group, and removing the primary
-  auto-promotes the lowest-index member. **B3-2 is storage only — it does not affect
-  commit/preview/reverse;** a grouped row still commits as its own new customer until
-  **B3-3** wires "one customer + multiple jobs."
+- **Pending rows may be grouped into one future customer (Section B3-2/B3-3).** A
+  reviewer may mark **≥2 pending rows in the same batch** as one group
+  (`customer_resolution_mode='group'`) with one **primary** row. Grouping is explicit
+  and manual — never auto-grouped. A row is exactly one of: unresolved/new, resolved
+  to an existing customer, or grouped. Group structure is editable only while **all**
+  members are pending (locked once any is approved/committed/reversed); removing a
+  member below 2 auto-dissolves the group, and removing the primary auto-promotes the
+  lowest-index member.
+- **A group commits to one customer + multiple jobs (Section B3-3).** At commit the
+  **primary creates the customer** (recorded on the group); **dependents attach jobs
+  to it** — never a new customer. Commit keeps each group contiguous + primary-first
+  (so a dependent commits after its primary, even across a `COMMIT_CAP` split); if the
+  primary isn't committed the dependents are **skipped** (`group_primary_not_committed`),
+  and if the group's customer is missing/deleted they **fail** — never a silent split.
+  Preview shows a group as **1 customer + N jobs** (`group_primary` / `group_dependent`).
+  **Reverse:** soft-delete the Job always; the **shared customer is soft-deleted only
+  when reversing its last active job** (and only if pristine) — a non-last grouped job
+  reverse is job-only. B2 attach and 'new' single-job reverse are unchanged.
 - **Preserved import context appears once.** It lives in On Commit / Job Internal
   Notes — there are no duplicate "Imported review/source" panels, and the customer
   file does not show an imported-source panel. Raw workbook cells stay inspectable

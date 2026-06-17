@@ -59,12 +59,18 @@ def reversibility(db: Session, row: ImportRow) -> dict:
     def blocked(reason: str, **extra) -> dict:
         return {**base, **extra, "reversible": False, "reason": reason}
 
-    # B2-2: an attached row (committed via customer_resolution_mode == "existing")
-    # only ever soft-deletes its imported Job — the pre-existing customer is NEVER
-    # touched. So the customer-pristineness guards (missing/deleted, modified,
-    # has-other-jobs) must NOT block reversal of an attached job; the job-pristine
-    # guards still apply. A normal new-customer commit keeps the full predicate.
+    # Unified reverse rule by how the row's customer came to be:
+    #   * 'existing' (B2 attach): the pre-existing customer is NEVER soft-deleted —
+    #     only the imported Job is. The customer-pristine guards don't apply.
+    #   * 'group' (B3): the group's SHARED customer is soft-deleted ONLY when this is
+    #     its LAST active job AND it is pristine; a non-last grouped job reverse is
+    #     job-only.
+    #   * otherwise ('new'): the created single-job customer is soft-deleted with the
+    #     full original predicate (unchanged).
+    # In all cases the job-pristine guards protect the imported Job.
     attach = row.customer_resolution_mode == "existing"
+    grouped = row.customer_resolution_mode == "group"
+    deletes_customer = not attach  # 'new' always; 'group' only on its last job
 
     if row.review_status == ImportRowReviewStatus.REVERSED.value:
         return blocked("already_reversed")
@@ -76,19 +82,20 @@ def reversibility(db: Session, row: ImportRow) -> dict:
     if job is None or job.deleted_at is not None:
         return blocked("job_missing_or_deleted")
     base["case_number"] = job.case_number
-    if not attach and (customer is None or customer.deleted_at is not None):
-        # New-customer reverse soft-deletes the customer too, so it must still exist.
+    # A 'new' reverse ALWAYS soft-deletes the customer, so it must still exist
+    # (unchanged). A grouped reverse defers this to the last-job decision below.
+    if deletes_customer and not grouped and (customer is None or customer.deleted_at is not None):
         return blocked("customer_missing_or_deleted")
 
-    # Job-pristineness guards (BOTH modes — protect the imported job).
+    # Job-pristineness guards (ALL modes — protect the imported job).
     if job.legacy_reference != row.legacy_reference:
         return blocked("legacy_reference_mismatch")
     if _status_value(job.status) != INSTALLED:
         return blocked("status_changed")
     if job.updated_at != job.created_at:
         return blocked("job_modified")
-    # Customer-pristineness applies ONLY to a new-customer reverse.
-    if not attach and customer.updated_at != customer.created_at:
+    # Customer-modified guard for a 'new' reverse (unchanged).
+    if deletes_customer and not grouped and customer.updated_at != customer.created_at:
         return blocked("customer_modified")
 
     # Any task/document linked to the job means it has been used.
@@ -104,19 +111,30 @@ def reversibility(db: Session, row: ImportRow) -> dict:
     ) or 0
     if non_import_activities > 0:
         return blocked("job_has_activity")
-    # New-customer reverse: the customer must own exactly this one (non-deleted)
-    # job, so soft-deleting it can't orphan another job. An attach never deletes
-    # the customer, so a multi-job existing customer must not block the undo.
-    if not attach:
+
+    # Customer-deletion decision.
+    delete_customer = False
+    if deletes_customer:
         active_jobs = db.scalar(
             select(func.count())
             .select_from(Job)
             .where(Job.customer_id == cust_id, Job.deleted_at.is_(None))
         ) or 0
-        if active_jobs != 1:
-            return blocked("customer_has_other_jobs")
+        if grouped:
+            # The shared group customer dies ONLY when reversing its last active job,
+            # and only if pristine. A non-last grouped job reverse is job-only.
+            if active_jobs <= 1:
+                if customer is None or customer.deleted_at is not None:
+                    return blocked("customer_missing_or_deleted")
+                if customer.updated_at != customer.created_at:
+                    return blocked("customer_modified")
+                delete_customer = True
+        else:  # 'new' (unchanged): the customer must own exactly this one job.
+            if active_jobs != 1:
+                return blocked("customer_has_other_jobs")
+            delete_customer = True
 
-    return {**base, "reversible": True, "reason": None}
+    return {**base, "reversible": True, "reason": None, "delete_customer": delete_customer}
 
 
 def reverse_row(db: Session, row: ImportRow, *, actor_id: int) -> dict:
@@ -137,22 +155,36 @@ def reverse_row(db: Session, row: ImportRow, *, actor_id: int) -> dict:
         }
 
     attach = row.customer_resolution_mode == "existing"
+    grouped = row.customer_resolution_mode == "group"
+    # The reversibility check (re-run above) decides whether the customer is also
+    # soft-deleted: 'new' always; 'group' only on its last active job; 'attach' never.
+    delete_customer = bool(check.get("delete_customer"))
     job = db.get(Job, row.committed_job_id)
     customer = db.get(Customer, row.committed_customer_id)
     case_number = job.case_number
 
     # Soft-delete only — never hard-delete (D1). Links preserved as audit (D2).
-    # B2-2: an attached job's pre-existing customer is NEVER deleted; only the
-    # imported Job is soft-deleted. A normal new-customer commit deletes both.
     soft_delete_job(db, job)
-    if not attach:
+    if delete_customer:
         soft_delete_customer(db, customer)
     row.review_status = ImportRowReviewStatus.REVERSED.value
-    description = (
-        "Import reversed; the imported Job was soft-deleted (existing customer kept)."
-        if attach
-        else "Import reversed; the created Customer and Job were soft-deleted."
-    )
+    if attach:
+        description = "Import reversed; the imported Job was soft-deleted (existing customer kept)."
+    elif grouped:
+        description = (
+            "Import reversed; the last grouped Job and its shared customer were soft-deleted."
+            if delete_customer
+            else "Import reversed; the grouped Job was soft-deleted (shared customer kept)."
+        )
+    else:
+        description = "Import reversed; the created Customer and Job were soft-deleted."
+    meta: dict = {
+        "batch_id": row.batch_id, "row_id": row.id, "case_number": case_number,
+        "attached_to_existing_customer": attach,
+    }
+    if grouped:
+        meta["customer_group_id"] = row.customer_group_id
+        meta["customer_soft_deleted"] = delete_customer
     log_activity(
         db,
         activity_type=ActivityType.RECORD_IMPORT_REVERSED,
@@ -160,10 +192,7 @@ def reverse_row(db: Session, row: ImportRow, *, actor_id: int) -> dict:
         actor_id=actor_id,
         customer_id=customer.id,
         job_id=job.id,
-        meta={
-            "batch_id": row.batch_id, "row_id": row.id, "case_number": case_number,
-            "attached_to_existing_customer": attach,
-        },
+        meta=meta,
     )
     db.commit()
     return {

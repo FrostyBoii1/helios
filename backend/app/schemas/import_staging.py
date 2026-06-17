@@ -314,11 +314,15 @@ class CommitRowPreview(BaseModel):
     predicted_case_number: str
     customer: CommitCustomerPreview
     job: CommitJobPreview
-    # B2-2: whether this row creates a new customer or attaches its job to an
-    # existing one (default "create" preserves pre-B2-2 behaviour).
-    customer_action: Literal["create", "attach"] = "create"
+    # B2-2/B3-3: how this row's customer is handled. "create" = new customer;
+    # "attach" = B2 existing-customer attach; "group_primary" = creates the group's
+    # one customer; "group_dependent" = attaches to the group's customer.
+    customer_action: Literal["create", "attach", "group_primary", "group_dependent"] = "create"
     resolved_customer_id: int | None = None
     resolved_customer_name: str | None = None
+    # B3-3: set on grouped rows so the UI can render the group.
+    group_id: int | None = None
+    primary_row_id: int | None = None
 
 
 class CommitExcludedCounts(BaseModel):
@@ -330,6 +334,10 @@ class CommitExcludedCounts(BaseModel):
     invalid_case_year: int
     # B2-2: row resolved to an existing customer that is now missing/soft-deleted.
     resolved_customer_invalid: int = 0
+    # B3-3: grouped dependent whose group's primary won't create a customer this
+    # commit, or whose committed group customer is now missing/soft-deleted.
+    group_primary_unavailable: int = 0
+    group_customer_invalid: int = 0
 
 
 class CommitWouldCreate(BaseModel):

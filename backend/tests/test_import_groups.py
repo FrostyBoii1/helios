@@ -341,26 +341,24 @@ def test_group_model_roundtrip(db_session):
 
 
 # --------------------------------------------------------------------------- #
-# INERT proof — grouping does NOT change commit behaviour in B3-2
+# B3-3 superseded this: grouped rows now commit into ONE shared customer.
+# (Detailed grouped commit/preview/reverse tests live in test_import_groups_commit.)
 # --------------------------------------------------------------------------- #
-def test_grouped_rows_commit_as_separate_customers_b3_2_inert(client_for, users, db_session):
+def test_grouped_rows_commit_into_one_customer_b3_3(client_for, users, db_session):
     admin = client_for(users["admin"])
     bid = _ingest(admin)
     a, b = _ids(admin, bid, "TESTIMP0001", "TESTIMP0002")
-    gid = _create_group(admin, bid, a, [b]).json()["id"]
+    gid = _create_group(admin, bid, a, [b]).json()["id"]  # primary = a
 
     cust_before = db_session.scalar(select(func.count()).select_from(Customer))
-    # Approve the clean rows + commit. The grouped rows must each create their OWN
-    # new customer (group ignored) — B3-2 is inert; B3-3 will make them share one.
     admin.post(f"/api/v1/imports/{bid}/bulk-approve-clean")
     res = admin.post(f"/api/v1/imports/{bid}/commit", json={}).json()
     assert res["committed"] == 3  # TESTIMP0001/0002/0004
 
     row_a = db_session.get(ImportRow, a)
     row_b = db_session.get(ImportRow, b)
-    assert row_a.committed_customer_id is not None and row_b.committed_customer_id is not None
-    # Two SEPARATE customers — the group did not merge them.
-    assert row_a.committed_customer_id != row_b.committed_customer_id
-    assert db_session.scalar(select(func.count()).select_from(Customer)) == cust_before + 3
-    # The group's commit hand-off slot is still unused in B3-2.
-    assert db_session.get(ImportCustomerGroup, gid).committed_customer_id is None
+    # a (primary) + b (dependent) share ONE customer; TESTIMP0004 makes its own.
+    assert row_a.committed_customer_id == row_b.committed_customer_id
+    assert db_session.scalar(select(func.count()).select_from(Customer)) == cust_before + 2
+    # The group records its created customer for audit/hand-off.
+    assert db_session.get(ImportCustomerGroup, gid).committed_customer_id == row_a.committed_customer_id

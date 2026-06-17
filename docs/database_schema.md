@@ -141,10 +141,13 @@ import_customer_groups.id (indexed)** — membership in a pending-row group
 **import_customer_groups** (B3-2) — a reviewer-defined group of pending rows that
 should become **one future customer**. Columns: `id`, `batch_id` FK, `primary_row_id`
 FK → import_rows.id (the row that creates the customer in B3-3), `committed_customer_id`
-FK → customers.id (**unused until B3-3**), `created_by_id` FK → users.id, `reason`,
-timestamps. **Storage only** — commit/preview/reverse do **not** read it yet (B3-3).
-The review service enforces same-batch / job-ambiguous / pending-lock / primary∈members
-and the ≥2-member (auto-dissolve) + auto-promote-primary rules.
+FK → customers.id (**set by B3-3 when the primary commits — the group's shared
+customer**), `created_by_id` FK → users.id, `reason`,
+timestamps. **B3-3 reads it at commit/preview/reverse:** the primary creates the
+customer (and sets `committed_customer_id`), dependents attach jobs to it, and reverse
+soft-deletes the shared customer only on its last active job. The review service
+enforces same-batch / job-ambiguous / pending-lock / primary∈members and the
+≥2-member (auto-dissolve) + auto-promote-primary rules.
 
 **import_issues** — first-class data-quality flags per row. Columns: `id`,
 `row_id` FK, `batch_id` FK, `kind`, `severity` (`ImportIssueSeverity`:

@@ -103,9 +103,12 @@ These are stubbed/absent and represent the next phases:
   strong candidates show a cosmetic **★ Recommended** badge (from the B1 confidence
   band) — advisory only, never auto-selected. **(B3-2 — built, storage only)** an
   admin API groups ≥2 pending rows into one future customer (`import_customer_groups`
-  + `import_rows.customer_group_id`, `mode='group'`); inert at commit/preview/reverse.
-  **(B3-3 — next)** grouped commit (primary creates / dependents attach), preview
-  ("1 customer + N jobs"), group-aware reverse; **(B3-4)** the grouping UI.
+  + `import_rows.customer_group_id`, `mode='group'`). **(B3-3 — built)** grouped rows
+  now commit as **one customer + N jobs** (primary creates / dependents attach,
+  contiguous primary-first ordering with cap-split deferral); preview shows
+  "1 customer + N jobs" (`group_primary`/`group_dependent`); reverse soft-deletes the
+  shared customer only on its **last** active job (non-last = job-only). B2 attach +
+  'new' reverse unchanged. **(B3-4 — next)** the grouping UI.
   **(B3/B4 — proposed)** auto-link/merge for identical names; existing-customer merge.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
@@ -173,12 +176,12 @@ parser/review refinements are done. Reasonable next steps, in order:
 
 1. **Finish Section D** (Jobs list labels/filter/columns) — in progress; then run
    the pre-staging audit → stage → commit → push (see §7).
-2. **Import matching — Section B3-3 (next)** — B1 advisory candidates, the NMI
+2. **Import matching — Section B3-4 (next)** — B1 advisory candidates, the NMI
    **"Same"** rule (C), B2 (resolution storage/commit/preview/reverse + UI), B3-1
-   (Recommended marker), and B3-2 (pending-row grouping **storage + API**) have all
-   landed. B3-3 makes grouped rows commit as **one customer + multiple jobs**
-   (primary creates / dependents attach), updates preview, and adds group-aware
-   reverse; B3-4 adds the grouping UI. Still **no silent merges**.
+   (Recommended marker), B3-2 (grouping storage + API), and B3-3 (grouped
+   commit/preview/reverse — one customer + N jobs) have all landed. B3-4 is the
+   remaining work: the **frontend grouping UI** (group pending rows from the
+   candidate panel, group banner, ungroup/reprimary). Still **no silent merges**.
 3. **NAS file integration** (baseline priority #8) — link each job/customer to its
    NAS folder, list/upload/preview with permission gating; later, **document
    classification** feeding approval state. Heavier (storage mounts, path safety) —

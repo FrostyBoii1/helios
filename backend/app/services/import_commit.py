@@ -17,7 +17,7 @@ Safety model (see _commit_one):
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
@@ -30,7 +30,7 @@ from app.models.enums import (
     JobStatus,
 )
 from app.models.customer import Customer
-from app.models.import_staging import ImportBatch, ImportRow
+from app.models.import_staging import ImportBatch, ImportCustomerGroup, ImportRow
 from app.models.job import Job
 from app.services import job_labels as job_labels_service
 from app.services import jobs as jobs_service
@@ -39,6 +39,7 @@ from app.services.customers import create_customer, get_customer
 from app.services.import_commit_preview import (
     case_year_source,
     classify_row,
+    commit_sort_key,
     map_customer_preview,
 )
 from app.services.import_details import (
@@ -179,31 +180,59 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
     if legacy and _live_legacy_ref_exists(db, legacy):
         return {**base, "status": "skipped", "reason": "duplicate_legacy_reference"}
 
-    # B2-2: a row resolved to an EXISTING customer attaches its job to that
-    # customer instead of creating a new one. Re-validate the target in THIS
-    # transaction; if it is gone, FAIL the row — never silently create a new
-    # customer, never clear the stored resolution.
+    # Decide where THIS row's job goes. Re-validate the target in THIS transaction;
+    # if it is gone, FAIL the row — never silently create a new customer, never
+    # clear the stored resolution.
+    #   * B2-2 'existing'   -> attach the job to the resolved live customer;
+    #   * B3-3 'group'       -> the PRIMARY creates the customer (and records it on
+    #                           the group); DEPENDENTs attach to group.committed_customer_id;
+    #   * otherwise          -> create a new customer (unchanged).
     attach = row.customer_resolution_mode == "existing"
-    resolved_customer: Customer | None = None
+    grouped = row.customer_resolution_mode == "group"
+    group: ImportCustomerGroup | None = None
+    is_group_primary = False
+    target_customer: Customer | None = None  # the existing/group customer to attach to
     if attach:
-        resolved_customer = get_customer(db, row.resolved_customer_id)  # active only
-        if resolved_customer is None:
+        target_customer = get_customer(db, row.resolved_customer_id)  # active only
+        if target_customer is None:
             still_exists = (
                 row.resolved_customer_id is not None
                 and db.get(Customer, row.resolved_customer_id) is not None
             )
             reason = "resolved_customer_deleted" if still_exists else "resolved_customer_missing"
             return {**base, "status": "failed", "reason": reason}
+    elif grouped:
+        group = db.get(ImportCustomerGroup, row.customer_group_id) if row.customer_group_id else None
+        if group is None:
+            return {**base, "status": "failed", "reason": "group_missing"}
+        is_group_primary = row.id == group.primary_row_id
+        if not is_group_primary:
+            # Dependent: attach to the customer the PRIMARY created. If the primary
+            # hasn't committed yet, SKIP (re-runnable next call) — never split the
+            # group into separate customers.
+            if group.committed_customer_id is None:
+                return {**base, "status": "skipped", "reason": "group_primary_not_committed"}
+            target_customer = get_customer(db, group.committed_customer_id)
+            if target_customer is None:
+                still_exists = db.get(Customer, group.committed_customer_id) is not None
+                reason = "group_customer_deleted" if still_exists else "group_customer_missing"
+                return {**base, "status": "failed", "reason": reason}
+
+    # An attach (B2 existing) and a grouped DEPENDENT reuse an existing customer; a
+    # 'new'/unresolved row and a grouped PRIMARY create one.
+    use_existing = attach or (grouped and not is_group_primary)
 
     try:
-        if attach:
-            # Use the existing customer as-is; never created, never mutated.
-            customer = resolved_customer
+        if use_existing:
+            # Use the existing/group customer as-is; never created, never mutated.
+            customer = target_customer
         else:
             customer = create_customer(
                 db, data=build_customer_data(parsed, raw, batch_id=batch_id, source_row_index=sidx)
             )
             db.flush()  # assign customer.id
+            if grouped and is_group_primary:
+                group.committed_customer_id = customer.id  # the group's shared customer
         _src, year = case_year_source(parsed, current_year=current_year)
         job = jobs_service.create_job(
             db,
@@ -219,8 +248,7 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
         # wins when set (NULL falls back to the generated build_imported_notes
         # default); ONLY when blank, so a manual note is never overwritten.
         seed_internal_notes(job, override=row.internal_notes_override)
-        # Provenance activity. For an attach, mark it so an auditor can see the job
-        # was added to an existing customer (and who resolved it).
+        # Provenance activity, with attach/group context for auditors.
         description = "Imported from legacy workbook."
         meta: dict = {"batch_id": batch_id, "source_row_index": sidx, "legacy_reference": legacy}
         if attach:
@@ -229,6 +257,14 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
             meta["resolved_customer_id"] = customer.id
             if row.resolved_by_id is not None:
                 meta["resolved_by_id"] = row.resolved_by_id
+        elif grouped:
+            meta["customer_group_id"] = group.id
+            meta["group_role"] = "primary" if is_group_primary else "dependent"
+            description = (
+                "Imported from legacy workbook; created the customer for a row group."
+                if is_group_primary
+                else "Imported from legacy workbook; job attached to the row group's customer."
+            )
         log_activity(
             db,
             activity_type=ActivityType.RECORD_IMPORTED,
@@ -311,12 +347,18 @@ def commit_batch(
     else:
         candidate_rows = [r for r in rows if classify_row(r, current_year=current_year) is None]
 
-    # Chronological order (matches the preview): dated rows first, then sheet order.
-    def sort_key(r: ImportRow) -> tuple[bool, date, int]:
-        src, _year = case_year_source(r.parsed or {}, current_year=current_year)
-        return (src is None, src or date.min, r.source_row_index)
-
-    candidate_rows.sort(key=sort_key)
+    # Chronological order that keeps each group CONTIGUOUS + PRIMARY-FIRST, so a
+    # dependent is always processed after its primary (even when COMMIT_CAP splits
+    # the group). Shared with the preview so the two agree.
+    groups = {
+        g.id: g
+        for g in db.scalars(
+            select(ImportCustomerGroup).where(ImportCustomerGroup.batch_id == batch.id)
+        ).all()
+    }
+    candidate_rows.sort(
+        key=lambda r: commit_sort_key(r, groups=groups, rows_by_id=by_id, current_year=current_year)
+    )
 
     to_process = candidate_rows[:COMMIT_CAP]
     capped_out = len(candidate_rows) - len(to_process)

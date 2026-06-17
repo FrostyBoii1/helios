@@ -9,6 +9,38 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Section B3-3: grouped preview / commit / reverse (one customer, N jobs)
+
+- **What:** Pending-row groups (B3-2) now actually create **one customer + multiple
+  jobs**.
+  - **Commit:** the group's **primary** row creates the customer and records it on
+    `import_customer_groups.committed_customer_id`; **dependent** rows create a Job
+    that attaches to that customer. Ordering keeps each group **contiguous +
+    primary-first** (shared `commit_sort_key`), so a dependent is always committed
+    after its primary — even when `COMMIT_CAP` (25) splits the group across calls
+    (dependents wait, then attach next call). If the primary fails / isn't committed
+    yet, dependents are **skipped** (`group_primary_not_committed`) — never split into
+    separate customers; if the group's customer is missing/deleted, dependents
+    **fail** (`group_customer_deleted`/`group_customer_missing`). Per-row durability,
+    labels, internal-notes override, legacy-ref de-dup, and `RECORD_IMPORTED` all
+    still apply.
+  - **Preview:** a group counts as **1 customer + N jobs**; per-row `customer_action`
+    is `group_primary` / `group_dependent` (+ `group_id` / `primary_row_id`);
+    `would_create.customers` counts each group once; invalid groups are excluded
+    (`group_primary_unavailable` / `group_customer_invalid`). Still read-only.
+  - **Reverse (unified rule):** always soft-delete the Job; soft-delete the
+    **customer only if it was import-created AND, after this job, has zero remaining
+    active jobs AND is pristine.** So a non-last grouped job reverse is **job-only**
+    (shared customer kept); the **last** grouped job reverse soft-deletes the
+    customer. **B2 attach and 'new' single-job reverse are byte-for-byte unchanged.**
+- **Why:** make the reviewer's grouping decision consolidate multi-job customers at
+  commit, safely and reversibly, with no auto-merge.
+- **Files:** `backend/app/services/{import_commit,import_commit_preview,import_reverse}.py`,
+  `backend/app/schemas/import_staging.py`, `backend/tests/test_import_groups_commit.py`
+  (+ the B3-2 inert test updated to the new behaviour).
+- **Temporary or permanent:** Permanent. **No migration** (uses the B3-2 columns).
+- **Risks / follow-up:** Frontend grouping UI is **B3-4** (not in this pass).
+
 ## 2026-06-17 — Section B3-2: pending-row grouping storage + API (storage only)
 
 - **What:** Foundation for grouping pending import rows into one **future** customer.
