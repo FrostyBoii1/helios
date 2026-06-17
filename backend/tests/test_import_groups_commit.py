@@ -421,3 +421,43 @@ def test_join_existing_group_preserves_primary(users, db_session):
     db_session.flush()
     assert db_session.get(ImportRow, joiner.id).customer_group_id == group.id
     assert db_session.get(ImportCustomerGroup, group.id).primary_row_id == rows[0].id  # primary preserved
+
+
+# --------------------------------------------------------------------------- #
+# Stabilization — committed-group candidate collapse + group-status visibility
+# --------------------------------------------------------------------------- #
+def test_committed_group_collapses_to_one_candidate(users, db_session):
+    # After a group commits, a later similar pending row sees ONE existing-customer
+    # candidate (the group's committed customer), not one per committed sibling.
+    from app.services.import_matching import find_candidates
+    b, rows, group = _grouped_batch(
+        db_session, users, n=2, primary_idx=0,
+        extra={0: {"customer_name": "Wendy Vale"}, 1: {"customer_name": "Wendy Vale"}},
+    )
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    cust_id = _cust_of(db_session, rows[0])
+    later = _row(b.id, 9, extra={"customer_name": "Wendy Vale"})
+    db_session.add(later)
+    db_session.flush()
+
+    cands = find_candidates(db_session, later)
+    for_cust = [c for c in cands if c["customer_id"] == cust_id]
+    assert len(for_cust) == 1                      # committed siblings collapse to one
+    assert for_cust[0]["kind"] == "live_customer"  # -> "Use this customer", not "Group"
+
+
+def test_group_to_dict_exposes_member_status_and_repromotion(users, db_session):
+    # Group-status visibility: members carry review_status + committed_customer_id; after
+    # reversing the primary, the re-promoted primary is reflected in the payload.
+    b, rows, group = _grouped_batch(db_session, users, n=3, primary_idx=0)
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    import_reverse.reverse_row(db_session, db_session.get(ImportRow, rows[0].id), actor_id=users["admin"].id)
+
+    d = import_review.group_to_dict(db_session, db_session.get(ImportCustomerGroup, group.id))
+    by_row = {m["row_id"]: m for m in d["members"]}
+    assert by_row[rows[0].id]["review_status"] == "reversed"
+    assert by_row[rows[1].id]["review_status"] == "committed"
+    assert d["primary_row_id"] == rows[1].id          # re-promoted to lowest-index committed
+    assert by_row[rows[1].id]["is_primary"] is True
+    assert by_row[rows[0].id]["is_primary"] is False
+    assert by_row[rows[1].id]["committed_customer_id"] == _cust_of(db_session, rows[1])

@@ -134,6 +134,8 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
         mode={mode}
         resolvedName={resolvedName}
         committedCustomerId={row.committed_customer_id}
+        group={mode === 'group' ? (group ?? null) : null}
+        currentRowId={row.id}
       />
     )
   }
@@ -262,19 +264,74 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
   )
 }
 
-// C: committed/reversed rows — a final / historical summary instead of the active
-// "possible same customer" review controls.
+// C/D: committed/reversed rows — a final / historical summary instead of the active
+// "possible same customer" review controls. For a GROUPED finalized row it also shows
+// a read-only group-status block (members, the current primary, per-member state, and
+// the committed customer) so the reviewer can confirm continuity — e.g. that the
+// primary was re-promoted after the original primary was reversed.
 function FinalizedResolutionSummary({
   committed,
   mode,
   resolvedName,
   committedCustomerId,
+  group,
+  currentRowId,
 }: {
   committed: boolean
   mode: CustomerResolutionMode | null
   resolvedName: string
   committedCustomerId: number | null
+  group: CustomerGroupRead | null
+  currentRowId: number
 }) {
+  // Grouped finalized row: show the group status (members + primary + committed customer).
+  if (mode === 'group') {
+    const groupCustomerId = group?.committed_customer_id ?? committedCustomerId
+    const tone = committed
+      ? 'border-emerald-500/30 bg-emerald-500/10'
+      : 'border-line bg-elevated'
+    const headText = committed ? 'text-emerald-200' : 'text-muted'
+    return (
+      <section className="flex flex-col gap-2">
+        <div className={`rounded-md border px-3 py-2 ${tone}`}>
+          <p className={`text-sm font-medium ${headText}`}>
+            {committed ? '✓ Committed' : '↩ Reversed'} — customer group
+          </p>
+          {groupCustomerId != null && (
+            <p className="mt-0.5 text-xs text-faint">
+              Group customer:{' '}
+              <Link to={`/customers/${groupCustomerId}`} className="text-brand-400 underline">
+                {resolvedName || `#${groupCustomerId}`}
+              </Link>
+            </p>
+          )}
+          {group ? (
+            <ul className="mt-1.5 flex flex-col gap-0.5">
+              {group.members.map((m) => (
+                <li key={m.row_id} className="flex flex-wrap items-center gap-x-2 text-xs">
+                  <span className="text-faint">row #{m.source_row_index}</span>
+                  <span className="text-fg">{m.customer_name || '(no name)'}</span>
+                  {m.is_primary && (
+                    <span className="rounded bg-indigo-500/25 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-200">
+                      Primary
+                    </span>
+                  )}
+                  <span className="text-[10px] uppercase tracking-wide text-faint">{m.review_status}</span>
+                  {m.row_id === currentRowId && <span className="text-indigo-300/70">(this row)</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1 text-xs text-faint">Loading group…</p>
+          )}
+          <p className="mt-1 text-[11px] text-faint">
+            The primary row owns the group's customer; if it was reversed the primary was
+            re-promoted to the lowest-numbered remaining committed row. Read-only.
+          </p>
+        </div>
+      </section>
+    )
+  }
   if (!committed) {
     return (
       <section className="flex flex-col gap-2">
@@ -288,12 +345,7 @@ function FinalizedResolutionSummary({
       </section>
     )
   }
-  const label =
-    mode === 'existing'
-      ? 'Attached to an existing customer'
-      : mode === 'group'
-        ? 'Committed as part of a customer group'
-        : 'New customer created'
+  const label = mode === 'existing' ? 'Attached to an existing customer' : 'New customer created'
   return (
     <section className="flex flex-col gap-2">
       <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">

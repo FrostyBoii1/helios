@@ -208,6 +208,10 @@ class CustomerGroupMember(BaseModel):
     source_row_index: int
     customer_name: str | None = None
     is_primary: bool
+    # Read-only group-status visibility (committed/reversed members + re-promoted
+    # primary after a reverse).
+    review_status: str = "pending"
+    committed_customer_id: int | None = None
 
 
 class CustomerGroupRead(BaseModel):

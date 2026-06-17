@@ -505,6 +505,11 @@ def group_to_dict(db: Session, group: ImportCustomerGroup) -> dict:
                 "source_row_index": m.source_row_index,
                 "customer_name": (m.parsed or {}).get("customer_name"),
                 "is_primary": m.id == group.primary_row_id,
+                # Read-only group-status visibility: per-member review state + the live
+                # customer it committed to (so the UI can show committed/reversed members
+                # and confirm a re-promoted primary after a reverse).
+                "review_status": m.review_status,
+                "committed_customer_id": m.committed_customer_id,
             }
             for m in members
         ],

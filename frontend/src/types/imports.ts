@@ -190,6 +190,9 @@ export interface CustomerGroupMember {
   source_row_index: number
   customer_name: string | null
   is_primary: boolean
+  // Read-only group-status visibility (committed/reversed members + re-promoted primary).
+  review_status: ImportRowReviewStatus
+  committed_customer_id: number | null
 }
 
 export interface CustomerGroupRead {

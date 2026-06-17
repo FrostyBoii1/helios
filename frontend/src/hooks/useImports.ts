@@ -128,8 +128,10 @@ function invalidateBatch(qc: ReturnType<typeof useQueryClient>, batchId: number)
   void qc.invalidateQueries({ queryKey: ['imports', 'reverse-check', batchId] })
   // Stabilization (C): same-customer candidates change after a commit/resolve/group
   // edit (e.g. once a sibling commits, its row collapses into one deduped existing
-  // customer candidate) — refresh every open row's candidate panel.
-  void qc.invalidateQueries({ queryKey: ['imports', 'match-candidates', batchId] })
+  // customer candidate, and a newly-grouped candidate becomes "Join this group").
+  // refetchType:'all' refreshes EVERY candidate panel — including ones not currently
+  // mounted — so a stale row-level group/use action can't survive a batch change.
+  void qc.invalidateQueries({ queryKey: ['imports', 'match-candidates', batchId], refetchType: 'all' })
   // B3-4: group reads (banner) — membership may have changed.
   void qc.invalidateQueries({ queryKey: ['imports', 'customer-group', batchId] })
 }
