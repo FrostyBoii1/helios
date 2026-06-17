@@ -461,3 +461,33 @@ def test_group_to_dict_exposes_member_status_and_repromotion(users, db_session):
     assert by_row[rows[1].id]["is_primary"] is True
     assert by_row[rows[0].id]["is_primary"] is False
     assert by_row[rows[1].id]["committed_customer_id"] == _cust_of(db_session, rows[1])
+
+
+# --------------------------------------------------------------------------- #
+# G (Stage 1): per-job site address persists for grouped multi-site jobs
+# --------------------------------------------------------------------------- #
+def test_grouped_commit_preserves_per_job_site_address(users, db_session):
+    # 3 grouped rows with 3 DIFFERENT site addresses -> ONE customer + 3 jobs, each job
+    # keeping its OWN details.site; the headline Customer address is the primary's.
+    from app.services.import_parser import parse_address
+
+    addrs = ["1 First St, Alpha NSW 2000", "2 Second St, Beta NSW 2001", "3 Third St, Gamma NSW 2002"]
+    b, rows, group = _grouped_batch(
+        db_session, users, n=3, primary_idx=0,
+        extra={i: {"customer_name": "Stuart White", "address": addrs[i],
+                   "address_parts": parse_address(addrs[i])} for i in range(3)},
+    )
+    # Preview exposes each job's site (read-only), matching what commit will write.
+    p = preview_svc.preview(db_session, b)
+    prev_sites = sorted((s["job"].get("details") or {}).get("site", {}).get("line1") for s in p["samples"])
+    assert prev_sites == ["1 First St", "2 Second St", "3 Third St"]
+
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    cust_id = _cust_of(db_session, rows[0])
+    jobs = list(
+        db_session.scalars(select(Job).where(Job.customer_id == cust_id, Job.deleted_at.is_(None))).all()
+    )
+    assert len(jobs) == 3                                          # one customer, three jobs
+    assert sorted((j.details or {}).get("site", {}).get("line1") for j in jobs) == \
+        ["1 First St", "2 Second St", "3 Third St"]                # each kept its OWN site
+    assert db_session.get(Customer, cust_id).address_line1 == "1 First St"   # headline = primary's

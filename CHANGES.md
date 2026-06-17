@@ -9,6 +9,34 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-18 — G (Stage 1): per-job site address in Job.details.site (no migration)
+
+- **What:** `build_details` now emits a top-level `details.site`
+  (line1/line2/suburb/state/postcode/note/structured/raw) from the parsed address for
+  every job row, so a multi-job customer keeps **each** job's own site address. Commit
+  persists it in `Job.details`; preview exposes the same per-job site (parity). The
+  Customer headline address is unchanged (primary/new-customer address). **JSONB only —
+  no Job columns, no migration**, and `details.site` is derived (not registry-editable).
+  - **Grouped:** one Customer + N jobs, each job's `details.site` is its own address
+    (dependents no longer lose their site).
+  - **Attach-to-existing:** the new job records its own `details.site`; the existing
+    Customer address is never mutated.
+  - **Display:** Job detail prefers the job's own site over the customer headline
+    address; the Customer page's jobs table shows each job's **Site** so multi-site jobs
+    are distinguishable. The **global** Jobs list keeps the customer Suburb/State for now
+    (deferred — a site column on the dense shared table is a separate low-risk follow-up;
+    the customer page already covers the distinguishing need).
+- **Why:** stop dropping non-primary grouped jobs' site addresses — display-first,
+  without a schema change.
+- **Files:** `backend/app/services/import_details.py`, `frontend/src/types/imports.ts`,
+  `frontend/src/pages/JobDetailPage.tsx`, `frontend/src/components/JobsTable.tsx`,
+  `frontend/src/components/CustomerJobsPanel.tsx` (+ tests).
+- **Temporary or permanent:** Permanent (Stage 1).
+- **Risks / follow-up:** **Stage 2 remains optional future work** — first-class queryable
+  `Job` site-address columns + migration + backfill, only if site must be filter/
+  searchable (Section D). Applies to FUTURE parses; existing committed jobs predate
+  `details.site` and need a re-ingest + commit to populate it.
+
 ## 2026-06-17 — F: peel trailing non-address notes from the import Address cell
 
 - **What:** `parse_address` now peels an obvious trailing non-address note that follows a

@@ -71,11 +71,15 @@ parser/review refinements** are implemented and pushed on `main` (HEAD
   line1/suburb/state/postcode + a `note`), surfaced as neutral imported review context;
   the raw cell keeps the full original. Conservative — only a dash/semicolon/pipe
   delimiter AFTER the tail, so a hyphenated street ("5-7 Smith St") is never split.
-  **(G — design only, queued)** per-job / site address for multi-job customers: today a
-  Customer has ONE address and `Job` has none, so non-primary grouped jobs' site
-  addresses aren't persisted on the live Job. Smallest path = a display-only
-  `details.site` written by `build_details` from `address_parts` (NO migration), then
-  optionally first-class queryable `Job` site columns later — **not built**.
+  **(G Stage 1 — built)** per-job / site address for multi-job customers: `build_details`
+  writes a display-only `details.site` (line1/line2/suburb/state/postcode/note/structured/
+  raw) on every job from the parsed address, persisted in `Job.details` (JSONB, NO
+  migration). Each grouped/attached job keeps its OWN site while the Customer headline
+  address stays the primary/new-customer address. Job detail prefers the job's site; the
+  customer page's jobs table shows per-job **Site** (the global Jobs list keeps the
+  customer Suburb/State for now — deferred). **Stage 2** (first-class queryable `Job`
+  site columns + migration/backfill, only if site must be filter/searchable in Section D)
+  remains optional future work — **not built**.
 - **Dev/system-admin reset tools** — admin-only, non-production **Clear imports** /
   **Clear live CRM** with an exact typed confirmation phrase (`/dev/reset/*`).
 - Tests: backend smoke (no DB) + database-backed integration tests

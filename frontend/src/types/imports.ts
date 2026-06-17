@@ -100,6 +100,19 @@ export interface MisfiledNote {
   source_column?: string | null
   text?: string | null
 }
+// G (Stage 1): the per-job/site address, derived from the parsed Address cell and
+// stored on Job.details.site (JSONB; no DB column). `structured` is false when the
+// address could not be confidently split (then `line1` holds the raw line).
+export interface SiteAddress {
+  line1?: string | null
+  line2?: string | null
+  suburb?: string | null
+  state?: string | null
+  postcode?: string | null
+  note?: string | null
+  structured?: boolean
+  raw?: string | null
+}
 export interface ParsedDetails {
   _v?: number
   notes?: {
@@ -109,6 +122,8 @@ export interface ParsedDetails {
   } & Record<string, unknown>
   flags?: { removes_old_system?: boolean; decommission_marker?: string | null } & Record<string, unknown>
   approval?: { pending_date?: string | null } & Record<string, unknown>
+  // G (Stage 1): per-job site address (display-only).
+  site?: SiteAddress | null
   [section: string]: unknown
 }
 

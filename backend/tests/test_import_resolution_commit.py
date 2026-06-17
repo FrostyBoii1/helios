@@ -104,6 +104,34 @@ def test_commit_resolved_existing_attaches_job(users, db_session: Session):
     assert "attached to an existing customer" in act.description
 
 
+def test_attached_job_gets_site_without_mutating_customer(users, db_session: Session):
+    # G (Stage 1): an attach-to-existing commit gives the NEW job its own details.site;
+    # the pre-existing customer's address is NOT mutated.
+    from app.services.import_parser import parse_address
+
+    cust = _customer(db_session, name="Site Keeper")
+    # Seed a non-null sentinel address (deliberately different from the job's site)
+    # so the immutability assertion below is non-vacuous: it proves the attach does
+    # not overwrite the customer with the new job's address.
+    cust.address_line1 = "99 Original Customer St"
+    db_session.flush()
+    addr_before = cust.address_line1
+    parsed = {
+        "customer_name": "Site Keeper", "sale_date": "01/06/2025",
+        "address": "42 New Job Rd, Newtown NSW 2042",
+        "address_parts": parse_address("42 New Job Rd, Newtown NSW 2042"),
+    }
+    b, row = _seed(db_session, ref="SITE0001", mode="existing", customer_id=cust.id, parsed=parsed)
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+
+    row = db_session.get(ImportRow, row.id)
+    job = db_session.get(Job, row.committed_job_id)
+    site = (job.details or {}).get("site", {})
+    assert site.get("line1") == "42 New Job Rd" and site.get("suburb") == "Newtown"
+    # the existing customer's address is unchanged (attach never mutates the customer).
+    assert db_session.get(Customer, cust.id).address_line1 == addr_before == "99 Original Customer St"
+
+
 def test_attached_job_keeps_labels_and_override(users, db_session: Session):
     cust = _customer(db_session)
     parsed = {"customer_name": "Imported Person", "sale_date": "01/06/2025", "address": "1 Test St",

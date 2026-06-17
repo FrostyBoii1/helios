@@ -36,6 +36,7 @@ export function CustomerJobsPanel({ customerId, customerName }: CustomerJobsPane
       <JobsTable
         jobs={data?.items ?? []}
         showCustomer={false}
+        showSite
         loading={isLoading}
         error={isError}
         emptyMessage="No jobs for this customer yet."

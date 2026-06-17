@@ -280,6 +280,26 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
     for section in _SECTIONS:
         if d[section]:
             out[section] = d[section]
+
+    # G (Stage 1): the per-JOB site address, structured from the parsed address, as a
+    # top-level ``details.site`` so a multi-job customer keeps EACH job's own site
+    # (the Customer headline address stays the primary/new-customer address). JSONB
+    # only — no Job columns / migration, and not a registry-editable section (it is
+    # derived from the parsed address, like the legacy blobs). Omitted when the row
+    # carries no address at all.
+    ap = parsed.get("address_parts") or {}
+    raw_addr = (_s(parsed.get("address")) or _s(raw.get("address"))).strip()
+    if any(ap.get(k) for k in ("line1", "suburb", "state", "postcode", "note")) or raw_addr:
+        out["site"] = {
+            "line1": ap.get("line1"),
+            "line2": None,  # parse_address does not produce a line2 yet
+            "suburb": ap.get("suburb"),
+            "state": ap.get("state"),
+            "postcode": ap.get("postcode"),
+            "note": ap.get("note"),
+            "structured": bool(ap.get("structured")),
+            "raw": raw_addr or None,  # full original Address cell, for provenance
+        }
     return out
 
 

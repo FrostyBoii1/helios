@@ -206,9 +206,18 @@ export function JobDetailPage() {
   // Structured view for imported jobs (null for native jobs -> plain rendering).
   const importedView = parseImportedJobDetails(job)
 
-  // Job/property address (from the committed customer) — important for customers
-  // with multiple jobs/properties. Shown as one line in the structured details.
-  const propertyAddress = customer
+  // Job/property address. G (Stage 1): PREFER this job's OWN site address
+  // (Job.details.site) over the customer headline address — a multi-job customer can
+  // have jobs at different sites. Falls back to the customer address when the job has
+  // no site detail (e.g. native jobs or rows staged before per-job site capture).
+  const site = job.details?.site
+  const jobSiteAddress = site
+    ? [site.line1, [site.suburb, site.state, site.postcode].filter(Boolean).join(' ')]
+        .map((p) => (p ? String(p).trim() : ''))
+        .filter(Boolean)
+        .join(', ') || (site.raw ? String(site.raw).trim() : '')
+    : ''
+  const customerAddress = customer
     ? [
         customer.address_line1,
         [customer.suburb, customer.state, customer.postcode].filter(Boolean).join(' '),
@@ -216,6 +225,7 @@ export function JobDetailPage() {
         .filter((part) => part && String(part).trim())
         .join(', ')
     : ''
+  const propertyAddress = jobSiteAddress || customerAddress
 
   return (
     <div>

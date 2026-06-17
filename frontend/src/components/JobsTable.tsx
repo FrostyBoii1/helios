@@ -12,6 +12,10 @@ interface JobsTableProps {
   jobs: Job[]
   /** Whether to show the Customer column (hidden inside a customer's own panel). */
   showCustomer?: boolean
+  /** G (Stage 1): show each job's OWN site address (from details.site) instead of the
+   *  customer's suburb/state — used in a customer's jobs panel so multi-site jobs are
+   *  distinguishable. The global jobs list keeps the customer Suburb/State for now. */
+  showSite?: boolean
   emptyMessage?: string
   loading?: boolean
   error?: boolean
@@ -22,9 +26,21 @@ function suburbState(c: CustomerRef): string {
   return [c.suburb, c.state].map((p) => p?.trim()).filter(Boolean).join(', ') || '—'
 }
 
+/** This job's OWN site address (G Stage 1): "line1, Suburb STATE" / raw / "—". */
+function jobSite(job: Job): string {
+  const s = job.details?.site
+  if (!s) return '—'
+  const line = [s.line1, [s.suburb, s.state].filter(Boolean).join(' ')]
+    .map((p) => (p ? String(p).trim() : ''))
+    .filter(Boolean)
+    .join(', ')
+  return line || (s.raw ? String(s.raw).trim() : '') || '—'
+}
+
 export function JobsTable({
   jobs,
   showCustomer = true,
+  showSite = false,
   emptyMessage = 'No jobs yet.',
   loading = false,
   error = false,
@@ -40,7 +56,7 @@ export function JobsTable({
           <tr>
             <th className="px-4 py-2 font-medium">Case #</th>
             {showCustomer && <th className="px-4 py-2 font-medium">Customer</th>}
-            <th className="px-4 py-2 font-medium">Suburb/State</th>
+            <th className="px-4 py-2 font-medium">{showSite ? 'Site' : 'Suburb/State'}</th>
             <th className="px-4 py-2 font-medium">Status</th>
             <th className="px-4 py-2 font-medium">Labels</th>
             <th className="px-4 py-2 font-medium">Install date</th>
@@ -68,7 +84,9 @@ export function JobsTable({
                 {showCustomer && (
                   <td className="px-4 py-2 text-fg">{job.customer.full_name}</td>
                 )}
-                <td className="whitespace-nowrap px-4 py-2 text-muted">{suburbState(job.customer)}</td>
+                <td className="whitespace-nowrap px-4 py-2 text-muted">
+                  {showSite ? jobSite(job) : suburbState(job.customer)}
+                </td>
                 <td className="px-4 py-2">
                   <JobStatusBadge status={job.status} />
                 </td>

@@ -23,6 +23,32 @@ from app.services.import_details import (
 
 
 # --------------------------------------------------------------------------- #
+# G (Stage 1): per-job site address in details.site
+# --------------------------------------------------------------------------- #
+def test_build_details_emits_site_from_parsed_address():
+    parsed = {"address_parts": import_parser.parse_address("39 Example St, Cooma NSW 2866")}
+    site = build_details(parsed, {"address": "39 Example St, Cooma NSW 2866"})["site"]
+    assert site["line1"] == "39 Example St"
+    assert site["suburb"] == "Cooma" and site["state"] == "NSW" and site["postcode"] == "2866"
+    assert site["note"] is None and site["structured"] is True and site["line2"] is None
+    assert site["raw"] == "39 Example St, Cooma NSW 2866"   # full original retained
+
+
+def test_build_details_site_includes_peeled_note():
+    raw_addr = "17 Daalbata Rd, Leeton 2705 NSW - 405 for the bill"
+    parsed = {"address_parts": import_parser.parse_address(raw_addr)}
+    site = build_details(parsed, {"address": raw_addr})["site"]
+    assert site["line1"] == "17 Daalbata Rd" and site["suburb"] == "Leeton"
+    assert site["note"] == "405 for the bill"               # F peeled note carried into site
+    assert site["raw"] == raw_addr
+
+
+def test_build_details_omits_site_when_no_address():
+    assert "site" not in build_details({"address_parts": {}}, {})
+    assert "site" not in build_details({}, {})
+
+
+# --------------------------------------------------------------------------- #
 # Pure build_details
 # --------------------------------------------------------------------------- #
 def test_details_has_version_and_expected_sections():
