@@ -29,12 +29,13 @@ from app.models.enums import (
     JobLabelSource,
     JobStatus,
 )
+from app.models.customer import Customer
 from app.models.import_staging import ImportBatch, ImportRow
 from app.models.job import Job
 from app.services import job_labels as job_labels_service
 from app.services import jobs as jobs_service
 from app.services.activity import log_activity
-from app.services.customers import create_customer
+from app.services.customers import create_customer, get_customer
 from app.services.import_commit_preview import (
     case_year_source,
     classify_row,
@@ -178,11 +179,31 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
     if legacy and _live_legacy_ref_exists(db, legacy):
         return {**base, "status": "skipped", "reason": "duplicate_legacy_reference"}
 
+    # B2-2: a row resolved to an EXISTING customer attaches its job to that
+    # customer instead of creating a new one. Re-validate the target in THIS
+    # transaction; if it is gone, FAIL the row — never silently create a new
+    # customer, never clear the stored resolution.
+    attach = row.customer_resolution_mode == "existing"
+    resolved_customer: Customer | None = None
+    if attach:
+        resolved_customer = get_customer(db, row.resolved_customer_id)  # active only
+        if resolved_customer is None:
+            still_exists = (
+                row.resolved_customer_id is not None
+                and db.get(Customer, row.resolved_customer_id) is not None
+            )
+            reason = "resolved_customer_deleted" if still_exists else "resolved_customer_missing"
+            return {**base, "status": "failed", "reason": reason}
+
     try:
-        customer = create_customer(
-            db, data=build_customer_data(parsed, raw, batch_id=batch_id, source_row_index=sidx)
-        )
-        db.flush()  # assign customer.id
+        if attach:
+            # Use the existing customer as-is; never created, never mutated.
+            customer = resolved_customer
+        else:
+            customer = create_customer(
+                db, data=build_customer_data(parsed, raw, batch_id=batch_id, source_row_index=sidx)
+            )
+            db.flush()  # assign customer.id
         _src, year = case_year_source(parsed, current_year=current_year)
         job = jobs_service.create_job(
             db,
@@ -198,14 +219,24 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
         # wins when set (NULL falls back to the generated build_imported_notes
         # default); ONLY when blank, so a manual note is never overwritten.
         seed_internal_notes(job, override=row.internal_notes_override)
+        # Provenance activity. For an attach, mark it so an auditor can see the job
+        # was added to an existing customer (and who resolved it).
+        description = "Imported from legacy workbook."
+        meta: dict = {"batch_id": batch_id, "source_row_index": sidx, "legacy_reference": legacy}
+        if attach:
+            description = "Imported from legacy workbook; job attached to an existing customer."
+            meta["attached_to_existing_customer"] = True
+            meta["resolved_customer_id"] = customer.id
+            if row.resolved_by_id is not None:
+                meta["resolved_by_id"] = row.resolved_by_id
         log_activity(
             db,
             activity_type=ActivityType.RECORD_IMPORTED,
-            description="Imported from legacy workbook.",
+            description=description,
             actor_id=actor_id,
             customer_id=customer.id,
             job_id=job.id,
-            meta={"batch_id": batch_id, "source_row_index": sidx, "legacy_reference": legacy},
+            meta=meta,
         )
         # Phase L3: auto-assign import-derived labels (approval state, decommission)
         # in the SAME per-row transaction. Additive + idempotent — never reads or

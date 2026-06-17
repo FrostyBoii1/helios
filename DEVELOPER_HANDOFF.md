@@ -91,12 +91,14 @@ These are stubbed/absent and represent the next phases:
   **fresh re-ingest/reparse** to pick it up. **(B2-1 — built, storage/API only)**
   an import row can store an explicit manual same-customer resolution (attach to an
   existing live customer, or new), editable while pending and locked at approval —
-  but it does **not** affect commit-to-live / commit-preview / reverse yet.
-  **(B2-2 — required next)** honour the resolution at commit (create-vs-attach), in
-  commit-preview, and in reverse (soft-delete only the job for an attached row);
-  **B2-2 is required before resolution has any live effect.** **(B2-3)** the
-  candidate-panel resolution UI. **(B3 — proposed)** auto-link/merge and
-  pending-row-to-pending-row resolution.
+  **(B2-2 — built)** the resolution is now honoured live: commit attaches a
+  resolved row's job to the existing customer (no new customer; a missing/deleted
+  target **fails** the row, never a silent fallback); commit-preview shows
+  attach-vs-create + `would_attach_jobs` and excludes an invalid resolution; and
+  **reverse of an attached row soft-deletes only the imported Job, never the
+  pre-existing customer**. **(B2-3 — next)** the candidate-panel resolution UI
+  (frontend). **(B3 — proposed)** auto-link/merge and pending-row-to-pending-row
+  resolution.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.
@@ -163,11 +165,10 @@ parser/review refinements are done. Reasonable next steps, in order:
 
 1. **Finish Section D** (Jobs list labels/filter/columns) — in progress; then run
    the pre-staging audit → stage → commit → push (see §7).
-2. **Import matching — Section B2-2 (next)** — B1 advisory candidates, the NMI
-   **"Same"** rule (C), and B2-1 (persisted same-customer resolution, storage/API
-   only) have landed. B2-2 makes commit-to-live honour the resolution
-   (create-vs-attach), updates commit-preview, and makes reverse soft-delete only
-   the job for an attached row; then B2-3 wires the candidate-panel UI. Still
+2. **Import matching — Section B2-3 (next)** — B1 advisory candidates, the NMI
+   **"Same"** rule (C), B2-1 (persisted resolution), and B2-2 (resolution wired
+   into commit/preview/reverse) have landed. B2-3 wires the candidate-panel
+   resolution UI (frontend: choose attach-to-existing / new / clear). Still
    **no silent merges** — auto-link/merge is B3.
 3. **NAS file integration** (baseline priority #8) — link each job/customer to its
    NAS folder, list/upload/preview with permission gating; later, **document

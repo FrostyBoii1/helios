@@ -18,10 +18,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.customer import Customer
 from app.models.enums import ImportRowClass, ImportRowReviewStatus
 from app.models.import_staging import ImportBatch, ImportRow
 from app.models.job import Job
 from app.services.case_number import build_case_number
+from app.services.customers import get_customer
 from app.services.import_parser import parse_date_maybe
 
 # Imported (COMPLETED-sheet) jobs would be created with this status (D3).
@@ -187,6 +189,8 @@ EXCLUSION_REASONS = (
     "unresolved_error",
     "missing_customer_name",
     "invalid_case_year",
+    # B2-2: row resolved to an existing customer that is now missing/soft-deleted.
+    "resolved_customer_invalid",
 )
 
 
@@ -239,6 +243,23 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
         else:
             excluded[reason] += 1
 
+    # B2-2: among otherwise-eligible rows, a resolution to an EXISTING customer
+    # that is now missing/soft-deleted cannot commit (it would fail at commit
+    # time, never silently create a new customer). Exclude it here so preview and
+    # commit agree. attach_customer maps row.id -> the live target customer for
+    # the rows that DO attach. Read-only.
+    attach_customer: dict[int, Customer] = {}
+    still_eligible: list[ImportRow] = []
+    for row in eligible:
+        if (row.customer_resolution_mode or None) == "existing":
+            target = get_customer(db, row.resolved_customer_id)
+            if target is None:
+                excluded["resolved_customer_invalid"] += 1
+                continue
+            attach_customer[row.id] = target
+        still_eligible.append(row)
+    eligible = still_eligible
+
     # Chronological order: dated rows first (by source date), undated rows last,
     # each tie-broken by original sheet order (D2).
     def sort_key(row: ImportRow) -> tuple[bool, date, int]:
@@ -272,6 +293,7 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
         predicted = build_case_number(year, base_counts[year] + running[year])
 
         if len(samples) < sample_limit:
+            target = attach_customer.get(row.id)
             samples.append(
                 {
                     "row_id": row.id,
@@ -288,15 +310,23 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
                         batch_id=batch.id,
                         source_row_index=row.source_row_index,
                     ),
+                    # B2-2: attach vs create. resolved_customer_* set only on attach.
+                    "customer_action": "attach" if target is not None else "create",
+                    "resolved_customer_id": target.id if target is not None else None,
+                    "resolved_customer_name": target.full_name if target is not None else None,
                 }
             )
 
+    attach_count = len(attach_customer)
     return {
         "batch_id": batch.id,
         "total_rows": len(rows),
         "eligible_count": len(eligible),
         "excluded": excluded,
-        "would_create": {"customers": len(eligible), "jobs": len(eligible)},
+        # would_create.customers counts only rows that create a NEW customer;
+        # attaching rows create a job under an existing customer (no new customer).
+        "would_create": {"customers": len(eligible) - attach_count, "jobs": len(eligible)},
+        "would_attach_jobs": attach_count,
         "predicted_case_numbers_by_year": by_year,
         "sample_limit": sample_limit,
         "sample_truncated": len(eligible) > len(samples),

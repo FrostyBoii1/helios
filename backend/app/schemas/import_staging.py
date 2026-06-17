@@ -258,6 +258,11 @@ class CommitRowPreview(BaseModel):
     predicted_case_number: str
     customer: CommitCustomerPreview
     job: CommitJobPreview
+    # B2-2: whether this row creates a new customer or attaches its job to an
+    # existing one (default "create" preserves pre-B2-2 behaviour).
+    customer_action: Literal["create", "attach"] = "create"
+    resolved_customer_id: int | None = None
+    resolved_customer_name: str | None = None
 
 
 class CommitExcludedCounts(BaseModel):
@@ -267,6 +272,8 @@ class CommitExcludedCounts(BaseModel):
     unresolved_error: int
     missing_customer_name: int
     invalid_case_year: int
+    # B2-2: row resolved to an existing customer that is now missing/soft-deleted.
+    resolved_customer_invalid: int = 0
 
 
 class CommitWouldCreate(BaseModel):
@@ -280,6 +287,9 @@ class ImportCommitPreview(BaseModel):
     eligible_count: int
     excluded: CommitExcludedCounts
     would_create: CommitWouldCreate
+    # B2-2: eligible jobs that attach to an existing customer (jobs created without
+    # a new customer). would_create.customers already excludes these.
+    would_attach_jobs: int = 0
     predicted_case_numbers_by_year: dict[str, int]
     sample_limit: int
     sample_truncated: bool

@@ -9,6 +9,38 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Section B2-2: wire same-customer resolution into commit / preview / reverse
+
+- **What:** The B2-1 resolution intent now has live effect.
+  - **Commit-to-live:** a row with `customer_resolution_mode = "existing"` attaches
+    a **new Job to the resolved existing customer** — no new customer is created and
+    the existing one is **not** mutated. The `RECORD_IMPORTED` activity gains
+    `attached_to_existing_customer` / `resolved_customer_id` / `resolved_by_id`
+    metadata and an attach-specific description. Labels, internal-notes seeding /
+    override, and legacy-reference de-duplication are all preserved. If the resolved
+    customer is missing/soft-deleted at commit time the row **fails**
+    (`resolved_customer_deleted` / `resolved_customer_missing`) — never a silent
+    fallback to a new customer, and the stored resolution is left intact for a retry.
+  - **Commit-preview:** per-row `customer_action` ("attach"/"create") +
+    `resolved_customer_id`/`resolved_customer_name`; `would_create.customers`
+    excludes attach rows; new top-level `would_attach_jobs`; a resolution to a
+    missing/deleted customer is excluded as `resolved_customer_invalid` so preview
+    and commit agree. Preview still writes nothing.
+  - **Reverse (safety-critical):** reversing an attached row soft-deletes **only the
+    imported Job — never the pre-existing customer**; the customer-pristineness
+    guards (`customer_missing_or_deleted` / `customer_modified` /
+    `customer_has_other_jobs`) are skipped for attach, while the job-pristineness
+    guards still apply. A normal new-customer reverse is unchanged (soft-deletes both).
+- **Why:** make the reviewer's explicit same-customer decision actually consolidate
+  multi-job customers at commit, safely and reversibly, with no auto-merge.
+- **Files:** `backend/app/services/{import_commit,import_commit_preview,import_reverse}.py`,
+  `backend/app/schemas/import_staging.py`, `backend/tests/test_import_resolution_commit.py`.
+- **Temporary or permanent:** Permanent. **No migration** (uses the B2-1 columns).
+- **Risks / follow-up:** `resolved_customer_missing` is defensive-only — the B2-1 FK
+  plus soft-delete-only model means a resolved target row always exists, so the
+  reachable invalid case is `resolved_customer_deleted`. Frontend resolution actions
+  are **Section B2-3** (not in this pass).
+
 ## 2026-06-17 — Section B2-1: persisted same-customer resolution state (storage/API only)
 
 - **What:** Foundation for manual same-customer resolution. Adds five nullable

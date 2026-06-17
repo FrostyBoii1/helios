@@ -130,9 +130,11 @@ same-customer resolution (storage only):** `resolved_customer_id` FK →
 customers.id (indexed), `customer_resolution_mode` (null = unresolved → new
 customer at commit / `new` = explicit new / `existing` = attach to
 `resolved_customer_id`), `customer_resolution_reason`, `resolved_by_id` FK →
-users.id, `resolved_at`. These record a reviewer's pre-commit intent only; the
-mode/customer invariant is enforced in the review service, and commit-to-live /
-commit-preview / reverse do **not** read them yet (Section B2-2).
+users.id, `resolved_at`. The mode/customer invariant is enforced in
+the review service. **Section B2-2 wires these into commit/preview/reverse:** an
+`existing` row attaches its job to `resolved_customer_id` (no new customer); a
+missing/soft-deleted target fails the row; reverse of an attached row soft-deletes
+only the Job, never the resolved customer.
 
 **import_issues** — first-class data-quality flags per row. Columns: `id`,
 `row_id` FK, `batch_id` FK, `kind`, `severity` (`ImportIssueSeverity`:

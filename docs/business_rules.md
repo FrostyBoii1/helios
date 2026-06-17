@@ -141,13 +141,23 @@ explains intent; protect important explicit decisions with tests, not docs alone
   Otherwise it stays "Same" and keeps its `nmi_unmatched` review warning. **Prefer
   false negatives over false positives** — never cross-link two properties' meters.
 - **Same-customer resolution is explicit, manual, and recorded before commit
-  (Section B2-1).** A reviewer may store an intent on an import row to either
+  (Section B2-1/B2-2).** A reviewer may store an intent on an import row to either
   create a new customer or attach the job to an **existing live customer** — never
-  an auto-merge, never a silent combine, and (for now) never another pending import
-  row. The intent is editable only while the row is **pending** and locked once
-  approved (reopen to change). In B2-1 this intent is **storage only**: it does not
-  change commit-to-live, commit-preview, or reverse — honouring it at commit is
-  Section B2-2.
+  an auto-merge, never a silent combine, and never another pending import row. The
+  intent is editable only while the row is **pending** and locked once approved
+  (reopen to change).
+- **A resolved "existing" row attaches its job to that customer at commit
+  (Section B2-2).** Commit creates a **new Job under the resolved existing
+  customer** and does **not** create or mutate a customer; the provenance activity
+  records `attached_to_existing_customer`. If the resolved customer is missing or
+  soft-deleted at commit time the row **fails** (`resolved_customer_deleted` /
+  `resolved_customer_missing`) — never a silent fallback to a new customer, and the
+  resolution is preserved for a retry. Commit-preview shows the row as **attach**
+  vs **create** (and excludes an invalid resolution). **Reverse of an attached row
+  soft-deletes only the imported Job — never the pre-existing customer** — and is
+  not blocked by that customer having other jobs or being modified. Legacy-reference
+  de-duplication still applies; two rows may attach to the same customer if their
+  legacy references differ.
 - **Preserved import context appears once.** It lives in On Commit / Job Internal
   Notes — there are no duplicate "Imported review/source" panels, and the customer
   file does not show an imported-source panel. Raw workbook cells stay inspectable
