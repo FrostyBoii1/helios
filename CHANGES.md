@@ -9,6 +9,29 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Section B4-0: extract shared matching core (no behaviour change)
+
+- **What:** Moved the pure, DB-free scoring core out of `import_matching.py` into a
+  new `backend/app/services/matching_core.py` so the SAME rules can back both import
+  matching and the future B4 live-CRM duplicate detection. Symbols moved: `Signature`,
+  `build_signature`, `score`, the confidence ranking `CONF_RANK`, the name/address
+  normalization helpers, the company/trust entity rule, and the House/Unit address
+  handling. `import_matching` imports + re-exports them (same objects), so existing
+  callers/tests are unchanged; the import-specific row/customer signature builders, the
+  candidate-list cap, and `find_candidates` stay in `import_matching`.
+- **Why:** B4-0 foundation — one source of truth for matching before building duplicate
+  detection (B4-A) and merge (B4-B). No scoring retune, no new endpoint, no DB/schema
+  change.
+- **Files:** `backend/app/services/matching_core.py` (new),
+  `backend/app/services/import_matching.py`, `backend/tests/test_matching_core.py` (new).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** None for matching — behaviour-identical; the import matching /
+  resolution / grouping / commit suites pass unedited. (A **pre-existing** `dev_reset`
+  FK gap surfaced while running the full suite — `clear_imports` / `clear_live_crm`
+  did not handle the B2/B3 `import_customer_groups` customer links — independent of and
+  predating B4-0; it was fixed separately in commit `e6c4eb0`,
+  "fix(dev-reset): handle B2/B3 import grouping links during resets".)
+
 ## 2026-06-17 — Docs: reconcile schema / overview / README with the B2/B3 matching series
 
 - **What:** Documentation-only reconciliation after the B2/B3 same-customer

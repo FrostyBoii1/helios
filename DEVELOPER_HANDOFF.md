@@ -85,6 +85,10 @@ These are stubbed/absent and represent the next phases:
 - **Import matching:** **(B1 — built, advisory only)** a read-only same-customer
   candidate engine surfaces possible same-customer rows/customers (with reasons +
   a confidence band) in the import row drawer; no merge/link/auto-action.
+  **(B4-0 — built, refactor)** the pure scoring core (`Signature` / `build_signature`
+  / `score` + the entity / address / normalization rules) now lives in
+  `app/services/matching_core.py`, shared verbatim by import matching and the future
+  B4 live-CRM duplicate detection — no behaviour change; `import_matching` re-exports it.
   **(C — built)** a conservative NMI **"Same"** rule carries a previous real NMI
   forward only on a strong adjacent-row + same-base-property match, else keeps the
   review issue. **Section C is parse-time only** — existing staged batches need a
