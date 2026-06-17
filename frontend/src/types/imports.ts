@@ -169,17 +169,45 @@ export interface ImportRow {
   customer_resolution_reason: string | null
   resolved_by_id: number | null
   resolved_at: string | null
+  // B3-2/B3-4: membership in a pending-row group (mode === 'group').
+  customer_group_id: number | null
   issues: ImportIssue[]
 }
 
-// Stored resolution mode on a row (null = unresolved). The resolve REQUEST also
-// accepts 'clear' to reset back to unresolved.
-export type CustomerResolutionMode = 'existing' | 'new'
+// Stored resolution mode on a row (null = unresolved). 'group' = member of a
+// pending-row group (B3). The resolve REQUEST also accepts 'clear' to reset.
+export type CustomerResolutionMode = 'existing' | 'new' | 'group'
 
 export interface CustomerResolutionRequest {
   mode: 'existing' | 'new' | 'clear'
   customer_id?: number | null
   reason?: string | null
+}
+
+// ---- B3: pending-row groups (become one future customer at commit) ----
+export interface CustomerGroupMember {
+  row_id: number
+  source_row_index: number
+  customer_name: string | null
+  is_primary: boolean
+}
+
+export interface CustomerGroupRead {
+  id: number
+  batch_id: number
+  primary_row_id: number
+  committed_customer_id: number | null
+  created_by_id: number | null
+  created_at: string
+  reason: string | null
+  member_row_ids: number[]
+  members: CustomerGroupMember[]
+}
+
+// remove-row / dissolve may dissolve the group (group: null).
+export interface CustomerGroupMutationResult {
+  dissolved: boolean
+  group: CustomerGroupRead | null
 }
 
 export interface ImportRowList {

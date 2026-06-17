@@ -1,16 +1,11 @@
-// Section B1/B2-3/B3-1 — "Possible same customer" panel for the import row modal.
+// Section B1/B2-3/B3-1/B3-4 — "Possible same customer" panel for the import row modal.
 // B1 surfaced advisory candidates (read-only, with reasons + a confidence band).
-// B2-3 makes live-customer candidates ACTIONABLE: when `onUseCustomer` is provided
-// (an editable/pending row), a candidate that resolves to an existing live customer
-// gets a "Use this customer" action. Batch-row candidates whose sibling hasn't been
-// committed yet have no live customer and stay advisory — pending-row linking is not
-// supported yet (that is future work). With no action props it renders as the
-// original advisory panel.
-//
-// B3-1 adds a purely cosmetic "Recommended" marker on STRONG candidates (derived
-// from the existing B1 confidence band — no new state/decision system). Recommended
-// is NOT auto-selected: it never writes resolution and never changes preview/commit/
-// reverse — the reviewer still confirms explicitly via "Use this customer".
+// B2-3 makes LIVE-customer candidates actionable: "Use this customer" attaches the
+// job to an existing customer. B3-4 makes PENDING batch-row candidates actionable too:
+// "Group as same customer" puts this row + the candidate row into one future-customer
+// group. The two actions are visually distinct (brand = attach existing, indigo =
+// group pending). B3-1 keeps the cosmetic "Recommended" marker on strong candidates.
+// With no action props it renders as the original advisory panel.
 
 import { Link } from 'react-router-dom'
 
@@ -30,11 +25,14 @@ const CONF_DOT: Record<string, string> = {
 interface MatchCandidatesPanelProps {
   batchId: number
   rowId: number
-  // B2-3 (optional): when provided AND editable, a live-customer candidate shows a
-  // "Use this customer" action. Omit (or editable=false) for an advisory panel.
   editable?: boolean
+  // B2-3: attach this row to a live customer candidate.
   resolvedCustomerId?: number | null
   onUseCustomer?: (customerId: number) => void
+  // B3-4: group this row with a PENDING batch-row candidate (no live customer yet).
+  onGroupWithRow?: (candidateRowId: number) => void
+  // Row ids already in THIS row's group (shown as "In group ✓").
+  groupMemberRowIds?: number[]
   busy?: boolean
 }
 
@@ -44,13 +42,18 @@ export function MatchCandidatesPanel({
   editable = false,
   resolvedCustomerId = null,
   onUseCustomer,
+  onGroupWithRow,
+  groupMemberRowIds = [],
   busy = false,
 }: MatchCandidatesPanelProps) {
   const { data, isLoading } = useRowMatchCandidates(batchId, rowId)
   const candidates = data ?? []
-  // Nothing to show: no candidates (or still loading) — stay out of the way.
   if (isLoading || candidates.length === 0) return null
-  const actionable = editable && typeof onUseCustomer === 'function'
+
+  const canUse = editable && typeof onUseCustomer === 'function'
+  const canGroup = editable && typeof onGroupWithRow === 'function'
+  const actionable = canUse || canGroup
+  const memberSet = new Set(groupMemberRowIds)
 
   return (
     <section className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] p-3">
@@ -59,33 +62,30 @@ export function MatchCandidatesPanel({
           Possible same customer ({candidates.length})
         </h3>
         <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-200/80">
-          {actionable ? 'Pick to attach' : 'Advisory'}
+          {actionable ? 'Pick / group' : 'Advisory'}
         </span>
       </div>
       <p className="mb-2 text-xs text-amber-200/70">
         {actionable
-          ? 'Attach this job to an existing customer, or leave it to create a new one. Only existing live customers can be selected.'
+          ? 'Attach to an existing customer (Use this customer), or group with another pending row to become one new customer (Group as same customer).'
           : 'This row may belong to an existing customer or another row in this batch. Review only.'}
       </p>
       <ul className="flex flex-col gap-1.5">
         {candidates.map((c, i) => {
-          // customer_id is set for live_customer candidates and for batch-row
-          // candidates whose sibling has already been committed (a live customer).
-          const liveId = c.customer_id
+          const liveId = c.customer_id // set for live_customer + already-committed batch rows
           const selected = liveId != null && liveId === resolvedCustomerId
-          const selectable = actionable && liveId != null && !selected
+          const inGroup = c.row_id != null && memberSet.has(c.row_id)
           return (
             <li key={i} className={`rounded border px-2 py-1.5 text-xs ${CONF_BOX[c.confidence]}`}>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${CONF_DOT[c.confidence]}`} />
                 <span className="font-medium text-fg">{c.name || '(no name)'}</span>
                 <span className="text-[10px] uppercase tracking-wide text-faint">{c.confidence}</span>
-                {/* B3-1: cosmetic "Recommended" marker on strong candidates only.
-                    Advisory — it never auto-selects; the reviewer still confirms. */}
+                {/* B3-1: cosmetic "Recommended" marker on strong candidates only. */}
                 {c.confidence === 'strong' && (
                   <span
                     className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200"
-                    title="High-confidence match — recommended, but never auto-selected. Confirm explicitly with “Use this customer”."
+                    title="High-confidence match — recommended, but never auto-selected."
                   >
                     ★ Recommended
                   </span>
@@ -101,27 +101,39 @@ export function MatchCandidatesPanel({
                 ) : (
                   <span className="text-faint">batch row #{c.source_row_index}</span>
                 )}
-                {/* B2-3 action / state (only on an editable row). */}
+                {/* Action (only on an editable row). */}
                 {actionable && (
                   <span className="ml-auto">
-                    {selected ? (
-                      <span className="font-medium text-emerald-300">Selected ✓</span>
-                    ) : selectable ? (
-                      <button
-                        type="button"
-                        onClick={() => onUseCustomer!(liveId!)}
-                        disabled={busy}
-                        className="rounded border border-brand-500/40 bg-brand-500/10 px-2 py-0.5 font-medium text-brand-200 hover:bg-brand-500/20 disabled:opacity-50"
-                      >
-                        Use this customer
-                      </button>
+                    {liveId != null ? (
+                      // B2: live customer -> attach.
+                      selected ? (
+                        <span className="font-medium text-emerald-300">Selected ✓</span>
+                      ) : canUse ? (
+                        <button
+                          type="button"
+                          onClick={() => onUseCustomer!(liveId)}
+                          disabled={busy}
+                          className="rounded border border-brand-500/40 bg-brand-500/10 px-2 py-0.5 font-medium text-brand-200 hover:bg-brand-500/20 disabled:opacity-50"
+                        >
+                          Use this customer
+                        </button>
+                      ) : null
+                    ) : c.row_id != null && canGroup ? (
+                      // B3: pending batch row -> group as one future customer.
+                      inGroup ? (
+                        <span className="font-medium text-indigo-300">In group ✓</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onGroupWithRow!(c.row_id!)}
+                          disabled={busy}
+                          className="rounded border border-indigo-500/40 bg-indigo-500/10 px-2 py-0.5 font-medium text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-50"
+                        >
+                          Group as same customer
+                        </button>
+                      )
                     ) : (
-                      <span
-                        className="text-faint"
-                        title="This batch row hasn't been committed yet, so it has no live customer to attach to."
-                      >
-                        pending — can’t select yet
-                      </span>
+                      <span className="text-faint">review only</span>
                     )}
                   </span>
                 )}

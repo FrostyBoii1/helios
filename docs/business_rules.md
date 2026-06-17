@@ -161,10 +161,13 @@ explains intent; protect important explicit decisions with tests, not docs alone
   not blocked by that customer having other jobs or being modified. Legacy-reference
   de-duplication still applies; two rows may attach to the same customer if their
   legacy references differ.
-- **Pending rows may be grouped into one future customer (Section B3-2/B3-3).** A
-  reviewer may mark **≥2 pending rows in the same batch** as one group
-  (`customer_resolution_mode='group'`) with one **primary** row. Grouping is explicit
-  and manual — never auto-grouped. A row is exactly one of: unresolved/new, resolved
+- **Pending rows may be grouped into one future customer (Section B3-2/B3-3/B3-4).**
+  A reviewer may mark **≥2 pending rows in the same batch** as one group
+  (`customer_resolution_mode='group'`) with one **primary** row, **in the import row
+  modal** (Section B3-4): a pending "Possible same customer" candidate gets a
+  "Group as same customer" action, and a group banner exposes the members, the
+  primary, and set-primary / remove / dissolve. Grouping is explicit and manual —
+  never auto-grouped. A row is exactly one of: unresolved/new, resolved
   to an existing customer, or grouped. Group structure is editable only while **all**
   members are pending (locked once any is approved/committed/reversed); removing a
   member below 2 auto-dissolves the group, and removing the primary auto-promotes the

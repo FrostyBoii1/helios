@@ -2,22 +2,28 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  addGroupRow,
   bulkApproveClean,
   commitBatch,
+  createCustomerGroup,
+  dissolveCustomerGroup,
   editRow,
   getBatch,
   getBatchSummary,
   getCommitPreview,
+  getCustomerGroup,
   getFieldRegistry,
   getReverseCheck,
   getRow,
   getRowMatchCandidates,
   listBatches,
   listRows,
+  removeGroupRow,
   resolveIssue,
   resolveRowCustomer,
   reverseRow,
   rowAction,
+  setGroupPrimary,
   uploadBatch,
   type RowAction,
 } from '@/lib/imports'
@@ -36,6 +42,8 @@ const keys = {
   commitPreview: (id: number) => ['imports', 'commit-preview', id] as const,
   reverseCheck: (batchId: number, rowId: number) =>
     ['imports', 'reverse-check', batchId, rowId] as const,
+  customerGroup: (batchId: number, groupId: number) =>
+    ['imports', 'customer-group', batchId, groupId] as const,
 }
 
 export function useFieldRegistry() {
@@ -118,6 +126,8 @@ function invalidateBatch(qc: ReturnType<typeof useQueryClient>, batchId: number)
   void qc.invalidateQueries({ queryKey: keys.batch(batchId) })
   void qc.invalidateQueries({ queryKey: keys.commitPreview(batchId) })
   void qc.invalidateQueries({ queryKey: ['imports', 'reverse-check', batchId] })
+  // B3-4: group reads (banner) — membership may have changed.
+  void qc.invalidateQueries({ queryKey: ['imports', 'customer-group', batchId] })
 }
 
 export function useReverseRow(batchId: number) {
@@ -170,6 +180,59 @@ export function useResolveRowCustomer(batchId: number) {
   return useMutation({
     mutationFn: ({ rowId, payload }: { rowId: number; payload: CustomerResolutionRequest }) =>
       resolveRowCustomer(batchId, rowId, payload),
+    onSuccess: () => invalidateBatch(qc, batchId),
+  })
+}
+
+// ---- Section B3-4: pending-row groups ----
+export function useCustomerGroup(batchId: number, groupId: number | null) {
+  return useQuery({
+    queryKey: keys.customerGroup(batchId, groupId ?? 0),
+    queryFn: () => getCustomerGroup(batchId, groupId as number),
+    enabled: Number.isFinite(batchId) && batchId > 0 && groupId != null && groupId > 0,
+  })
+}
+
+export function useCreateCustomerGroup(batchId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ primaryRowId, memberRowIds, reason }: { primaryRowId: number; memberRowIds: number[]; reason?: string | null }) =>
+      createCustomerGroup(batchId, primaryRowId, memberRowIds, reason),
+    onSuccess: () => invalidateBatch(qc, batchId),
+  })
+}
+
+export function useAddGroupRow(batchId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ groupId, rowId }: { groupId: number; rowId: number }) =>
+      addGroupRow(batchId, groupId, rowId),
+    onSuccess: () => invalidateBatch(qc, batchId),
+  })
+}
+
+export function useRemoveGroupRow(batchId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ groupId, rowId }: { groupId: number; rowId: number }) =>
+      removeGroupRow(batchId, groupId, rowId),
+    onSuccess: () => invalidateBatch(qc, batchId),
+  })
+}
+
+export function useSetGroupPrimary(batchId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ groupId, primaryRowId }: { groupId: number; primaryRowId: number }) =>
+      setGroupPrimary(batchId, groupId, primaryRowId),
+    onSuccess: () => invalidateBatch(qc, batchId),
+  })
+}
+
+export function useDissolveCustomerGroup(batchId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ groupId }: { groupId: number }) => dissolveCustomerGroup(batchId, groupId),
     onSuccess: () => invalidateBatch(qc, batchId),
   })
 }

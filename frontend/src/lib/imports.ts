@@ -3,6 +3,8 @@
 import { apiFetch } from '@/lib/api'
 import type {
   BulkApproveResult,
+  CustomerGroupMutationResult,
+  CustomerGroupRead,
   CustomerResolutionRequest,
   FieldRegistry,
   ImportBatch,
@@ -76,6 +78,61 @@ export function resolveRowCustomer(
   return apiFetch<ImportRow>(`/imports/${batchId}/rows/${rowId}/resolve-customer`, {
     method: 'POST',
     body: payload,
+  })
+}
+
+// ---- Section B3-4: pending-row groups (admin-only) ----
+export function getCustomerGroup(batchId: number, groupId: number): Promise<CustomerGroupRead> {
+  return apiFetch<CustomerGroupRead>(`/imports/${batchId}/customer-groups/${groupId}`)
+}
+
+export function createCustomerGroup(
+  batchId: number,
+  primaryRowId: number,
+  memberRowIds: number[],
+  reason?: string | null,
+): Promise<CustomerGroupRead> {
+  return apiFetch<CustomerGroupRead>(`/imports/${batchId}/customer-groups`, {
+    method: 'POST',
+    body: { primary_row_id: primaryRowId, member_row_ids: memberRowIds, reason: reason ?? null },
+  })
+}
+
+export function addGroupRow(batchId: number, groupId: number, rowId: number): Promise<CustomerGroupRead> {
+  return apiFetch<CustomerGroupRead>(`/imports/${batchId}/customer-groups/${groupId}/rows`, {
+    method: 'POST',
+    body: { row_id: rowId },
+  })
+}
+
+export function removeGroupRow(
+  batchId: number,
+  groupId: number,
+  rowId: number,
+): Promise<CustomerGroupMutationResult> {
+  return apiFetch<CustomerGroupMutationResult>(
+    `/imports/${batchId}/customer-groups/${groupId}/rows/${rowId}`,
+    { method: 'DELETE' },
+  )
+}
+
+export function setGroupPrimary(
+  batchId: number,
+  groupId: number,
+  primaryRowId: number,
+): Promise<CustomerGroupRead> {
+  return apiFetch<CustomerGroupRead>(`/imports/${batchId}/customer-groups/${groupId}`, {
+    method: 'PATCH',
+    body: { primary_row_id: primaryRowId },
+  })
+}
+
+export function dissolveCustomerGroup(
+  batchId: number,
+  groupId: number,
+): Promise<CustomerGroupMutationResult> {
+  return apiFetch<CustomerGroupMutationResult>(`/imports/${batchId}/customer-groups/${groupId}`, {
+    method: 'DELETE',
   })
 }
 

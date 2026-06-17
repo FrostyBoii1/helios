@@ -9,6 +9,32 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Section B3-4: import-modal UI for pending-row grouping (frontend only)
+
+- **What:** The import row modal now lets a reviewer group pending rows into one
+  future customer (the B3-2/B3-3 backend made reachable).
+  - The "Possible same customer" panel gives a **pending batch-row** candidate a
+    **"Group as same customer"** action (indigo), distinct from B2's "Use this
+    customer" (brand). Live-customer candidates still attach via B2; the B3-1
+    ★ Recommended marker is unchanged.
+  - Grouping a candidate **creates** a group (current row = primary) or, if the row
+    is already grouped, **adds** the candidate to it. A **group banner** shows
+    "Grouped as one future customer (N rows)", the member list with the **Primary**
+    badge, and the commit explanation, plus **Set this row as primary** /
+    **Remove this row from group** / **Dissolve group** controls. Candidates already
+    in the group show "In group ✓".
+  - Controls show only while the row is **pending**; locked rows render the group
+    read-only. A row is shown in exactly one state (group banner vs B2 resolution
+    banner); the Create-new / search controls are hidden when grouped.
+- **Why:** make the B3 grouping decision reachable to reviewers so they can
+  consolidate multi-job customers during import review — no auto-grouping.
+- **Files (frontend only):** `frontend/src/components/imports/CustomerResolutionSection.tsx`,
+  `MatchCandidatesPanel.tsx`, `hooks/useImports.ts`, `lib/imports.ts`, `types/imports.ts`.
+- **Temporary or permanent:** Permanent. **No backend change** (uses the existing
+  B3-2 group endpoints + B3-3 commit/preview/reverse). No migration.
+- **Risks / follow-up:** Existing-customer **merge** (combining two live customers)
+  remains out of scope (future B4).
+
 ## 2026-06-17 — Section B3-3: grouped preview / commit / reverse (one customer, N jobs)
 
 - **What:** Pending-row groups (B3-2) now actually create **one customer + multiple
