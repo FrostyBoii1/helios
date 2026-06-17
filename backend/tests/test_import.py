@@ -816,7 +816,10 @@ def test_parse_address_conservative_when_uncertain():
     assert weird["suburb"] is None and weird["state"] is None and weird["postcode"] is None
     # Blank.
     blank = pa("")
-    assert blank == {"line1": None, "suburb": None, "state": None, "postcode": None, "structured": False}
+    assert blank == {
+        "line1": None, "suburb": None, "state": None, "postcode": None,
+        "structured": False, "note": None,
+    }
 
 
 def test_parse_rows_attaches_address_parts():
@@ -826,6 +829,62 @@ def test_parse_rows_attaches_address_parts():
     ap = row.parsed["address_parts"]
     assert ap["line1"] == "9 Test St" and ap["structured"] is False
     assert row.parsed["address"] == "9 Test St"  # raw retained for back-compat
+
+
+# --------------------------------------------------------------------------- #
+# F: trailing non-address note peeled off the Address cell
+# --------------------------------------------------------------------------- #
+def test_parse_address_peels_trailing_billing_note():
+    # The exact reported case: the billing note is peeled, the address parses cleanly,
+    # and the note is preserved (the raw cell keeps the full original verbatim).
+    r = import_parser.parse_address("17 Daalbata Rd , Leeton 2705 NSW - 405 for the bill")
+    assert r["line1"] == "17 Daalbata Rd"
+    assert r["suburb"] == "Leeton"
+    assert r["state"] == "NSW"
+    assert r["postcode"] == "2705"
+    assert r["structured"] is True
+    assert r["note"] == "405 for the bill"          # preserved, NOT part of the address
+
+
+def test_parse_address_no_trailing_note_unchanged():
+    # A normal address with no trailing note: behaviour unchanged, note is None.
+    r = import_parser.parse_address("39 Example St, Cooma NSW 2866")
+    assert r["line1"] == "39 Example St" and r["suburb"] == "Cooma"
+    assert r["state"] == "NSW" and r["postcode"] == "2866" and r["note"] is None
+
+
+def test_parse_address_does_not_split_hyphen_in_street():
+    pa = import_parser.parse_address
+    # A hyphen that is part of legitimate street text (before the tail) is NEVER peeled.
+    r = pa("5-7 Example St, Town NSW 2000")
+    assert r["line1"] == "5-7 Example St" and r["suburb"] == "Town"
+    assert r["postcode"] == "2000" and r["note"] is None
+    # ...even when a genuine trailing note IS present after the tail: only the note peels.
+    r2 = pa("5-7 Example St, Town NSW 2000 - paid in cash")
+    assert r2["line1"] == "5-7 Example St" and r2["suburb"] == "Town"
+    assert r2["note"] == "paid in cash"
+
+
+def test_parse_address_preserves_unit_prefix_with_note():
+    # A unit prefix stays in line1; a trailing note still peels cleanly.
+    r = import_parser.parse_address("Unit 4, 17 Daalbata Rd, Leeton NSW 2705 - 405 for the bill")
+    assert "Unit 4" in r["line1"]
+    assert r["suburb"] == "Leeton" and r["state"] == "NSW" and r["postcode"] == "2705"
+    assert r["note"] == "405 for the bill"
+
+
+def test_address_note_surfaces_in_imported_notes():
+    # The peeled note is preserved as neutral imported review context and surfaces in
+    # the seeded internal-notes summary.
+    from app.services.import_details import build_details, build_imported_notes
+
+    raw_addr = "17 Daalbata Rd, Leeton 2705 NSW - 405 for the bill"
+    parsed = {"address_parts": import_parser.parse_address(raw_addr)}
+    details = build_details(parsed, {"address": raw_addr})
+    review_texts = [m["text"] for m in (details.get("notes", {}).get("review_notes") or [])]
+    assert "405 for the bill" in review_texts
+    notes = build_imported_notes(details)
+    assert notes is not None and "405 for the bill" in notes
 
 
 def test_worst_row_combined_pollution_all_preserved():

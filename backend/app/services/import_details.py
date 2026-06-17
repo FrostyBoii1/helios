@@ -136,6 +136,12 @@ def build_details(parsed: dict | None, raw: dict | None) -> dict[str, Any]:
         else:
             sink(col, rv)
 
+    # F: a trailing non-address note peeled off the Address cell (e.g. a billing/admin
+    # reference like "405 for the bill") — preserved as neutral imported review context,
+    # never treated as suburb/state/postcode/address content. The raw Address cell still
+    # holds the full original verbatim.
+    review_note("Address", (parsed.get("address_parts") or {}).get("note"))
+
     # --- Sales ---
     put_text("sales", "salesperson_text", parsed.get("salesperson"))
     # Non-name suffix lifted off the Sales Consultant cell (a DOB / payment / system

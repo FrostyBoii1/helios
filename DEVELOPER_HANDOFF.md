@@ -65,7 +65,17 @@ parser/review refinements** are implemented and pushed on `main` (HEAD
   references kept in Job Internal Notes; approval-action phrases and numeric-panel
   + inverter jobs derive **Needs approval**; benign name-cell suffixes cleaned and
   preserved verbatim in internal notes; duplicate imported review/source panels
-  removed (preserved context lives only in On Commit / Job Internal Notes).
+  removed (preserved context lives only in On Commit / Job Internal Notes). **(F —
+  built)** `parse_address` peels an obvious trailing non-address note after a valid AU
+  "STATE POSTCODE" tail (e.g. "… Leeton 2705 NSW - 405 for the bill" → clean
+  line1/suburb/state/postcode + a `note`), surfaced as neutral imported review context;
+  the raw cell keeps the full original. Conservative — only a dash/semicolon/pipe
+  delimiter AFTER the tail, so a hyphenated street ("5-7 Smith St") is never split.
+  **(G — design only, queued)** per-job / site address for multi-job customers: today a
+  Customer has ONE address and `Job` has none, so non-primary grouped jobs' site
+  addresses aren't persisted on the live Job. Smallest path = a display-only
+  `details.site` written by `build_details` from `address_parts` (NO migration), then
+  optionally first-class queryable `Job` site columns later — **not built**.
 - **Dev/system-admin reset tools** — admin-only, non-production **Clear imports** /
   **Clear live CRM** with an exact typed confirmation phrase (`/dev/reset/*`).
 - Tests: backend smoke (no DB) + database-backed integration tests

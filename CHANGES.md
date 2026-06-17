@@ -9,6 +9,27 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — F: peel trailing non-address notes from the import Address cell
+
+- **What:** `parse_address` now peels an obvious trailing non-address note that follows a
+  valid AU "STATE POSTCODE" tail (e.g. `"17 Daalbata Rd, Leeton 2705 NSW - 405 for the
+  bill"`) into a `note` field — so the structured address (line1/suburb/state/postcode)
+  is clean, and the note is preserved as neutral imported review context (`build_details`
+  → the "Uncategorised Data on Import" internal-notes summary). The raw Address cell still
+  holds the full original verbatim, so no source evidence is lost.
+- **Why:** a trailing billing/admin note broke the end-anchored address tail, so the whole
+  cell fell through to `line1` unstructured and the note polluted the address fields.
+- **Conservative:** only peels after a dash / semicolon / pipe delimiter that follows the
+  AU tail — a hyphen inside a street (`"5-7 Smith St"`) or a Lot/DP legal descriptor is
+  never split, and a normal address with no trailing note is unchanged.
+- **Files:** `backend/app/services/import_parser.py`,
+  `backend/app/services/import_details.py`, `backend/tests/test_import.py`. **No schema /
+  migration** — parser/note rules apply to FUTURE parses; existing staged rows need a
+  re-ingest to reflect this.
+- **Temporary or permanent:** Permanent.
+- **Follow-up:** **G (multi-job / per-site address) is design-only / queued** (see
+  `DEVELOPER_HANDOFF.md`) — not implemented in this pass.
+
 ## 2026-06-17 — Grouped-customer read-model UI: candidate refetch + group status (follow-up to f67c1ec)
 
 - **What:** Display / read-model-only fixes that closed the manual-UI failures found

@@ -192,6 +192,20 @@ _ADDR_TAIL_RE = re.compile(
     r")\s*$",
     re.IGNORECASE,
 )
+# An obvious trailing NON-address note that follows a valid AU "STATE POSTCODE" tail,
+# set off by a clear delimiter (" - ", " – ", "; ", " | ") — e.g.
+# "17 Daalbata Rd, Leeton 2705 NSW - 405 for the bill". Conservative on purpose: the
+# delimiter must be a dash / semicolon / pipe FOLLOWED BY whitespace (a comma is normal
+# address punctuation and never splits), and it must come AFTER the AU tail — so a
+# hyphen inside a street ("5-7 Smith St") or a Lot/DP legal descriptor is never peeled.
+_ADDR_TAIL_NOTE_RE = re.compile(
+    r"(?P<tail>"
+    r"\b(?:" + "|".join(AU_STATES) + r")\b[\s,]+\d{4}"
+    r"|\d{4}[\s,]+\b(?:" + "|".join(AU_STATES) + r")\b"
+    r")"
+    r"\s*[-–—;|]\s+(?P<note>\S.*?)\s*$",
+    re.IGNORECASE,
+)
 DIVIDER_HINTS = ("FORTNIGHT", "WEEK ", "BELOW", "ABOVE", "MONTH", "TBC")
 PANEL_BRAND_HINTS = ("longi", "trina", "ae", "tw", "jinko", "ja ", "canadian", "risen", "qcell",
                      "rec", "sunpower", "hyundai", "seraphim", "phono")
@@ -603,19 +617,30 @@ def parse_address(raw: str) -> dict[str, Any]:
     remaining head; the street (incl. any Lot/DP/legal descriptor, preserved
     verbatim) is everything before that comma. If the head has no comma we cannot
     confidently separate suburb from street, so the whole head stays as ``line1``
-    and ``suburb`` is left blank — never guessed. line1 + suburb + state +
-    postcode always reconstruct the original (no text is lost)."""
+    and ``suburb`` is left blank — never guessed.
+
+    An OBVIOUS trailing non-address note after the AU tail (e.g. "... NSW - 405 for
+    the bill") is peeled into ``note`` so it can't pollute the structured address; the
+    caller (build_details) surfaces it as neutral imported review context. The raw
+    address cell is always retained verbatim upstream, so nothing is lost. line1 +
+    suburb + state + postcode reconstruct the (note-stripped) address."""
     s = (raw or "").strip()
     out: dict[str, Any] = {
         "line1": s or None, "suburb": None, "state": None,
-        "postcode": None, "structured": False,
+        "postcode": None, "structured": False, "note": None,
     }
     if not s:
         out["line1"] = None
         return out
+    # F: peel an obvious trailing non-address note that follows the AU tail.
+    nm = _ADDR_TAIL_NOTE_RE.search(s)
+    if nm:
+        out["note"] = nm.group("note").strip() or None
+        s = s[: nm.end("tail")].strip()
+        out["line1"] = s or None
     m = _ADDR_TAIL_RE.search(s)
     if not m:
-        return out  # no reliable anchor -> keep the raw line, structure nothing
+        return out  # no reliable anchor -> keep the (note-stripped) line, structure nothing
     state = (m.group("state1") or m.group("state2") or "").upper()
     postcode = m.group("pc1") or m.group("pc2")
     head = s[: m.start()].strip().rstrip(",").strip()
