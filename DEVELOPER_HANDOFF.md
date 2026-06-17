@@ -148,8 +148,15 @@ These are stubbed/absent and represent the next phases:
   stale "Group as same customer" disappears once siblings group/commit/reverse and
   collapse to one "Use this customer"), and committed/reversed grouped rows show a
   read-only group-status block (members + per-member primary/review state + the
-  committed-customer link) so a re-promoted primary is visible. **(B4 — proposed)**
-  auto-link/merge for identical names; existing-customer merge.
+  committed-customer link) so a re-promoted primary is visible. **(H — built)** each
+  "Possible same customer" candidate that resolves to a committed customer gets a
+  **Preview** button opening a strictly read-only modal (`CandidatePreviewModal`):
+  it composes the existing read-only GETs `useCustomer(id)` + `useJobs({customer_id})`
+  to show the customer's name/contact/headline address and their jobs (each with the
+  job's own `details.site`, status, labels) — no new endpoint, no action callbacks, no
+  mutation; dismissal only. Pending/group candidates (`customer_id` null) show no
+  Preview button; previewing a pending row's parsed import data is deferred. **(B4 —
+  proposed)** auto-link/merge for identical names; existing-customer merge.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

@@ -9,6 +9,36 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-18 — H: read-only candidate customer preview in the import review modal
+
+- **What:** In the "Possible same customer" panel (`MatchCandidatesPanel`), each candidate
+  that resolves to an existing **committed** customer now shows a **Preview** button. It
+  opens a **strictly read-only** modal (`CandidatePreviewModal`) so the reviewer can
+  inspect that customer before deciding whether to *Use this customer* / *Join this group*
+  / *Group as same customer*. The modal shows the customer's name, email/phone, headline
+  address, and their jobs — each with the job's own site address (`details.site` from G),
+  status, and labels — plus the total job count.
+- **Why:** reviewers need to confirm "is this really the same customer?" without leaving
+  the import review or mutating anything.
+- **How (no parallel system, zero backend change):** the modal composes the two existing
+  read-only GET hooks — `useCustomer(id)` (`GET /customers/{id}`) and
+  `useJobs({customer_id})` (`GET /jobs?customer_id=…`). It holds **no** action callbacks
+  and performs **no** mutation; its only controls are dismissal (✕ / Escape / backdrop).
+  All decision actions stay on `MatchCandidatesPanel`.
+- **Previewable scope:** only candidates with a committed `customer_id`
+  (`kind='live_customer'`, or a `batch_row` already committed in a prior phase). Pending
+  / group candidates (`customer_id` null) have no committed customer to inspect, so the
+  Preview button does not render for them. **Deferred:** a preview of a pending batch
+  row's *parsed* import data (name/address from the staged row) — out of scope for this
+  first cut; the panel only carries `MatchCandidate` fields, not the full parsed row.
+- **Files:** `frontend/src/components/imports/CandidatePreviewModal.tsx` (new),
+  `frontend/src/components/imports/MatchCandidatesPanel.tsx`.
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** Read-only by construction (no action callbacks, two GETs only).
+  Browser verification is currently not exercisable — with `customers=0` (batch 14150 is
+  staged-only) no candidate is previewable yet; it becomes visible once live customers
+  exist. Pre-G jobs have `details.site=null` and fall back to "—".
+
 ## 2026-06-18 — G (Stage 1): per-job site address in Job.details.site (no migration)
 
 - **What:** `build_details` now emits a top-level `details.site`
