@@ -9,6 +9,33 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Docs: reconcile schema / overview / README with the B2/B3 matching series
+
+- **What:** Documentation-only reconciliation after the B2/B3 same-customer
+  resolution + grouping work. **No code, schema, or behaviour change.**
+  - `docs/database_schema.md`: corrected stale/false migration prose. It claimed the
+    `job_label_*` tables were "the only schema migration since `legacy_reference`" and
+    that the import work added "no migrations." It now lists the ordered import-migration
+    chain including **`c7d8e9f0a1b2`** (B2-1 `import_rows` customer-resolution columns)
+    and **`d8e9f0a1b2c3`** (B3-2 `import_customer_groups` + `import_rows.customer_group_id`),
+    with the current Alembic **head = `d8e9f0a1b2c3`**.
+  - `PROJECT_OVERVIEW.md`: §4 data models now name `import_customer_groups` and the
+    per-row customer-resolution state (new / attach-existing / group-into-one).
+  - `README.md`: "What's implemented" now lists same-customer matching — advisory
+    candidates, manual attach-to-existing, and pending-row grouping (one customer + N jobs).
+  - `docs/business_rules.md`: noted the B2/B3 resolution + grouping actions are
+    **admin-only** and clarified the group lock is **backend-authoritative** (the modal
+    controls follow the row's pending status; the server rejects locked-group changes
+    with HTTP 422).
+  - `DEVELOPER_HANDOFF.md`: fixed the matching stale "No migration beyond
+    `legacy_reference`" line for consistency.
+- **Why:** the repository must explain the current system on its own; the migration
+  prose was factually false and the overview/README predated the matching series.
+- **Files (docs only):** `docs/database_schema.md`, `PROJECT_OVERVIEW.md`, `README.md`,
+  `docs/business_rules.md`, `DEVELOPER_HANDOFF.md`, `CHANGES.md`.
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** None — docs only; no migration, no code, no data touched.
+
 ## 2026-06-17 — Section B3-4: import-modal UI for pending-row grouping (frontend only)
 
 - **What:** The import row modal now lets a reviewer group pending rows into one

@@ -102,9 +102,13 @@ Core entities: **User, Role, Customer, Job, Task, Activity, Document**, plus the
   `job_label_assignments`. They are operational workflow signals; approval state is
   represented by one **system** approval label, auto-assigned at import commit and
   edited via the structured approval control (operational labels are user-managed).
-- **Import staging** (`import_batches` / `import_rows` / `import_issues`) holds the
-  legacy-workbook migration; rows become live Customer/Job records only via an
-  explicit, admin-confirmed commit (see `docs/business_rules.md`).
+- **Import staging** (`import_batches` / `import_rows` / `import_issues` /
+  `import_customer_groups`) holds the legacy-workbook migration; rows become live
+  Customer/Job records only via an explicit, admin-confirmed commit. Before commit a
+  reviewer may record a per-row **customer resolution**: leave it as a new customer,
+  **attach** the job to an existing live customer, or **group** several pending rows
+  into one future customer (the group's primary creates the customer; the others
+  attach a job to it). See `docs/business_rules.md`.
 - Business records use timestamps + soft delete (`deleted_at`); activities are
   permanent.
 

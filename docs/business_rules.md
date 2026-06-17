@@ -141,7 +141,7 @@ explains intent; protect important explicit decisions with tests, not docs alone
   Otherwise it stays "Same" and keeps its `nmi_unmatched` review warning. **Prefer
   false negatives over false positives** — never cross-link two properties' meters.
 - **Same-customer resolution is explicit, manual, and recorded before commit
-  (Section B2-1/B2-2/B2-3).** A reviewer may store an intent on an import row to
+  (Section B2-1/B2-2/B2-3).** An **admin** reviewer may store an intent on an import row to
   either create a new customer or attach the job to an **existing live customer** —
   never an auto-merge, never a silent combine, and never another pending import row.
   The intent is editable only while the row is **pending** and locked once approved
@@ -162,7 +162,7 @@ explains intent; protect important explicit decisions with tests, not docs alone
   de-duplication still applies; two rows may attach to the same customer if their
   legacy references differ.
 - **Pending rows may be grouped into one future customer (Section B3-2/B3-3/B3-4).**
-  A reviewer may mark **≥2 pending rows in the same batch** as one group
+  An **admin** reviewer may mark **≥2 pending rows in the same batch** as one group
   (`customer_resolution_mode='group'`) with one **primary** row, **in the import row
   modal** (Section B3-4): a pending "Possible same customer" candidate gets a
   "Group as same customer" action, and a group banner exposes the members, the
@@ -171,7 +171,10 @@ explains intent; protect important explicit decisions with tests, not docs alone
   to an existing customer, or grouped. Group structure is editable only while **all**
   members are pending (locked once any is approved/committed/reversed); removing a
   member below 2 auto-dissolves the group, and removing the primary auto-promotes the
-  lowest-index member.
+  lowest-index member. The **backend is authoritative**: the import-modal grouping
+  controls follow the current row's pending status, but the server re-validates the
+  **whole** group and rejects the change (HTTP 422) once any member is approved/
+  committed/reversed — the UI never decides the lock.
 - **A group commits to one customer + multiple jobs (Section B3-3).** At commit the
   **primary creates the customer** (recorded on the group); **dependents attach jobs
   to it** — never a new customer. Commit keeps each group contiguous + primary-first

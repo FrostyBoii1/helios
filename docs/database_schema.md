@@ -172,8 +172,11 @@ approval label (the structured approval control enforces this).
 > `jobs.internal_notes` (manual staff notes, distinct from the read-only imported
 > `notes` blob) and `jobs.details` (JSONB, registry-shaped structured import
 > attributes); `customers.internal_notes`; `import_rows.internal_notes_override`
-> (the reviewer's editable On-Commit notes). The two `job_label_*` tables are the
-> only schema migration since `legacy_reference`.
+> (the reviewer's editable On-Commit notes). Several additive migrations have
+> followed `legacy_reference` (the column additions above, the two `job_label_*`
+> tables + approval-label renames, the B2-1 customer-resolution columns, and the
+> B3-2 `import_customer_groups` table) — see **Migrations** for the ordered chain
+> and current head.
 
 ## Relationships
 
@@ -218,6 +221,13 @@ customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
   `ImportRowReviewStatus`/`ImportIssueSeverity`) are stored as strings, so adding
   a value needs **no migration**. The current set lives in
   `backend/app/models/enums.py` (the authoritative source).
-- **Import migrations:** the staging tables (Phase A) and `jobs.legacy_reference`
-  (Phase C0) are the only import-related migrations. The commit-to-live, reverse,
-  and case-year-guard work added **no** migrations (string-enum values only).
+- **Import migrations (ordered):** `3a7c8dea1004` staging tables (Phase A) →
+  `7e512cf78bf7` review-audit columns → `91a6e16b2a20` `jobs.legacy_reference`
+  (Phase C0) → `b6c7d8e9f0a1` `import_rows.internal_notes_override` →
+  **`c7d8e9f0a1b2` `import_rows` customer-resolution columns** (B2-1:
+  `resolved_customer_id`, `customer_resolution_mode`, `customer_resolution_reason`,
+  `resolved_by_id`, `resolved_at`) → **`d8e9f0a1b2c3` `import_customer_groups` table
+  + `import_rows.customer_group_id`** (B3-2). The current Alembic **head is
+  `d8e9f0a1b2c3`**. The commit-to-live, reverse, and case-year-guard work (and the
+  later B2-2/B2-3, B3-3/B3-4 wiring) added **no** further migrations — they read the
+  existing columns at commit/preview/reverse and in the UI (string-enum values only).

@@ -226,8 +226,11 @@ own commit; see CHANGES.md):
 **Safety model:** no live record is created until a row is `approved` **and** a
 commit is explicitly confirmed; commit is capped at 25/call; reverse is
 soft-delete-only and never touches a record that's been edited/used; the
-case-year guard blocks implausible years. No migration beyond `legacy_reference`
-(status/activity additions are string enums). v1 maps one Customer per Job,
+case-year guard blocks implausible years. Beyond `legacy_reference` the import
+schema added the B2-1 resolution columns (`c7d8e9f0a1b2`) and the B3-2
+`import_customer_groups` table (`d8e9f0a1b2c3`, current Alembic head); the
+commit/reverse/case-year work itself added none (status/activity additions are
+string enums). v1 maps one Customer per Job,
 keeps salesperson/installer as text, and uses a single-line address — no NAS
 matching, reference catalogs, StaffDirectory, status-label tables, or
 CustomerContact.

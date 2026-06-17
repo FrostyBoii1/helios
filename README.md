@@ -146,6 +146,7 @@ cat backups/<file>.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$PO
 - ✅ **Spreadsheet import pipeline** (legacy jobs workbook → live records), admin-only, end to end:
   - **A — staging**: parse-only `.xlsx` upload into `ImportBatch`/`ImportRow`/`ImportIssue` (no live writes); the read-only dry-run parser (`backend/scripts/import_dryrun.py`) shares the same parser
   - **B1/B2 — review**: edit the parsed candidate (whitelisted fields incl. address), approve/reject/skip/reopen, resolve issues, bulk-approve-clean; admin review UI with filters/search, paginated table, and a row drawer
+  - **B1/B2/B3 — same-customer matching** (admin-only, recorded before commit): advisory "Possible same customer" candidates (read-only suggestions, never auto-applied); manual per-row resolution to **attach** the job to an existing live customer; and **grouping** of ≥2 pending rows into one future customer that commits as **one customer + multiple jobs** (the primary creates the customer, dependents attach jobs; reverse is group-aware)
   - **C0 — commit-preview**: read-only eligibility + excluded reasons + predicted (estimated) case numbers; `jobs.legacy_reference` column added
   - **C1/C2 — commit-to-live**: create live Customer + Job from approved rows, **capped at 25 rows/call**, create-only, idempotent, one `RECORD_IMPORTED` activity/job; preview/confirm/result modal in the UI
   - **C3a/C3b — scoped reverse**: per-row, soft-delete-only undo of a *pristine* imported record (re-checked server-side), with a confirm modal and a read-only "Reversed" state
