@@ -250,6 +250,51 @@ def classify_row(row: ImportRow, *, current_year: int | None = None) -> str | No
     return None
 
 
+# Terminal review states whose group membership is preserved as audit (never detached).
+_GROUP_TERMINAL = (
+    ImportRowReviewStatus.COMMITTED.value,
+    ImportRowReviewStatus.REVERSED.value,
+)
+
+
+def plan_group_commit(
+    group: ImportCustomerGroup, member_rows: list[ImportRow], eligible_ids: set[int]
+) -> tuple[int | None, list[int]]:
+    """A (stabilization): shared planner used by BOTH preview (predict) and commit
+    (apply) so the two always agree on grouped rows.
+
+    Given a group's member rows and the set of per-row-eligible ids (``classify_row``
+    returned None), return ``(effective_primary_id, detach_ids)``:
+
+      * ``effective_primary_id`` — the stored primary if it is eligible, else the
+        lowest-source-index eligible member (re-promotion); the stored primary when the
+        group already committed a customer (historical); None when the group is not
+        being committed into (no eligible member and not already committed).
+      * ``detach_ids`` — non-eligible, non-terminal members (pending-unapproved /
+        rejected / skipped / error). At commit these are detached so they are not left
+        stranded in a now-locked committed group; committed/reversed members stay
+        (audit). Empty when the group is not being committed into.
+
+    Pure (no DB).
+    """
+    members = sorted(member_rows, key=lambda r: r.source_row_index)
+    eligible = [m for m in members if m.id in eligible_ids]
+    committed = group.committed_customer_id is not None
+    if not (eligible or committed):
+        return None, []
+    detach = [
+        m.id for m in members
+        if m.id not in eligible_ids and m.review_status not in _GROUP_TERMINAL
+    ]
+    if committed:
+        effective_primary = group.primary_row_id  # dependents attach to committed_customer_id
+    else:  # eligible is non-empty here
+        effective_primary = (
+            group.primary_row_id if group.primary_row_id in eligible_ids else eligible[0].id
+        )
+    return effective_primary, detach
+
+
 # --------------------------------------------------------------------------- #
 # Preview (read-only)
 # --------------------------------------------------------------------------- #
@@ -290,6 +335,17 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
     }
     rows_by_id = {r.id: r for r in rows}
     eligible_ids = {r.id for r in eligible}
+    # A (stabilization): each group's EFFECTIVE primary (re-promoted to the lowest
+    # source-index eligible member when the stored primary is not eligible) — preview
+    # PREDICTS it, commit APPLIES it, via the same plan_group_commit, so the two agree.
+    members_by_group: dict[int, list[ImportRow]] = {}
+    for r in rows:
+        if r.customer_group_id is not None:
+            members_by_group.setdefault(r.customer_group_id, []).append(r)
+    eff_primary: dict[int, int | None] = {
+        g.id: plan_group_commit(g, members_by_group.get(g.id, []), eligible_ids)[0]
+        for g in groups.values()
+    }
     attach_customer: dict[int, Customer] = {}        # B2 'existing' -> live customer
     group_role: dict[int, tuple[str, int, int]] = {}  # row.id -> (action, group_id, primary_row_id)
     group_dep_customer: dict[int, Customer] = {}     # dep on an already-committed group customer
@@ -307,17 +363,18 @@ def preview(db: Session, batch: ImportBatch, *, sample_limit: int = 50) -> dict:
             if g is None:
                 excluded["group_primary_unavailable"] += 1
                 continue
-            if row.id == g.primary_row_id:
-                group_role[row.id] = ("group_primary", g.id, g.primary_row_id)
-            elif g.committed_customer_id is not None:
+            ep = eff_primary.get(g.id)
+            if g.committed_customer_id is not None:
                 cust = get_customer(db, g.committed_customer_id)
                 if cust is None:
                     excluded["group_customer_invalid"] += 1
                     continue
                 group_role[row.id] = ("group_dependent", g.id, g.primary_row_id)
                 group_dep_customer[row.id] = cust
-            elif g.primary_row_id in eligible_ids:
-                group_role[row.id] = ("group_dependent", g.id, g.primary_row_id)
+            elif ep is not None and row.id == ep:
+                group_role[row.id] = ("group_primary", g.id, ep)
+            elif ep is not None:
+                group_role[row.id] = ("group_dependent", g.id, ep)
             else:
                 excluded["group_primary_unavailable"] += 1
                 continue

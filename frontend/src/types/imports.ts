@@ -408,4 +408,7 @@ export interface MatchCandidate {
   row_id: number | null
   source_row_index: number | null
   customer_id: number | null
+  // B (stabilization): the batch-row candidate's pending group (if any) — drives the
+  // "Join this group" action instead of silently stealing the row. Null otherwise.
+  customer_group_id: number | null
 }

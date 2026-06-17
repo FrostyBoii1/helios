@@ -412,7 +412,9 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-faint">
               {!notesEditable
-                ? 'Locked — reopen the row to edit.'
+                ? locked
+                  ? 'Locked — committed and reversed rows are final.'
+                  : 'Locked — reopen the row to edit.'
                 : overrideActive
                   ? internalNotesOverride === ''
                     ? 'Will commit blank internal notes.'

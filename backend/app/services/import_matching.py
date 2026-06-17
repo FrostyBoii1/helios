@@ -174,6 +174,9 @@ def find_candidates(db: Session, row: ImportRow) -> list[dict]:
                     "row_id": r.id,
                     "source_row_index": r.source_row_index,
                     "customer_id": r.committed_customer_id,
+                    # B (stabilization): expose the candidate's group so the UI can offer
+                    # "Join this group" instead of silently stealing the row.
+                    "customer_group_id": r.customer_group_id,
                     "name": ((r.parsed or {}).get("customer_name") or "").strip(),
                     "confidence": conf,
                     "reasons": reasons,
@@ -199,6 +202,7 @@ def find_candidates(db: Session, row: ImportRow) -> list[dict]:
                     "row_id": None,
                     "source_row_index": None,
                     "customer_id": c.id,
+                    "customer_group_id": None,  # not applicable to a live-customer candidate
                     "name": c.full_name,
                     "confidence": conf,
                     "reasons": reasons,

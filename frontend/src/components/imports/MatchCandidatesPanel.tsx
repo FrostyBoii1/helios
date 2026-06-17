@@ -31,6 +31,9 @@ interface MatchCandidatesPanelProps {
   onUseCustomer?: (customerId: number) => void
   // B3-4: group this row with a PENDING batch-row candidate (no live customer yet).
   onGroupWithRow?: (candidateRowId: number) => void
+  // B (stabilization): join THIS row to the candidate's EXISTING group (preserving
+  // that group's primary) instead of stealing the candidate into a new group.
+  onJoinGroup?: (groupId: number) => void
   // Row ids already in THIS row's group (shown as "In group ✓").
   groupMemberRowIds?: number[]
   busy?: boolean
@@ -43,6 +46,7 @@ export function MatchCandidatesPanel({
   resolvedCustomerId = null,
   onUseCustomer,
   onGroupWithRow,
+  onJoinGroup,
   groupMemberRowIds = [],
   busy = false,
 }: MatchCandidatesPanelProps) {
@@ -52,6 +56,7 @@ export function MatchCandidatesPanel({
 
   const canUse = editable && typeof onUseCustomer === 'function'
   const canGroup = editable && typeof onGroupWithRow === 'function'
+  const canJoin = editable && typeof onJoinGroup === 'function'
   const actionable = canUse || canGroup
   const memberSet = new Set(groupMemberRowIds)
 
@@ -122,6 +127,17 @@ export function MatchCandidatesPanel({
                       // B3: pending batch row -> group as one future customer.
                       inGroup ? (
                         <span className="font-medium text-indigo-300">In group ✓</span>
+                      ) : c.customer_group_id != null && canJoin ? (
+                        // B (stabilization): the candidate already belongs to a group —
+                        // JOIN it (keeping its primary), never steal the candidate out.
+                        <button
+                          type="button"
+                          onClick={() => onJoinGroup!(c.customer_group_id!)}
+                          disabled={busy}
+                          className="rounded border border-indigo-500/40 bg-indigo-500/10 px-2 py-0.5 font-medium text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-50"
+                        >
+                          Join this group
+                        </button>
                       ) : (
                         <button
                           type="button"

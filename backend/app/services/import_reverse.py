@@ -20,7 +20,7 @@ from app.models.activity import Activity
 from app.models.customer import Customer
 from app.models.document import Document
 from app.models.enums import ActivityType, ImportRowReviewStatus
-from app.models.import_staging import ImportRow
+from app.models.import_staging import ImportCustomerGroup, ImportRow
 from app.models.job import Job
 from app.models.task import Task
 from app.services.activity import log_activity
@@ -137,6 +137,38 @@ def reversibility(db: Session, row: ImportRow) -> dict:
     return {**base, "reversible": True, "reason": None, "delete_customer": delete_customer}
 
 
+def _reconcile_group_after_reverse(db: Session, group_id: int, *, reversed_row_id: int) -> None:
+    """D (stabilization): keep a group's continuity after reversing one of its rows.
+
+    Members still COMMITTED (live job, not reversed) keep the group/customer alive. If
+    the reversed row was the group's PRIMARY and committed siblings remain, re-promote
+    the lowest-source-index committed sibling as the new primary (deterministic, same
+    rule as ``_leave_group``). If NO committed members remain, clear the group's
+    ``committed_customer_id`` — the shared customer is gone or no longer linked — so a
+    later dependent commit fails fast (``group_customer_*``) instead of attaching to a
+    stale / soft-deleted customer. Never deletes the group row (audit).
+    """
+    group = db.get(ImportCustomerGroup, group_id)
+    if group is None:
+        return
+    committed_siblings = list(
+        db.scalars(
+            select(ImportRow)
+            .where(
+                ImportRow.customer_group_id == group_id,
+                ImportRow.id != reversed_row_id,
+                ImportRow.review_status == ImportRowReviewStatus.COMMITTED.value,
+            )
+            .order_by(ImportRow.source_row_index)
+        ).all()
+    )
+    if not committed_siblings:
+        group.committed_customer_id = None
+        return
+    if group.primary_row_id == reversed_row_id:
+        group.primary_row_id = committed_siblings[0].id
+
+
 def reverse_row(db: Session, row: ImportRow, *, actor_id: int) -> dict:
     """Reverse one committed row if (re-checked) reversible. Per-row, transactional.
 
@@ -168,6 +200,11 @@ def reverse_row(db: Session, row: ImportRow, *, actor_id: int) -> dict:
     if delete_customer:
         soft_delete_customer(db, customer)
     row.review_status = ImportRowReviewStatus.REVERSED.value
+    # D: keep group continuity — if this was the group's primary and committed siblings
+    # remain, re-promote the lowest-source-index one; if none remain, clear the group's
+    # committed_customer_id (the shared customer is gone / unlinked).
+    if grouped and row.customer_group_id is not None:
+        _reconcile_group_after_reverse(db, row.customer_group_id, reversed_row_id=row.id)
     if attach:
         description = "Import reversed; the imported Job was soft-deleted (existing customer kept)."
     elif grouped:

@@ -41,6 +41,7 @@ from app.services.import_commit_preview import (
     classify_row,
     commit_sort_key,
     map_customer_preview,
+    plan_group_commit,
 )
 from app.services.import_details import (
     build_details,
@@ -301,6 +302,48 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
         return {**base, "status": "failed", "error": type(exc).__name__}
 
 
+def _reconcile_groups_for_commit(db: Session, batch_id: int, eligible_ids: set[int]) -> None:
+    """A (stabilization): before committing, reconcile every group being committed into.
+
+    For each group, ``plan_group_commit`` gives the effective primary + the members to
+    detach (non-eligible, non-terminal — pending-unapproved/rejected/skipped/error).
+    Detach those (clear their group fields) so they are NOT left stranded in a now-locked
+    committed group, and re-promote the primary to the lowest-source-index eligible
+    member when the stored primary is being detached (only while the group has not yet
+    committed a customer). Committed/reversed members are kept as audit. Persists.
+    """
+    groups = db.scalars(
+        select(ImportCustomerGroup).where(ImportCustomerGroup.batch_id == batch_id)
+    ).all()
+    for g in groups:
+        members = list(
+            db.scalars(
+                select(ImportRow)
+                .where(ImportRow.customer_group_id == g.id)
+                .order_by(ImportRow.source_row_index)
+            ).all()
+        )
+        effective_primary, detach_ids = plan_group_commit(g, members, eligible_ids)
+        if effective_primary is None and not detach_ids:
+            continue  # group not being committed into — leave it untouched
+        detach_set = set(detach_ids)
+        for m in members:
+            if m.id in detach_set:
+                m.customer_group_id = None
+                if m.customer_resolution_mode == "group":
+                    m.customer_resolution_mode = None
+                    m.customer_resolution_reason = None
+                    m.resolved_by_id = None
+                    m.resolved_at = None
+        if (
+            g.committed_customer_id is None
+            and effective_primary is not None
+            and g.primary_row_id != effective_primary
+        ):
+            g.primary_row_id = effective_primary
+    db.flush()
+
+
 def commit_batch(
     db: Session,
     batch: ImportBatch,
@@ -320,6 +363,11 @@ def commit_batch(
         ).unique()
     )
     by_id = {r.id: r for r in rows}
+
+    # A: detach non-approved grouped members + re-promote the primary BEFORE ordering /
+    # committing, using GLOBAL per-row eligibility (independent of any row_ids subset).
+    eligible_ids = {r.id for r in rows if classify_row(r, current_year=current_year) is None}
+    _reconcile_groups_for_commit(db, batch.id, eligible_ids)
 
     results: list[dict] = []
 

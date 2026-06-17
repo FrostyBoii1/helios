@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.customer import Customer
 from app.models.enums import ImportBatchStatus, ImportRowClass, ImportRowReviewStatus
-from app.models.import_staging import ImportBatch, ImportRow
+from app.models.import_staging import ImportBatch, ImportCustomerGroup, ImportRow
 from app.services.import_matching import build_signature as sig, find_candidates, score
 
 
@@ -236,3 +236,39 @@ def test_pending_duplicates_are_not_collapsed(db_session: Session):
     cands = find_candidates(db_session, target)
     pending_ids = {c["row_id"] for c in cands if c["customer_id"] is None}
     assert r2.id in pending_ids and r3.id in pending_ids  # both kept, not collapsed
+
+
+def test_candidate_exposes_group_id(db_session: Session):
+    """B (stabilization): a batch-row candidate that is already in a group surfaces its
+    customer_group_id so the UI can offer "Join this group" rather than steal it."""
+    b = ImportBatch(source_filename="grp.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db_session.add(b)
+    db_session.flush()
+
+    def _mk(idx):
+        r = ImportRow(
+            batch_id=b.id, source_row_index=idx, row_class=ImportRowClass.JOB.value,
+            legacy_reference=f"G{idx}", raw={},
+            parsed={"customer_name": "Pat Lin", "phones": [{"number": "0400888999"}],
+                    "emails": [], "address": "1 G St"},
+            review_status=ImportRowReviewStatus.PENDING.value,
+        )
+        db_session.add(r)
+        db_session.flush()
+        return r
+
+    grouped_row = _mk(2)
+    grp = ImportCustomerGroup(batch_id=b.id, primary_row_id=grouped_row.id)
+    db_session.add(grp)
+    db_session.flush()
+    grouped_row.customer_group_id = grp.id
+    target = _mk(3)
+    db_session.flush()
+
+    cands = find_candidates(db_session, target)
+    grouped_cand = [c for c in cands if c["row_id"] == grouped_row.id]
+    assert len(grouped_cand) == 1
+    assert grouped_cand[0]["customer_group_id"] == grp.id
+    # an ungrouped candidate carries no group id
+    assert all(c["customer_group_id"] is None for c in cands if c["row_id"] != grouped_row.id)

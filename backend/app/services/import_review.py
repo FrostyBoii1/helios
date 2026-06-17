@@ -182,6 +182,14 @@ def set_review_status(
             raise ValueError("Only job/ambiguous rows can be approved")
         if has_unresolved_error(row):
             raise ValueError("Resolve all error-severity issues before approving")
+    # D (stabilization): committed and reversed rows are terminal — they own (or owned)
+    # live records, so they cannot be reopened to pending through the normal review
+    # path. A reverse-then-recommit flow is a separate, larger guarded design.
+    if new_status == ImportRowReviewStatus.PENDING and row.review_status in (
+        ImportRowReviewStatus.COMMITTED.value,
+        ImportRowReviewStatus.REVERSED.value,
+    ):
+        raise ValueError("Committed and reversed rows are final and cannot be reopened.")
     row.review_status = new_status
     row.reviewer_id = actor_id
     row.reviewed_at = _now()
@@ -371,7 +379,17 @@ def _ensure_group_unlocked(db: Session, group: ImportCustomerGroup) -> None:
 def _set_group_membership(
     db: Session, group: ImportCustomerGroup, row: ImportRow, *, actor_id: int
 ) -> None:
-    _leave_group(db, row)  # detach from any PRIOR group first
+    # B (stabilization): never silently STEAL a row out of another group. If it is
+    # already a member of THIS group, this is an idempotent no-op; if it belongs to a
+    # DIFFERENT group, reject — the reviewer must remove it from that group first (or
+    # join this row to the existing group rather than pulling the member out).
+    if row.customer_group_id == group.id:
+        return
+    if row.customer_group_id is not None:
+        raise ValueError(
+            "This row is already in another group — remove it from that group first, "
+            "or join this row to the existing group."
+        )
     row.customer_group_id = group.id
     row.customer_resolution_mode = "group"
     row.resolved_customer_id = None  # mutual exclusion with B2 existing-resolution

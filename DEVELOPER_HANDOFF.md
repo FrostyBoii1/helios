@@ -121,8 +121,16 @@ These are stubbed/absent and represent the next phases:
   final/historical summary instead of active candidate/group controls; review buttons
   are status-aware (pending → Approve/Reject/Skip; finalized → status + Reopen);
   "Search existing customers" is pending-only, 2+ chars, with loading / no-results
-  guidance. **(B4 — proposed)** auto-link/merge for identical names; existing-customer
-  merge.
+  guidance. **(Grouping-lifecycle stabilization — built)** commit & preview share
+  `plan_group_commit`: unapproved/ineligible grouped members are auto-detached at commit
+  (only approved + eligible rows commit — grouped rows are never auto-approved), with the
+  primary re-promoted to the lowest-index eligible member; reverse re-promotes a grouped
+  primary and clears the group's committed link when the last grouped job is reversed;
+  committed/reversed rows can't be reopened via the review-status flow; a grouped
+  candidate can't be silently stolen (server hard-reject) — the modal offers "Join this
+  group" using the candidate's `customer_group_id`; the match-candidates cache is
+  invalidated on any batch change. **(B4 — proposed)** auto-link/merge for identical
+  names; existing-customer merge.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

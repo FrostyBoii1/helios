@@ -9,6 +9,44 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — B2/B3 grouping-lifecycle stabilization: approval / reverse / steal / cache
+
+- **What:** Import grouping-lifecycle fixes (no schema/parser/migration change):
+  - **Candidate cache (C):** `invalidateBatch` now also invalidates the
+    `match-candidates` query key, so an open row's "Possible same customer" panel
+    refreshes after any batch change (e.g. once siblings commit they collapse into one
+    deduped "Use this customer").
+  - **Commit auto-detach (A):** commit and preview share `plan_group_commit`; at commit,
+    unapproved/ineligible grouped members (rejected / skipped / unresolved-error) are
+    **detached** from a group being committed into instead of being stranded in the
+    now-locked committed group. **Only approved + eligible rows commit — grouped rows
+    are never auto-approved.** The primary is re-promoted to the lowest-source-index
+    eligible member when the stored primary is detached.
+  - **Reverse continuity (D):** reversing a grouped **primary** re-promotes the
+    lowest-source-index remaining **committed** sibling; reversing the **last** active
+    grouped job **clears** the group's `committed_customer_id`. Committed/reversed rows
+    can no longer be reopened to pending through the normal review-status flow, and the
+    reversed-row UI copy no longer offers a non-existent "reopen".
+  - **No silent stealing (B):** a row already in a group can no longer be silently
+    stolen into another group (server hard-reject). Candidates expose their
+    `customer_group_id`; the modal offers **"Join this group"** (adds this row to the
+    candidate's existing group, preserving its primary) instead of "Group as same
+    customer".
+- **Why:** B2/B3 grouping-lifecycle bugs found in manual testing — unapproved grouped
+  members stranded at commit, reversed rows confusingly terminal, group stealing, and a
+  stale candidate panel after commit.
+- **Files:** `backend/app/services/{import_review,import_reverse,import_commit,
+  import_commit_preview,import_matching}.py`, `backend/app/schemas/import_staging.py`,
+  `frontend/src/hooks/useImports.ts`, `frontend/src/types/imports.ts`,
+  `frontend/src/components/imports/{ImportRowModal,CustomerResolutionSection,
+  MatchCandidatesPanel}.tsx` (+ matching/group-commit tests).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** Search API is **unchanged** (E was an empty-DB perception, not a
+  bug). Browser verification of the grouping lifecycle requires a **manual/live test**
+  because grouping / approve / commit / reverse are mutating flows; backend tests cover
+  the scenarios rollback-isolated. Out of scope (separate slices): reverse-then-recommit,
+  multi-address/contact (F/G), address parser.
+
 ## 2026-06-17 — B2/B3 stabilization (Phase 2): candidate dedup + status-aware modal
 
 - **What:** Four import-review stabilization fixes (no schema change):

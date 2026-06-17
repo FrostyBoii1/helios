@@ -430,3 +430,7 @@ class MatchCandidateRead(BaseModel):
     row_id: int | None = None
     source_row_index: int | None = None
     customer_id: int | None = None
+    # B (stabilization): the batch-row candidate's pending group (if any), so the UI
+    # can offer "Join this group" rather than silently stealing the row. Null for a
+    # live-customer candidate or an ungrouped row.
+    customer_group_id: int | None = None

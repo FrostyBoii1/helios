@@ -9,10 +9,12 @@ existing-attach and 'new' single-job behaviour are unchanged.
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.customer import Customer
+from app.models.enums import ImportRowReviewStatus
 from app.models.import_staging import ImportBatch, ImportCustomerGroup, ImportRow
 from app.models.job import Job
 from app.services import import_commit, import_commit_preview as preview_svc, import_reverse, import_review
@@ -214,13 +216,21 @@ def test_grouped_preview_counts_and_actions(users, db_session):
     assert s0["group_id"] == group.id and s0["primary_row_id"] == rows[0].id
 
 
-def test_invalid_group_preview_excludes_dependents(users, db_session):
+def test_unapproved_primary_repromotes_approved_dependent(users, db_session):
+    # A (stabilization): with the stored primary unapproved but a dependent approved,
+    # the approved dependent is RE-PROMOTED to primary (so it can commit) and the
+    # unapproved primary is excluded (not_approved) — it no longer strands the group.
     b, rows, group = _grouped_batch(db_session, users, n=2, primary_idx=0, approve=False)
     rows[1].review_status = "approved"  # dependent approved, primary still pending
     db_session.flush()
     p = preview_svc.preview(db_session, b)
-    assert p["excluded"]["group_primary_unavailable"] == 1
-    assert rows[1].id not in {s["row_id"] for s in p["samples"]}
+    assert p["excluded"]["group_primary_unavailable"] == 0
+    assert p["excluded"]["not_approved"] == 1            # the unapproved stored primary
+    assert p["eligible_count"] == 1
+    assert p["would_create"]["customers"] == 1
+    dep = next(s for s in p["samples"] if s["row_id"] == rows[1].id)
+    assert dep["customer_action"] == "group_primary"     # re-promoted to primary
+    assert rows[0].id not in {s["row_id"] for s in p["samples"]}
 
 
 def test_committed_group_previews_dependents_as_attach(users, db_session):
@@ -319,3 +329,95 @@ def test_no_auto_merge_identical_names(users, db_session):
     import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
     assert _ncust(db_session) == c_before + 2  # no auto-merge
     assert _cust_of(db_session, rows[0]) != _cust_of(db_session, rows[1])
+
+
+# --------------------------------------------------------------------------- #
+# Stabilization A — commit auto-detach of unapproved grouped members
+# --------------------------------------------------------------------------- #
+def test_commit_detaches_unapproved_grouped_member(users, db_session):
+    # Group of 2, approve only the PRIMARY, commit -> the primary commits as one
+    # customer; the unapproved dependent does NOT commit and is DETACHED from the group
+    # (no longer stranded in the now-locked committed group). Preview and commit agree.
+    b, rows, group = _grouped_batch(db_session, users, n=2, primary_idx=0, approve=False)
+    rows[0].review_status = "approved"  # primary only
+    db_session.flush()
+    p = preview_svc.preview(db_session, b)
+    assert p["eligible_count"] == 1 and p["excluded"]["not_approved"] == 1
+
+    res = import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    assert res["committed"] == 1
+
+    prim = db_session.get(ImportRow, rows[0].id)
+    dep = db_session.get(ImportRow, rows[1].id)
+    assert prim.review_status == "committed" and prim.committed_customer_id is not None
+    assert dep.review_status != "committed" and dep.committed_customer_id is None
+    assert dep.customer_group_id is None              # detached, not stranded
+    assert dep.customer_resolution_mode is None
+    assert db_session.get(ImportCustomerGroup, group.id).committed_customer_id == prim.committed_customer_id
+
+
+# --------------------------------------------------------------------------- #
+# Stabilization D — reverse re-promotion + reversed-row terminal guard
+# --------------------------------------------------------------------------- #
+def test_reverse_committed_primary_repromotes_sibling(users, db_session):
+    b, rows, group = _grouped_batch(db_session, users, n=3, primary_idx=0)
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    cust_id = _cust_of(db_session, rows[0])
+    assert db_session.get(ImportCustomerGroup, group.id).primary_row_id == rows[0].id
+
+    out = import_reverse.reverse_row(db_session, db_session.get(ImportRow, rows[0].id), actor_id=users["admin"].id)
+    assert out["status"] == "reversed"
+    g = db_session.get(ImportCustomerGroup, group.id)
+    assert g.primary_row_id == rows[1].id        # lowest-source-index committed sibling
+    assert g.committed_customer_id == cust_id     # customer continuity preserved
+
+
+def test_reverse_last_grouped_job_clears_committed_customer(users, db_session):
+    b, rows, group = _grouped_batch(db_session, users, n=2, primary_idx=0)
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    import_reverse.reverse_row(db_session, db_session.get(ImportRow, rows[1].id), actor_id=users["admin"].id)
+    out = import_reverse.reverse_row(db_session, db_session.get(ImportRow, rows[0].id), actor_id=users["admin"].id)
+    assert out["status"] == "reversed"
+    assert db_session.get(ImportCustomerGroup, group.id).committed_customer_id is None
+
+
+def test_reversed_row_cannot_be_reopened(users, db_session):
+    b, rows, group = _grouped_batch(db_session, users, n=2, primary_idx=0)
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    r1 = db_session.get(ImportRow, rows[1].id)
+    import_reverse.reverse_row(db_session, r1, actor_id=users["admin"].id)
+    r1 = db_session.get(ImportRow, rows[1].id)
+    assert r1.review_status == "reversed"
+    with pytest.raises(ValueError):
+        import_review.set_review_status(
+            db_session, b, r1, ImportRowReviewStatus.PENDING, actor_id=users["admin"].id
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Stabilization B — no silent group stealing / join an existing group
+# --------------------------------------------------------------------------- #
+def test_grouped_candidate_cannot_be_stolen(users, db_session):
+    b, rowsA, groupA = _grouped_batch(db_session, users, n=2, primary_idx=0, approve=False)
+    extra1, extra2 = _row(b.id, 5), _row(b.id, 6)
+    db_session.add_all([extra1, extra2])
+    db_session.flush()
+    groupB = import_review.create_group(
+        db_session, b, primary_row_id=extra1.id, member_row_ids=[extra2.id], actor_id=users["admin"].id
+    )
+    db_session.flush()
+    # a member of group A cannot be silently pulled into group B
+    with pytest.raises(ValueError):
+        import_review.add_to_group(db_session, b, groupB, row_id=rowsA[1].id, actor_id=users["admin"].id)
+    assert db_session.get(ImportRow, rowsA[1].id).customer_group_id == groupA.id
+
+
+def test_join_existing_group_preserves_primary(users, db_session):
+    b, rows, group = _grouped_batch(db_session, users, n=2, primary_idx=0, approve=False)
+    joiner = _row(b.id, 5)
+    db_session.add(joiner)
+    db_session.flush()
+    import_review.add_to_group(db_session, b, group, row_id=joiner.id, actor_id=users["admin"].id)
+    db_session.flush()
+    assert db_session.get(ImportRow, joiner.id).customer_group_id == group.id
+    assert db_session.get(ImportCustomerGroup, group.id).primary_row_id == rows[0].id  # primary preserved

@@ -90,9 +90,9 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
     }
   }
 
-  // B3: group THIS row with a pending candidate row. If this row is already in a
-  // group, add the candidate to it; otherwise create a new group with this row as
-  // the primary. (The backend detaches the candidate from any prior group.)
+  // B3: group THIS row with an UNGROUPED pending candidate row. If this row is already
+  // in a group, add the candidate to it; otherwise create a new group with this row as
+  // the primary. (The backend hard-rejects an already-grouped candidate — use joinGroup.)
   async function groupWith(candidateRowId: number) {
     setError(null)
     try {
@@ -103,6 +103,17 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
       }
     } catch (err) {
       setError(describe(err, 'Could not group the rows.'))
+    }
+  }
+
+  // B (stabilization): the candidate already belongs to a group — JOIN this row to that
+  // existing group (preserving its primary) rather than stealing the candidate out.
+  async function joinGroup(candidateGroupId: number) {
+    setError(null)
+    try {
+      await addRow.mutateAsync({ groupId: candidateGroupId, rowId: row.id })
+    } catch (err) {
+      setError(describe(err, 'Could not join the group.'))
     }
   }
 
@@ -212,6 +223,7 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
           resolvedCustomerId={resolvedId}
           onUseCustomer={(customerId) => run({ mode: 'existing', customer_id: customerId })}
           onGroupWithRow={groupWith}
+          onJoinGroup={joinGroup}
           groupMemberRowIds={group?.member_row_ids ?? []}
           busy={busy}
         />
