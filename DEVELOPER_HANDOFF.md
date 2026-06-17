@@ -129,8 +129,13 @@ These are stubbed/absent and represent the next phases:
   committed/reversed rows can't be reopened via the review-status flow; a grouped
   candidate can't be silently stolen (server hard-reject) — the modal offers "Join this
   group" using the candidate's `customer_group_id`; the match-candidates cache is
-  invalidated on any batch change. **(B4 — proposed)** auto-link/merge for identical
-  names; existing-customer merge.
+  invalidated on any batch change. **(Group read-model UI — built)** every cached
+  match-candidates panel refetches after a batch mutation (`refetchType: 'all'`, so a
+  stale "Group as same customer" disappears once siblings group/commit/reverse and
+  collapse to one "Use this customer"), and committed/reversed grouped rows show a
+  read-only group-status block (members + per-member primary/review state + the
+  committed-customer link) so a re-promoted primary is visible. **(B4 — proposed)**
+  auto-link/merge for identical names; existing-customer merge.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

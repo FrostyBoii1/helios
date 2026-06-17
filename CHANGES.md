@@ -9,6 +9,29 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-17 — Grouped-customer read-model UI: candidate refetch + group status (follow-up to f67c1ec)
+
+- **What:** Display / read-model-only fixes that closed the manual-UI failures found
+  after `f67c1ec`:
+  - **Candidate refetch:** every cached match-candidates panel (mounted or not) now
+    refetches after a batch mutation (`refetchType: 'all'`), so a stale "Group as same
+    customer" / "Join this group" action disappears once siblings are grouped / committed
+    / reversed (they collapse to one "Use this customer").
+  - **Group status:** committed/reversed grouped rows show a **read-only group-status
+    block** — members with their primary / review state and the committed-customer link —
+    so a re-promoted primary (after the original primary is reversed) is visible. The
+    group member payload (`group_to_dict` / `CustomerGroupMember`) gained read-only
+    `review_status` + `committed_customer_id`.
+- **Why:** Manual browser testing after `f67c1ec` showed stale candidate actions and no
+  way to see group status / re-promotion; both are now resolved (owner-verified).
+- **Files:** `backend/app/services/import_review.py`,
+  `backend/app/schemas/import_staging.py`, `frontend/src/hooks/useImports.ts`,
+  `frontend/src/types/imports.ts`,
+  `frontend/src/components/imports/CustomerResolutionSection.tsx` (+ group tests).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** Display / read-model only — **no commit/reverse/approve logic and
+  no parser/address/NAS/dev_reset/migration/model change**.
+
 ## 2026-06-17 — B2/B3 grouping-lifecycle stabilization: approval / reverse / steal / cache
 
 - **What:** Import grouping-lifecycle fixes (no schema/parser/migration change):
