@@ -135,6 +135,15 @@ function invalidateBatch(qc: ReturnType<typeof useQueryClient>, batchId: number)
   void qc.invalidateQueries({ queryKey: ['imports', 'match-candidates', batchId], refetchType: 'all' })
   // B3-4: group reads (banner) — membership may have changed.
   void qc.invalidateQueries({ queryKey: ['imports', 'customer-group', batchId] })
+  // Item 3: an import write (commit / reverse / prepare-recommit / recommit) can create,
+  // soft-delete, re-promote, or attach LIVE records — affecting CRM read models these
+  // import queries don't otherwise touch. A grouped commit/reverse can touch the promoted
+  // primary plus any attach-to-existing customers, so broad prefixes (not a single id)
+  // refresh the Customer detail, Jobs panel/list, and Timeline immediately instead of
+  // after staleTime. Only currently-mounted queries refetch, so this is cheap.
+  void qc.invalidateQueries({ queryKey: ['customers'] })
+  void qc.invalidateQueries({ queryKey: ['jobs'] })
+  void qc.invalidateQueries({ queryKey: ['activities'] })
 }
 
 export function useReverseRow(batchId: number) {
