@@ -2,6 +2,7 @@
 // Used by the import review modal (Item 4 pre-commit "Property address") and the
 // candidate row preview, so both render the cleaned structured address identically.
 
+import type { Job } from '@/types'
 import type { ParsedCandidate, SiteAddress } from '@/types/imports'
 
 /** "line1, line2, Suburb STATE postcode" from a site address, or '' if none/empty. */
@@ -26,4 +27,22 @@ export function cleanedAddressValue(parsed: ParsedCandidate | null | undefined):
   const site = parsed?.details?.site
   if (!site) return null
   return siteLine(site) || null
+}
+
+/** Distinct job-site addresses for a customer, formatted via `siteLine()`, in first-seen
+ *  order. Reads each job's `details.site`, skips jobs with no usable site (including
+ *  pre-G `details === null`), and dedupes case-insensitively. Stage 1: drives the
+ *  read-only Customer-Detail "Job sites" summary. Pure — no side effects. */
+export function distinctJobSites(jobs: Job[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const job of jobs) {
+    const line = siteLine(job.details?.site).trim()
+    if (!line) continue
+    const key = line.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(line)
+  }
+  return out
 }

@@ -7,6 +7,8 @@ import { InternalNotesPanel } from '@/components/InternalNotesPanel'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
+import { useJobs } from '@/hooks/useJobs'
+import { distinctJobSites } from '@/lib/addressDisplay'
 import type { CustomerInput } from '@/types'
 
 // `notes` (imported source) and `internal_notes` (manual) are handled by their
@@ -31,6 +33,9 @@ export function CustomerDetailPage() {
   const { data: customer, isLoading, isError } = useCustomer(customerId)
   const updateMutation = useUpdateCustomer(customerId)
   const deleteMutation = useDeleteCustomer()
+  // Stage 1: reuse the SAME jobs query key as CustomerJobsPanel (React Query dedupes →
+  // one fetch) to roll the customer's distinct job sites into a read-only summary card.
+  const jobsQuery = useJobs({ customer_id: customerId, limit: 50 })
 
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Record<string, string>>({})
@@ -94,6 +99,10 @@ export function CustomerDetailPage() {
     }
   }
 
+  // Distinct job-site addresses (deduped, first-seen order) for the read-only summary
+  // card below. Empty (and the card hidden) when no job has a usable details.site.
+  const jobSites = distinctJobSites(jobsQuery.data?.items ?? [])
+
   return (
     <div>
       <Link to="/customers" className="text-sm text-muted underline hover:text-fg">
@@ -140,6 +149,22 @@ export function CustomerDetailPage() {
           surfaced here. */}
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="flex min-w-0 flex-col gap-6">
+          {/* Stage 1: read-only roll-up of the customer's DISTINCT job sites (deduped
+              across jobs[].details.site). Complementary to the per-job Site column in the
+              Jobs panel above — no statuses/case numbers/labels/rows/actions. Hidden when
+              there are no usable job sites. */}
+          {jobSites.length > 0 && (
+            <div className="card p-5">
+              <h2 className="eyebrow mb-3">Job sites ({jobSites.length})</h2>
+              <ul className="flex flex-col gap-1 text-sm text-fg">
+                {jobSites.map((site, i) => (
+                  <li key={i} className="break-words">
+                    {site}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="card p-5">
             <h2 className="eyebrow mb-3">Details</h2>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
