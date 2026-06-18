@@ -54,3 +54,25 @@ class CustomerList(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+# --------------------------------------------------------------------------- #
+# B4-2: customer merge result
+# --------------------------------------------------------------------------- #
+class MergeMovedCount(BaseModel):
+    """How many rows of one kind moved/repointed, with their ids. ``ids`` is empty
+    for kinds reported count-only (e.g. moved activities, which can be bulk)."""
+
+    count: int
+    ids: list[int] = Field(default_factory=list)
+
+
+class CustomerMergeResult(BaseModel):
+    """Summary of an explicit admin customer merge (loser -> winner)."""
+
+    winner: CustomerRead
+    loser_id: int
+    merged_at: datetime
+    moved: dict[str, MergeMovedCount]            # jobs / tasks / documents / activities
+    repointed_import: dict[str, MergeMovedCount]  # rows_committed / rows_resolved / groups_committed
+    notes_appended: bool

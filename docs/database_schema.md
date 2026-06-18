@@ -239,3 +239,6 @@ customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
   **head is `e9f0a1b2c3d4`**. The commit-to-live, reverse, and case-year-guard work (and the
   later B2-2/B2-3, B3-3/B3-4 wiring) added **no** further migrations — they read the
   existing columns at commit/preview/reverse and in the UI (string-enum values only).
+  **B4-2 (customer-merge execution) likewise adds NO migration** — it reuses the B4-1
+  `customers.merged_into_customer_id` / `merged_at` columns and the `CUSTOMER_MERGED`
+  string-enum value, so the head stays **`e9f0a1b2c3d4`**.

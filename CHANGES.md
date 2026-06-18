@@ -9,6 +9,45 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — B4-2: existing-customer merge — execution (admin-only, transactional, no migration)
+
+- **What:** the explicit admin **customer merge** is now executable. Admin-only
+  `POST /customers/{loser_id}/merge-into/{winner_id}` runs `merge_customers` in ONE
+  transaction: under a `FOR UPDATE` lock on both customers (canonical id order) it repoints
+  every customer FK loser→winner (`Job`/`Activity`/`Task`/`Document.customer_id` + the import
+  links `ImportRow.committed_customer_id`, `ImportRow.resolved_customer_id`,
+  `ImportCustomerGroup.committed_customer_id`), appends the loser's notes/internal_notes into
+  `winner.internal_notes` with a provenance header, **soft-deletes** the loser and marks it
+  `merged_into_customer_id` + `merged_at`, and emits one `CUSTOMER_MERGED` activity (on the
+  winner) with moved/repointed ids + counts. Returns a `CustomerMergeResult` summary.
+  Single-pair only; `merged_into` immutable; **nothing hard-deleted**.
+- **Why:** consolidate duplicate live customers after the fact, losing nothing (jobs, tasks,
+  documents, timeline, import provenance), with full auditability.
+- **Guards (re-checked under the lock, before any mutation):** loser≠winner (400); both
+  exist (404); neither already merged (409, immutable); both live (409); non-admin (403).
+- **Winner authoritative:** the winner's contact/address/email/phone/notes are NEVER
+  overwritten — only its `internal_notes` is appended-to.
+- **Reverse safety (keystone):** `import_reverse.reversibility()` gains a
+  `job_customer_mismatch` guard (blocks when `job.customer_id != committed_customer_id`), and
+  the merge **bumps each moved `Job.updated_at`** so a post-merge reverse is blocked by the
+  existing `job_modified` guard — a merged job can therefore **never** be reversed into
+  soft-deleting the merge **winner**. Merged jobs are intentionally non-reversible;
+  **Prepare recommit** remains the safe correction path. (The bump relies on merge running in
+  its own transaction after commit — Postgres `now()` is transaction-stable; noted in-code.)
+- **No migration (owner decision):** uses the B4-1 columns; `CUSTOMER_MERGED` is a
+  string-enum value. Schema head remains **`e9f0a1b2c3d4`**.
+- **Deferred:** no frontend merge UI; no `GET`/search chain-follow redirect for a merged
+  loser id (`resolve_active_customer` resolves it in code); no unmerge.
+- **Files:** `backend/app/services/customers.py` (`merge_customers` + `MergeError`),
+  `backend/app/schemas/customer.py` (`CustomerMergeResult`),
+  `backend/app/api/v1/endpoints/customers.py` (endpoint),
+  `backend/app/services/import_reverse.py` (`job_customer_mismatch` guard),
+  `backend/tests/test_customer_merge.py` (new), `backend/tests/test_import_reverse.py`
+  (+ docs).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** merged jobs become non-reversible (by design); a stale loser id is
+  not yet redirected to the winner. Builds on B4-1 storage.
+
 ## 2026-06-18 — B4-1: existing-customer merge — storage foundation only (no execution)
 
 - **What:** schema + helper scaffolding for a future explicit admin **customer merge**, with

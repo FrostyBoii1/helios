@@ -8,11 +8,19 @@ relationship cascade can never hard-delete child jobs.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.models.activity import Activity
 from app.models.customer import Customer
+from app.models.document import Document
+from app.models.enums import ActivityType
+from app.models.import_staging import ImportCustomerGroup, ImportRow
+from app.models.job import Job
+from app.models.task import Task
+from app.services.activity import log_activity
 
 
 def get_customer(db: Session, customer_id: int) -> Customer | None:
@@ -116,3 +124,191 @@ def update_customer(db: Session, customer: Customer, *, data: dict) -> list[str]
 def soft_delete_customer(db: Session, customer: Customer) -> None:
     """Mark a customer deleted. Never performs a hard delete."""
     customer.deleted_at = datetime.now(timezone.utc)
+
+
+# --------------------------------------------------------------------------- #
+# B4-2: explicit admin customer merge (LOSER -> WINNER), transactional.
+# --------------------------------------------------------------------------- #
+class MergeError(Exception):
+    """A B4-2 merge guard failure. Carries the HTTP status the endpoint should
+    surface. Guard failures are raised BEFORE any mutation, so the transaction
+    stays clean; a mid-merge integrity failure raises 500 and the endpoint rolls
+    back the whole (single) transaction."""
+
+    def __init__(self, reason: str, http_status: int) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.http_status = http_status
+
+
+def _build_merge_note(loser: Customer, *, merged_at: datetime) -> str | None:
+    """The provenance block appended to the winner's internal_notes, or None when
+    the loser carries no notes/internal_notes worth preserving. NULL/blank-safe."""
+    parts: list[str] = []
+    if loser.notes and loser.notes.strip():
+        parts.append(f"Notes: {loser.notes.strip()}")
+    if loser.internal_notes and loser.internal_notes.strip():
+        parts.append(f"Internal notes: {loser.internal_notes.strip()}")
+    if not parts:
+        return None
+    header = f"--- Merged from {loser.full_name} (#{loser.id}) on {merged_at:%Y-%m-%d} ---"
+    return header + "\n" + "\n".join(parts)
+
+
+def _repoint_returning_ids(
+    db: Session,
+    model: Any,
+    column: str,
+    *,
+    loser_id: int,
+    winner_id: int,
+    extra_values: dict[str, Any] | None = None,
+) -> list[int]:
+    """Repoint ``model.<column>`` loser_id -> winner_id in one bulk UPDATE and return
+    the affected row ids (RETURNING). Pre-counts and asserts the rowcount matches so a
+    silent orphan can never slip through. ``synchronize_session=False`` — no stale ORM
+    object is read afterwards (counts/ids come from RETURNING, the loser/winner Customer
+    rows are not touched by these child-table updates)."""
+    col = getattr(model, column)
+    expected = db.scalar(select(func.count()).select_from(model).where(col == loser_id)) or 0
+    values: dict[str, Any] = {column: winner_id}
+    if extra_values:
+        values.update(extra_values)
+    stmt = (
+        update(model)
+        .where(col == loser_id)
+        .values(**values)
+        .returning(model.id)
+        .execution_options(synchronize_session=False)
+    )
+    ids = list(db.execute(stmt).scalars().all())
+    if len(ids) != expected:
+        raise MergeError("repoint_count_mismatch", 500)
+    return ids
+
+
+def merge_customers(db: Session, *, loser_id: int, winner_id: int, actor_id: int) -> dict:
+    """Merge the LOSER customer into the WINNER (B4-2). ONE transaction; the caller
+    (endpoint) commits. Admin-only, explicit, non-destructive — nothing is hard-deleted.
+
+    Guards (re-checked under a row lock, before any mutation): loser != winner; both
+    exist; neither is already merged (immutable); both are live. Then repoints every
+    customer FK loser->winner (Job/Activity/Task/Document + the import links
+    committed_customer_id / resolved_customer_id / group committed_customer_id), appends
+    the loser's notes into the winner's internal_notes with a provenance header,
+    soft-deletes the loser + records the (immutable) merge pointer, and logs ONE
+    CUSTOMER_MERGED activity. Returns a summary dict (winner + moved/repointed ids/counts).
+    """
+    if loser_id == winner_id:
+        raise MergeError("same_customer", 400)
+
+    # Lock BOTH customer rows in canonical (id-ascending) order to avoid a deadlock
+    # between inverse concurrent merges; FOR UPDATE on the loser also blocks any
+    # concurrent insert of a child row referencing it (an FK insert takes FOR KEY
+    # SHARE, which conflicts), so the loser's child set is frozen for the merge.
+    locked = db.scalars(
+        select(Customer)
+        .where(Customer.id.in_((loser_id, winner_id)))
+        .order_by(Customer.id)
+        .with_for_update()
+    ).all()
+    by_id = {c.id: c for c in locked}
+    loser = by_id.get(loser_id)
+    winner = by_id.get(winner_id)
+
+    # Re-validate ALL guards under the lock (TOCTOU-safe). already_merged is checked
+    # before not_live so a merged customer reports the precise immutability reason.
+    if loser is None:
+        raise MergeError("loser_not_found", 404)
+    if winner is None:
+        raise MergeError("winner_not_found", 404)
+    if loser.merged_into_customer_id is not None:
+        raise MergeError("loser_already_merged", 409)
+    if winner.merged_into_customer_id is not None:
+        raise MergeError("winner_already_merged", 409)
+    if loser.deleted_at is not None:
+        raise MergeError("loser_not_live", 409)
+    if winner.deleted_at is not None:
+        raise MergeError("winner_not_live", 409)
+
+    merged_at = datetime.now(timezone.utc)
+
+    # Repoint live-CRM customer FKs loser -> winner. The Job repoint ALSO bumps
+    # updated_at (server now()) so every moved job becomes non-pristine and a later
+    # reverse is blocked by the existing `job_modified` guard — the moved job must
+    # never be reversible into soft-deleting the merge WINNER (owner decision 2).
+    # NOTE: this relies on merge running in its OWN transaction strictly AFTER the
+    # import commit (the normal endpoint path). Postgres now() is transaction-stable,
+    # so created_at (commit, txn T1) < updated_at (merge, txn T2). Do NOT call merge
+    # in the same transaction as the commit, or the bump is a no-op — the
+    # `job_customer_mismatch` guard still covers partial/divergent states regardless.
+    job_ids = _repoint_returning_ids(
+        db, Job, "customer_id", loser_id=loser_id, winner_id=winner_id,
+        extra_values={"updated_at": func.now()},
+    )
+    # Repoint activities BEFORE logging the CUSTOMER_MERGED row, so the new row
+    # (customer_id=winner) is never swept by this loser->winner UPDATE.
+    activity_ids = _repoint_returning_ids(db, Activity, "customer_id", loser_id=loser_id, winner_id=winner_id)
+    task_ids = _repoint_returning_ids(db, Task, "customer_id", loser_id=loser_id, winner_id=winner_id)
+    document_ids = _repoint_returning_ids(db, Document, "customer_id", loser_id=loser_id, winner_id=winner_id)
+
+    # Import links — each its OWN column WHERE/SET (never a blanket two-column update,
+    # else a row with committed==loser but resolved==other would have resolved clobbered).
+    committed_row_ids = _repoint_returning_ids(db, ImportRow, "committed_customer_id", loser_id=loser_id, winner_id=winner_id)
+    resolved_row_ids = _repoint_returning_ids(db, ImportRow, "resolved_customer_id", loser_id=loser_id, winner_id=winner_id)
+    group_ids = _repoint_returning_ids(db, ImportCustomerGroup, "committed_customer_id", loser_id=loser_id, winner_id=winner_id)
+
+    # Append the loser's notes/internal_notes into the winner's internal_notes with a
+    # provenance header. Winner contact/address/notes stay authoritative (untouched).
+    note_block = _build_merge_note(loser, merged_at=merged_at)
+    notes_appended = note_block is not None
+    if notes_appended:
+        if winner.internal_notes and winner.internal_notes.strip():
+            winner.internal_notes = f"{winner.internal_notes}\n\n{note_block}"
+        else:
+            winner.internal_notes = note_block
+
+    # Soft-delete the loser + record the immutable merge pointer. Never hard-delete.
+    loser.deleted_at = merged_at
+    loser.merged_into_customer_id = winner.id
+    loser.merged_at = merged_at
+
+    moved = {
+        "jobs": {"count": len(job_ids), "ids": job_ids},
+        "tasks": {"count": len(task_ids), "ids": task_ids},
+        "documents": {"count": len(document_ids), "ids": document_ids},
+        "activities": {"count": len(activity_ids)},  # count-only (owner decision 3)
+    }
+    repointed_import = {
+        "rows_committed": {"count": len(committed_row_ids), "ids": committed_row_ids},
+        "rows_resolved": {"count": len(resolved_row_ids), "ids": resolved_row_ids},
+        "groups_committed": {"count": len(group_ids), "ids": group_ids},
+    }
+    log_activity(
+        db,
+        activity_type=ActivityType.CUSTOMER_MERGED,
+        description=(
+            f"Merged customer {loser.full_name} (#{loser.id}) "
+            f"into {winner.full_name} (#{winner.id})"
+        ),
+        actor_id=actor_id,
+        customer_id=winner.id,
+        meta={
+            "loser_customer_id": loser.id,
+            "winner_customer_id": winner.id,
+            "loser_name": loser.full_name,
+            "merged_at": merged_at.isoformat(),
+            "moved": moved,
+            "repointed_import": repointed_import,
+            "notes_appended": notes_appended,
+        },
+    )
+
+    return {
+        "winner": winner,
+        "loser_id": loser.id,
+        "merged_at": merged_at,
+        "moved": moved,
+        "repointed_import": repointed_import,
+        "notes_appended": notes_appended,
+    }

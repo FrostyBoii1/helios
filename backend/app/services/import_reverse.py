@@ -82,6 +82,14 @@ def reversibility(db: Session, row: ImportRow) -> dict:
     if job is None or job.deleted_at is not None:
         return blocked("job_missing_or_deleted")
     base["case_number"] = job.case_number
+    # B4-2 defense-in-depth: a committed row's job.customer_id MUST equal its
+    # committed_customer_id (the commit invariant — import_commit sets both to the same
+    # customer). If they diverge — e.g. a customer merge repointed the job but not this
+    # row, or vice versa — block, rather than risk counting the WRONG customer's jobs
+    # below or soft-deleting a merge WINNER. (After a full merge both equal the winner,
+    # so this passes; the moved job's bumped updated_at then blocks via `job_modified`.)
+    if job.customer_id != cust_id:
+        return blocked("job_customer_mismatch")
     # A 'new' reverse ALWAYS soft-deletes the customer, so it must still exist
     # (unchanged). A grouped reverse defers this to the last-job decision below.
     if deletes_customer and not grouped and (customer is None or customer.deleted_at is not None):

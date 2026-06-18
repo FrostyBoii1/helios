@@ -21,8 +21,10 @@ from app.models.user import User
 from app.schemas.customer import (
     CustomerCreate,
     CustomerList,
+    CustomerMergeResult,
     CustomerRead,
     CustomerUpdate,
+    MergeMovedCount,
 )
 from app.services import customers as customers_service
 from app.services.activity import log_activity
@@ -128,3 +130,37 @@ def delete_customer(
         customer_id=customer.id,
     )
     db.commit()
+
+
+@router.post("/{loser_id}/merge-into/{winner_id}", response_model=CustomerMergeResult)
+def merge_customer(
+    loser_id: int,
+    winner_id: int,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
+) -> CustomerMergeResult:
+    """Explicitly merge the LOSER customer into the WINNER (B4-2). Admin-only.
+
+    One transaction: repoint every customer FK loser->winner, append the loser's
+    notes into the winner's internal_notes, soft-delete the loser (never hard-delete)
+    + record the immutable merge pointer, and log a CUSTOMER_MERGED activity. On any
+    guard failure nothing is changed (the service raises before mutating; the endpoint
+    rolls back and surfaces the mapped status).
+    """
+    try:
+        result = customers_service.merge_customers(
+            db, loser_id=loser_id, winner_id=winner_id, actor_id=actor.id
+        )
+    except customers_service.MergeError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.http_status, detail=exc.reason)
+    db.commit()
+    db.refresh(result["winner"])
+    return CustomerMergeResult(
+        winner=CustomerRead.model_validate(result["winner"]),
+        loser_id=result["loser_id"],
+        merged_at=result["merged_at"],
+        moved={k: MergeMovedCount(**v) for k, v in result["moved"].items()},
+        repointed_import={k: MergeMovedCount(**v) for k, v in result["repointed_import"].items()},
+        notes_appended=result["notes_appended"],
+    )

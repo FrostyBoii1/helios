@@ -174,12 +174,20 @@ These are stubbed/absent and represent the next phases:
   execution**: `customers.merged_into_customer_id` (nullable, indexed, self-FK, NO ACTION) +
   `customers.merged_at`, `ActivityType.CUSTOMER_MERGED`, a pure-read cycle-guarded
   `resolve_active_customer(db, id)` chain-walk helper (loser→winner; no callers yet), and
-  `dev_reset.clear_live_crm` nulling `merged_into_customer_id` before deleting customers. No
-  endpoint/service/UI, **no reassignment** of jobs/tasks/documents/activities/import links,
-  and **no loser soft-delete** — merge **execution is deferred to B4-2** (winner fields
-  authoritative; loser notes appended with a provenance header at execution; `merged_into`
-  immutable; unmerge deferred; single-pair only). **(B4 — proposed)** auto-link/merge for
-  identical names.
+  `dev_reset.clear_live_crm` nulling `merged_into_customer_id` before deleting customers.
+  **(B4-2 — built)** the merge now EXECUTES: admin-only `POST
+  /customers/{loser_id}/merge-into/{winner_id}` runs `merge_customers` in one transaction —
+  repoints every customer FK loser→winner (Job/Activity/Task/Document + the import links
+  committed/resolved/group customer ids), appends loser notes into `winner.internal_notes`
+  with a provenance header (winner contact/address authoritative, untouched), soft-deletes
+  the loser + sets `merged_into_customer_id`/`merged_at` (never hard-deletes), and emits a
+  `CUSTOMER_MERGED` activity on the winner. Single-pair, `merged_into` immutable, NO migration
+  (head stays `e9f0a1b2c3d4`). **Reverse safety:** `reversibility()` gains a
+  `job_customer_mismatch` guard and the merge bumps moved `Job.updated_at` so a post-merge
+  reverse is blocked by `job_modified` — a merged job can never be reversed into deleting the
+  winner (Prepare recommit is the correction path). No frontend merge UI, no merged-loser
+  `GET`/search redirect, no unmerge yet. **(B4 — proposed)** auto-link/merge for identical
+  names.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

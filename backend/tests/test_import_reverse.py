@@ -29,6 +29,7 @@ from app.models.enums import (
 from app.models.import_staging import ImportBatch, ImportRow
 from app.models.job import Job
 from app.models.task import Task
+from app.services import customers as customers_service
 from app.services import import_commit, import_reverse
 from app.services.activity import log_activity
 from tests.test_import import _synthetic_bytes
@@ -199,6 +200,58 @@ def test_block_already_reversed(users, db_session: Session):
     db_session.refresh(r)
     res = import_reverse.reverse_row(db_session, r, actor_id=admin_id)
     assert res["status"] == "blocked" and res["reason"] == "already_reversed"
+
+
+# --------------------------------------------------------------------------- #
+# B4-2 merge safety: a committed row's job.customer_id must equal its
+# committed_customer_id, and a post-merge reverse must NOT delete the winner.
+# --------------------------------------------------------------------------- #
+def test_block_job_customer_mismatch(users, db_session: Session):
+    """Defense-in-depth: if a job's customer_id diverges from the row's
+    committed_customer_id (e.g. a partial/buggy merge), block rather than risk
+    counting or soft-deleting the WRONG customer."""
+    r = _seed_and_commit(db_session, 1, users["admin"].id, prefix="MM")[0]
+    other = Customer(full_name="Mismatch Other")
+    db_session.add(other)
+    db_session.flush()
+    # Move ONLY the job's customer, leaving row.committed_customer_id stale -> diverge.
+    db_session.execute(update(Job).where(Job.id == r.committed_job_id).values(customer_id=other.id))
+    db_session.flush()
+    db_session.expire(db_session.get(Job, r.committed_job_id))
+    assert _reason(db_session, r) == "job_customer_mismatch"
+
+
+def test_reverse_blocked_after_merge_protects_winner(users, db_session: Session):
+    """After merging the import-created customer into a winner, reversing the import
+    row must NOT soft-delete the winner. The merge bumps the moved job's updated_at;
+    here the job is given an older created_at (now() is txn-stable in-test, mirroring
+    the real separate-transaction commit) so the `job_modified` guard blocks."""
+    admin_id = users["admin"].id
+    r = _seed_and_commit(db_session, 1, admin_id, prefix="PM")[0]
+    loser_id = r.committed_customer_id
+    job_id = r.committed_job_id
+    # Simulate real timing: the job was committed in an EARLIER transaction.
+    db_session.execute(
+        update(Job)
+        .where(Job.id == job_id)
+        .values(created_at=func.now() - timedelta(days=1), updated_at=func.now() - timedelta(days=1))
+    )
+    db_session.flush()
+    winner = Customer(full_name="Merge Winner PM")
+    db_session.add(winner)
+    db_session.flush()
+
+    customers_service.merge_customers(db_session, loser_id=loser_id, winner_id=winner.id, actor_id=admin_id)
+    db_session.flush()
+    db_session.expire_all()
+
+    r = db_session.get(ImportRow, r.id)
+    res = import_reverse.reverse_row(db_session, r, actor_id=admin_id)
+    assert res["status"] == "blocked"
+    assert res["reason"] == "job_modified"
+    # the winner is NOT soft-deleted (no back-door unmerge); the merge stays intact
+    assert db_session.get(Customer, winner.id).deleted_at is None
+    assert db_session.get(Customer, loser_id).deleted_at is not None
 
 
 # --------------------------------------------------------------------------- #
