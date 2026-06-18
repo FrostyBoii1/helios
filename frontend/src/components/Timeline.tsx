@@ -81,6 +81,17 @@ function formatMeta(a: Activity): string | null {
   const meta = a.meta
   if (!meta) return null
 
+  // Item 1: surface grouped-import provenance — a job imported as part of a row group
+  // (the commit logs meta.customer_group_id + meta.group_role on RECORD_IMPORTED). Shown
+  // only when customer_group_id is present, so non-grouped imports are unaffected.
+  if (a.activity_type === 'record_imported') {
+    const groupId = (meta as { customer_group_id?: unknown }).customer_group_id
+    if (groupId != null) {
+      const role = (meta as { group_role?: unknown }).group_role
+      const roleText = role === 'primary' || role === 'dependent' ? ` — ${role}` : ''
+      return `Imported as part of a group${roleText}`
+    }
+  }
   if (a.activity_type === 'job_status_changed' && 'from' in meta && 'to' in meta) {
     return `${labelStatus(meta.from)} → ${labelStatus(meta.to)}`
   }

@@ -166,6 +166,11 @@ export type ActivityType =
   | 'file_deleted'
   | 'user_created'
   | 'user_updated'
+  // Spreadsheet-import provenance (Sections C/D) — emitted by commit / reverse /
+  // prepare-recommit and shown on customer/job timelines.
+  | 'record_imported'
+  | 'record_import_reversed'
+  | 'record_import_recommit_prepared'
 
 export interface ActorRef {
   id: number
