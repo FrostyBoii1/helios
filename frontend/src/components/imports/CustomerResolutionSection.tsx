@@ -16,6 +16,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { ApiError } from '@/lib/api'
+import type { RowAction } from '@/lib/imports'
 import { useCustomer, useCustomers } from '@/hooks/useCustomers'
 import {
   useAddGroupRow,
@@ -24,6 +25,7 @@ import {
   useDissolveCustomerGroup,
   useRemoveGroupRow,
   useResolveRowCustomer,
+  useRowAction,
   useSetGroupPrimary,
 } from '@/hooks/useImports'
 import { MatchCandidatesPanel } from '@/components/imports/MatchCandidatesPanel'
@@ -55,6 +57,7 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
   const removeRow = useRemoveGroupRow(batchId)
   const setPrimary = useSetGroupPrimary(batchId)
   const dissolve = useDissolveCustomerGroup(batchId)
+  const reviewAction = useRowAction(batchId)
   const [error, setError] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
 
@@ -126,6 +129,27 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
     }
   }
 
+  // Item 2: approve / reject / skip ANOTHER grouped member from this modal, without
+  // opening its own row. Reuses the existing per-row review endpoint (useRowAction acts
+  // on any rowId); the backend enforces the same guards (can't approve a row with
+  // unresolved errors, can't reopen committed/reversed). Reject/skip prompt for an
+  // optional note like the single-row controls. The shared invalidateBatch (onSuccess of
+  // useRowAction) refreshes the import row, group members, candidates, batch, and CRM caches.
+  async function reviewMember(rowId: number, action: RowAction) {
+    let notes: string | undefined
+    if (action === 'reject' || action === 'skip') {
+      const entered = window.prompt(`Optional note for ${action}:`, '')
+      if (entered === null) return // cancelled
+      notes = entered.trim() || undefined
+    }
+    setError(null)
+    try {
+      await reviewAction.mutateAsync({ rowId, action, notes })
+    } catch (err) {
+      setError(describe(err, `Could not ${action} the row.`))
+    }
+  }
+
   // C: committed/reversed rows show a final / historical summary only.
   if (finalized) {
     return (
@@ -158,6 +182,8 @@ export function CustomerResolutionSection({ batchId, row, editable }: Props) {
           onDissolve={() =>
             group && groupAction(() => dissolve.mutateAsync({ groupId: group.id }), 'Could not dissolve the group.')
           }
+          onMemberReview={reviewMember}
+          memberBusy={reviewAction.isPending}
         />
       ) : mode === 'existing' && resolvedId != null ? (
         <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
@@ -371,6 +397,8 @@ function GroupBanner({
   onMakePrimary,
   onRemoveSelf,
   onDissolve,
+  onMemberReview,
+  memberBusy,
 }: {
   group: CustomerGroupRead | null
   currentRowId: number
@@ -379,6 +407,8 @@ function GroupBanner({
   onMakePrimary: () => void
   onRemoveSelf: () => void
   onDissolve: () => void
+  onMemberReview: (rowId: number, action: RowAction) => void
+  memberBusy: boolean
 }) {
   if (!group) {
     return (
@@ -394,18 +424,60 @@ function GroupBanner({
         Grouped as one future customer ({group.members.length} rows)
       </p>
       <ul className="mt-1 flex flex-col gap-0.5">
-        {group.members.map((m) => (
-          <li key={m.row_id} className="flex flex-wrap items-center gap-x-2 text-xs text-indigo-100/90">
-            <span className="text-indigo-200/60">row #{m.source_row_index}</span>
-            <span className="text-fg">{m.customer_name || '(no name)'}</span>
-            {m.is_primary && (
-              <span className="rounded bg-indigo-500/25 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-200">
-                Primary
+        {group.members.map((m) => {
+          const isCurrent = m.row_id === currentRowId
+          // Per-member review is offered for OTHER members that are still pending. The
+          // current row uses the modal's own controls, and committed / reversed / already-
+          // reviewed members show their status only (respect existing locks / terminal
+          // states). The backend re-checks every guard (e.g. unresolved errors block approve).
+          const canReview = !isCurrent && m.review_status === 'pending'
+          return (
+            <li
+              key={m.row_id}
+              className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-indigo-100/90"
+            >
+              <span className="text-indigo-200/60">row #{m.source_row_index}</span>
+              <span className="text-fg">{m.customer_name || '(no name)'}</span>
+              {m.is_primary && (
+                <span className="rounded bg-indigo-500/25 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-200">
+                  Primary
+                </span>
+              )}
+              <span className="text-[10px] uppercase tracking-wide text-indigo-200/70">
+                {m.review_status}
               </span>
-            )}
-            {m.row_id === currentRowId && <span className="text-indigo-300/70">(this row)</span>}
-          </li>
-        ))}
+              {isCurrent && <span className="text-indigo-300/70">(this row)</span>}
+              {canReview && (
+                <span className="ml-auto flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onMemberReview(m.row_id, 'approve')}
+                    disabled={memberBusy}
+                    className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMemberReview(m.row_id, 'reject')}
+                    disabled={memberBusy}
+                    className="rounded border border-red-500/40 px-1.5 py-0.5 text-[11px] font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMemberReview(m.row_id, 'skip')}
+                    disabled={memberBusy}
+                    className="rounded border border-line px-1.5 py-0.5 text-[11px] font-medium text-indigo-100/80 hover:bg-indigo-500/10 disabled:opacity-50"
+                  >
+                    Skip
+                  </button>
+                </span>
+              )}
+            </li>
+          )
+        })}
       </ul>
       <p className="mt-1 text-[11px] text-indigo-200/60">
         On commit: the primary row creates the customer; the others attach a job to it.
