@@ -11,8 +11,8 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
+import { siteLine } from '@/lib/addressDisplay'
 import { useImportRow } from '@/hooks/useImports'
-import type { SiteAddress } from '@/types/imports'
 
 interface CandidateRowPreviewModalProps {
   batchId: number
@@ -24,13 +24,6 @@ interface CandidateRowPreviewModalProps {
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Pending', approved: 'Approved', rejected: 'Rejected',
   skipped: 'Skipped', committed: 'Committed', reversed: 'Reversed',
-}
-
-/** "line1, line2, Suburb STATE postcode" from the parsed site address, or '' if none. */
-function siteLine(s: SiteAddress | null | undefined): string {
-  if (!s) return ''
-  const city = [s.suburb, s.state, s.postcode].map((p) => (p ? String(p).trim() : '')).filter(Boolean).join(' ')
-  return [s.line1, s.line2, city].map((p) => (p ? String(p).trim() : '')).filter(Boolean).join(', ')
 }
 
 export function CandidateRowPreviewModal({

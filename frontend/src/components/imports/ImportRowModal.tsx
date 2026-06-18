@@ -4,6 +4,7 @@
 // side drawer.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { cleanedAddressValue } from '@/lib/addressDisplay'
 import { ApiError } from '@/lib/api'
 import { previewInternalNotes } from '@/lib/internalNotesPreview'
 import {
@@ -197,6 +198,12 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   useEffect(() => {
     const next: Record<string, string> = {}
     for (const { key } of PARSED_TEXT_FIELDS) next[key] = asString(row.parsed?.[key])
+    // Item 4: show the CLEANED structured address in the (still editable) Address field
+    // when the parser produced one. The raw parsed.address stays in Raw cells / import
+    // context (never deleted); buildEdit baselines against this same cleaned value so a
+    // no-op save never overwrites it. Rows without details.site keep the raw flat address.
+    const cleanedAddr = cleanedAddressValue(row.parsed)
+    if (cleanedAddr != null) next.address = cleanedAddr
     setText(next)
     setEmails(asEmails(row.parsed))
     setPhones(asPhones(row.parsed))
@@ -223,9 +230,16 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     // PARSED_TEXT_FIELDS are all scalar string fields; assign through a string
     // view so the union with emails/phones doesn't widen the value type.
     const textEdit = edit as Record<string, string | null>
+    // Item 4: the Address field DISPLAYS the cleaned structured value, so baseline the
+    // address comparison against that same value — a no-op save then sends no address
+    // edit and the raw parsed.address is preserved; an explicit edit still flows normally.
+    const cleanedAddr = cleanedAddressValue(row.parsed)
     for (const { key } of PARSED_TEXT_FIELDS) {
       const cur = text[key]?.trim() ?? ''
-      const orig = asString(row.parsed?.[key]).trim()
+      const orig =
+        key === 'address' && cleanedAddr != null
+          ? cleanedAddr.trim()
+          : asString(row.parsed?.[key]).trim()
       if (cur !== orig) textEdit[key] = cur === '' ? null : cur
     }
     const curEmails = emails.map((e) => e.trim()).filter(Boolean)
