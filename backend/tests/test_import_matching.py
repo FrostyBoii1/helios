@@ -6,6 +6,8 @@ merges, or links — the engine is advisory only.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 
 from app.models.customer import Customer
@@ -272,3 +274,124 @@ def test_candidate_exposes_group_id(db_session: Session):
     assert grouped_cand[0]["customer_group_id"] == grp.id
     # an ungrouped candidate carries no group id
     assert all(c["customer_group_id"] is None for c in cands if c["row_id"] != grouped_row.id)
+
+
+# --------------------------------------------------------------------------- #
+# #5b: a reversed sibling / soft-deleted committed customer is not offered
+# --------------------------------------------------------------------------- #
+def _white_row(db: Session, b: ImportBatch, idx: int, *, status: str, committed_cid):
+    r = ImportRow(
+        batch_id=b.id, source_row_index=idx, row_class=ImportRowClass.JOB.value,
+        legacy_reference=f"W{idx}", raw={},
+        parsed={"customer_name": "Stuart White", "phones": [{"number": "0400555111"}],
+                "emails": [], "address": "1 Test St"},
+        review_status=status, committed_customer_id=committed_cid,
+    )
+    db.add(r)
+    db.flush()
+    return r
+
+
+def test_reversed_sibling_with_deleted_customer_not_offered(db_session: Session):
+    """#5b: a REVERSED sibling whose committed_customer_id points at a now soft-deleted
+    customer must NOT surface that customer as a "Use this customer" candidate, and the
+    reversed row itself produces no candidate."""
+    cust = Customer(full_name="Stuart White", address_line1="1 Test St")
+    db_session.add(cust)
+    db_session.flush()
+    cust.deleted_at = datetime.now(timezone.utc)  # reversed -> soft-deleted
+    db_session.flush()
+    b = ImportBatch(source_filename="rev.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db_session.add(b)
+    db_session.flush()
+
+    reversed_row = _white_row(db_session, b, 2, status=ImportRowReviewStatus.REVERSED.value, committed_cid=cust.id)
+    target = _white_row(db_session, b, 3, status=ImportRowReviewStatus.PENDING.value, committed_cid=None)
+
+    cands = find_candidates(db_session, target)
+    # The soft-deleted customer is never offered (neither via the reversed batch_row nor
+    # the live_customer branch, which filters deleted_at).
+    assert all(c["customer_id"] != cust.id for c in cands)
+    # The reversed sibling produces no candidate at all (terminal, excluded).
+    assert all(c["row_id"] != reversed_row.id for c in cands)
+
+
+def test_active_committed_sibling_offers_one_customer(db_session: Session):
+    """A single ACTIVE committed sibling still surfaces exactly one usable
+    existing-customer candidate (collapsed to the live customer)."""
+    cust = Customer(full_name="Stuart White", address_line1="1 Test St")
+    db_session.add(cust)
+    db_session.flush()
+    b = ImportBatch(source_filename="act.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db_session.add(b)
+    db_session.flush()
+
+    _white_row(db_session, b, 2, status=ImportRowReviewStatus.COMMITTED.value, committed_cid=cust.id)
+    target = _white_row(db_session, b, 3, status=ImportRowReviewStatus.PENDING.value, committed_cid=None)
+
+    cands = find_candidates(db_session, target)
+    for_cust = [c for c in cands if c["customer_id"] == cust.id]
+    assert len(for_cust) == 1
+    assert for_cust[0]["kind"] == "live_customer"
+
+
+def test_active_plus_reversed_sibling_dedupes_to_active_only(db_session: Session):
+    """One sibling stayed committed (active customer), another was reversed (its customer
+    soft-deleted): only the active customer is offered, as exactly one candidate."""
+    active = Customer(full_name="Stuart White", address_line1="1 Test St")
+    deleted = Customer(full_name="Stuart White", address_line1="1 Test St")
+    db_session.add_all([active, deleted])
+    db_session.flush()
+    deleted.deleted_at = datetime.now(timezone.utc)
+    db_session.flush()
+    b = ImportBatch(source_filename="mix.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db_session.add(b)
+    db_session.flush()
+
+    _white_row(db_session, b, 2, status=ImportRowReviewStatus.COMMITTED.value, committed_cid=active.id)
+    reversed_row = _white_row(db_session, b, 3, status=ImportRowReviewStatus.REVERSED.value, committed_cid=deleted.id)
+    target = _white_row(db_session, b, 4, status=ImportRowReviewStatus.PENDING.value, committed_cid=None)
+
+    cands = find_candidates(db_session, target)
+    offered = {c["customer_id"] for c in cands if c["customer_id"] is not None}
+    assert offered == {active.id}  # only the active customer, never the deleted one
+    assert all(c["row_id"] != reversed_row.id for c in cands)  # reversed sibling excluded
+    assert len([c for c in cands if c["customer_id"] == active.id]) == 1  # collapsed to one
+
+
+def test_pending_grouped_candidate_still_exposes_group_id(db_session: Session):
+    """The #5b fix must not affect pending grouped candidates — they still expose
+    customer_group_id (for "Join this group") and carry no committed customer_id."""
+    b = ImportBatch(source_filename="grp2.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db_session.add(b)
+    db_session.flush()
+
+    def _mk(idx):
+        r = ImportRow(
+            batch_id=b.id, source_row_index=idx, row_class=ImportRowClass.JOB.value,
+            legacy_reference=f"GG{idx}", raw={},
+            parsed={"customer_name": "Pat Lin", "phones": [{"number": "0400888999"}],
+                    "emails": [], "address": "1 G St"},
+            review_status=ImportRowReviewStatus.PENDING.value,
+        )
+        db_session.add(r)
+        db_session.flush()
+        return r
+
+    grouped_row = _mk(2)
+    grp = ImportCustomerGroup(batch_id=b.id, primary_row_id=grouped_row.id)
+    db_session.add(grp)
+    db_session.flush()
+    grouped_row.customer_group_id = grp.id
+    target = _mk(3)
+    db_session.flush()
+
+    cands = find_candidates(db_session, target)
+    grouped_cand = [c for c in cands if c["row_id"] == grouped_row.id]
+    assert len(grouped_cand) == 1
+    assert grouped_cand[0]["customer_group_id"] == grp.id
+    assert grouped_cand[0]["customer_id"] is None  # pending: no committed customer

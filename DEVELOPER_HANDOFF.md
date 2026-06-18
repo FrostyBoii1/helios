@@ -132,7 +132,13 @@ These are stubbed/absent and represent the next phases:
   "In group ✓" state — distinct from B2's "Use this customer". **(Phase 2
   stabilization — built)** same-customer candidates dedupe by live `customer_id` (one
   candidate per customer, reasons merged); committed/reversed rows show a
-  final/historical summary instead of active candidate/group controls; review buttons
+  final/historical summary instead of active candidate/group controls. **(#5b fix —
+  built)** `find_candidates` excludes REVERSED sibling rows entirely and only exposes a
+  sibling's `committed_customer_id` when that customer is still live — so a reversed /
+  soft-deleted customer is never offered as a "Use this customer" candidate (the
+  live_customer branch already filtered `deleted_at`; this closes the same gap in the
+  batch_row branch). Pending grouped candidates still expose `customer_group_id`. Review
+  buttons
   are status-aware (pending → Approve/Reject/Skip; finalized → status + Reopen);
   "Search existing customers" is pending-only, 2+ chars, with loading / no-results
   guidance. **(Grouping-lifecycle stabilization — built)** commit & preview share

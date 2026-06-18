@@ -41,6 +41,28 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
   sanctioned ONLY inside this dedicated action and the prior ids are preserved in audit.
   Recommit mints a new case number — the old one is permanently retired.
 
+## 2026-06-18 — #5b fix: candidate engine no longer offers reversed / soft-deleted customers
+
+- **What:** `find_candidates` (`import_matching.py`) no longer offers a **reversed** import
+  sibling, or a `committed_customer_id` pointing to a **soft-deleted** Customer, as a
+  usable "Use this customer" candidate. Two changes to the `batch_row` branch: (1) REVERSED
+  sibling rows are excluded from candidate generation entirely (terminal — they offer no
+  valid action); (2) a sibling's `committed_customer_id` is exposed only when that customer
+  is still live (a since-soft-deleted link is dropped to `null`, mirroring the
+  `live_customer` branch's existing `deleted_at` filter).
+- **Why:** a manual-test bug (#5b) — after reversing customer #26749, sibling "Stuart
+  White" rows still surfaced the soft-deleted #26749 as "Use this customer". The
+  `live_customer` branch filtered deleted customers, but the `batch_row` branch used
+  `r.committed_customer_id` blindly. (Clicking it was already safely blocked at
+  resolve/commit — `resolved_customer_deleted` — so this is a misleading-UX fix, not a
+  data-corruption fix.)
+- **Preserved:** active committed siblings still collapse/dedupe to one live_customer
+  candidate; pending grouped candidates still expose `customer_group_id` for "Join this
+  group"; the `live_customer` search branch and the resolve/commit deleted-customer
+  defenses are unchanged.
+- **Files:** `backend/app/services/import_matching.py` (+ `test_import_matching.py`).
+- **Temporary or permanent:** Permanent. No migration/model/schema/parser change.
+
 ## 2026-06-18 — H2: extend read-only Preview to staged batch-row candidates
 
 - **What:** the "Possible same customer" Preview now also works for **`batch_row`

@@ -34,7 +34,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.customer import Customer
-from app.models.enums import ImportRowClass
+from app.models.enums import ImportRowClass, ImportRowReviewStatus
 from app.models.import_staging import ImportRow
 from app.services.matching_core import (
     CONF_RANK,
@@ -97,7 +97,9 @@ def _collapse_same_customer(cands: list[dict]) -> list[dict]:
     """Collapse candidates that resolve to the SAME live customer into one entry.
 
     A candidate carries a live ``customer_id`` when it is a live customer OR a
-    COMMITTED batch row (its ``committed_customer_id``). When a customer already has
+    COMMITTED batch row whose ``committed_customer_id`` is still live (#5b: a reversed
+    sibling is excluded, and a committed link to a soft-deleted customer carries no
+    ``customer_id`` — so only LIVE customers collapse). When a customer already has
     several committed import jobs, each committed sibling would otherwise surface as
     its own candidate pointing at the same customer; this collapses them (plus the
     direct live-customer candidate) into a single canonical candidate per
@@ -163,9 +165,32 @@ def find_candidates(db: Session, row: ImportRow) -> list[dict]:
                 ImportRow.batch_id == row.batch_id,
                 ImportRow.id != row.id,
                 ImportRow.row_class.in_(_COMMITTABLE),
+                # #5b: a REVERSED sibling is terminal — its committed customer was (or
+                # may have been) soft-deleted on reverse and it offers no valid action,
+                # so it must NOT surface as a candidate ("Use this customer" / group).
+                # The active committed siblings + the live-customer branch still surface a
+                # live customer; a stale reversed link must not.
+                ImportRow.review_status != ImportRowReviewStatus.REVERSED.value,
                 or_(*conds),
             )
         ).all()
+        # #5b defense-in-depth: only expose a sibling's committed_customer_id as a
+        # usable candidate when that customer is still LIVE (mirrors the live_customer
+        # branch's deleted_at filter below). A committed link to a since-soft-deleted
+        # customer is dropped to None — the row can still group (row_id), but never
+        # offers a dead "Use this customer".
+        committed_ids = {
+            r.committed_customer_id for r in batch_rows if r.committed_customer_id is not None
+        }
+        active_committed_ids: set[int] = set()
+        if committed_ids:
+            active_committed_ids = set(
+                db.scalars(
+                    select(Customer.id).where(
+                        Customer.id.in_(committed_ids), Customer.deleted_at.is_(None)
+                    )
+                ).all()
+            )
         for r in batch_rows:
             reasons, conf = score(target, _row_signature(r))
             if reasons:
@@ -173,7 +198,11 @@ def find_candidates(db: Session, row: ImportRow) -> list[dict]:
                     "kind": "batch_row",
                     "row_id": r.id,
                     "source_row_index": r.source_row_index,
-                    "customer_id": r.committed_customer_id,
+                    "customer_id": (
+                        r.committed_customer_id
+                        if r.committed_customer_id in active_committed_ids
+                        else None
+                    ),
                     # B (stabilization): expose the candidate's group so the UI can offer
                     # "Join this group" instead of silently stealing the row.
                     "customer_group_id": r.customer_group_id,
