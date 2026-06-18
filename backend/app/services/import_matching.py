@@ -92,6 +92,17 @@ def _customer_signature(c: Customer) -> Signature:
 # --------------------------------------------------------------------------- #
 _COMMITTABLE = (ImportRowClass.JOB.value, ImportRowClass.AMBIGUOUS.value)
 
+# Review statuses under which a sibling row may be offered as a same-customer candidate:
+# it is, or will become, a live customer. EXCLUDED: REJECTED / SKIPPED (the reviewer
+# decided this row will not become a customer) and REVERSED (#5b — terminal; its committed
+# customer was soft-deleted on reverse). COMMITTED siblings stay candidates, but their
+# committed_customer_id is exposed only when that customer is still live (checked below).
+_CANDIDATE_STATUSES = (
+    ImportRowReviewStatus.PENDING.value,
+    ImportRowReviewStatus.APPROVED.value,
+    ImportRowReviewStatus.COMMITTED.value,
+)
+
 
 def _collapse_same_customer(cands: list[dict]) -> list[dict]:
     """Collapse candidates that resolve to the SAME live customer into one entry.
@@ -165,12 +176,12 @@ def find_candidates(db: Session, row: ImportRow) -> list[dict]:
                 ImportRow.batch_id == row.batch_id,
                 ImportRow.id != row.id,
                 ImportRow.row_class.in_(_COMMITTABLE),
-                # #5b: a REVERSED sibling is terminal — its committed customer was (or
-                # may have been) soft-deleted on reverse and it offers no valid action,
-                # so it must NOT surface as a candidate ("Use this customer" / group).
-                # The active committed siblings + the live-customer branch still surface a
-                # live customer; a stale reversed link must not.
-                ImportRow.review_status != ImportRowReviewStatus.REVERSED.value,
+                # Only PENDING / APPROVED / COMMITTED siblings are candidates (see
+                # _CANDIDATE_STATUSES): a REJECTED / SKIPPED row the reviewer decided will
+                # not become a customer, and a REVERSED row (#5b — terminal, its committed
+                # customer was soft-deleted) must NOT surface as a usable same-customer /
+                # group candidate. Committed siblings keep their live-customer dedupe.
+                ImportRow.review_status.in_(_CANDIDATE_STATUSES),
                 or_(*conds),
             )
         ).all()

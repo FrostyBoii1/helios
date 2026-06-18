@@ -357,9 +357,14 @@ def test_active_plus_reversed_sibling_dedupes_to_active_only(db_session: Session
 
     cands = find_candidates(db_session, target)
     offered = {c["customer_id"] for c in cands if c["customer_id"] is not None}
-    assert offered == {active.id}  # only the active customer, never the deleted one
-    assert all(c["row_id"] != reversed_row.id for c in cands)  # reversed sibling excluded
+    # The active customer is offered (collapsed to one) and the soft-deleted customer is
+    # NEVER offered. Assert membership, not the exact set: the rollback-isolated session
+    # also sees any real same-name ("Stuart White") customers committed in the live DB —
+    # the live_customer branch correctly offers those too, which must not fail this test.
+    assert active.id in offered
+    assert deleted.id not in offered
     assert len([c for c in cands if c["customer_id"] == active.id]) == 1  # collapsed to one
+    assert all(c["row_id"] != reversed_row.id for c in cands)  # reversed sibling excluded
 
 
 def test_pending_grouped_candidate_still_exposes_group_id(db_session: Session):
@@ -395,3 +400,50 @@ def test_pending_grouped_candidate_still_exposes_group_id(db_session: Session):
     assert len(grouped_cand) == 1
     assert grouped_cand[0]["customer_group_id"] == grp.id
     assert grouped_cand[0]["customer_id"] is None  # pending: no committed customer
+
+
+# --------------------------------------------------------------------------- #
+# Skipped / rejected siblings are not offered (candidate status allowlist)
+# --------------------------------------------------------------------------- #
+def test_skipped_sibling_not_offered(db_session: Session):
+    """A SKIPPED sibling must not surface as a same-customer / group candidate — the
+    reviewer decided it won't become a customer."""
+    b = ImportBatch(source_filename="skp.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db_session.add(b)
+    db_session.flush()
+    skipped = _white_row(db_session, b, 2, status=ImportRowReviewStatus.SKIPPED.value, committed_cid=None)
+    target = _white_row(db_session, b, 3, status=ImportRowReviewStatus.PENDING.value, committed_cid=None)
+
+    cands = find_candidates(db_session, target)
+    assert all(c["row_id"] != skipped.id for c in cands)
+
+
+def test_rejected_sibling_not_offered(db_session: Session):
+    """A REJECTED sibling must not surface as a same-customer / group candidate."""
+    b = ImportBatch(source_filename="rej.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db_session.add(b)
+    db_session.flush()
+    rejected = _white_row(db_session, b, 2, status=ImportRowReviewStatus.REJECTED.value, committed_cid=None)
+    target = _white_row(db_session, b, 3, status=ImportRowReviewStatus.PENDING.value, committed_cid=None)
+
+    cands = find_candidates(db_session, target)
+    assert all(c["row_id"] != rejected.id for c in cands)
+
+
+def test_pending_and_approved_siblings_are_offered(db_session: Session):
+    """Allowlist positive case: PENDING and APPROVED siblings remain candidates (only
+    rejected / skipped / reversed are excluded)."""
+    b = ImportBatch(source_filename="okk.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.REVIEWING.value)
+    db_session.add(b)
+    db_session.flush()
+    pending = _white_row(db_session, b, 2, status=ImportRowReviewStatus.PENDING.value, committed_cid=None)
+    approved = _white_row(db_session, b, 3, status=ImportRowReviewStatus.APPROVED.value, committed_cid=None)
+    target = _white_row(db_session, b, 4, status=ImportRowReviewStatus.PENDING.value, committed_cid=None)
+
+    cands = find_candidates(db_session, target)
+    offered_rows = {c["row_id"] for c in cands if c["row_id"] is not None}
+    assert pending.id in offered_rows
+    assert approved.id in offered_rows
