@@ -25,6 +25,17 @@ explains intent; protect important explicit decisions with tests, not docs alone
 
 - **Customers and jobs are separate entities.** A customer may have many jobs
   over time. Never model one-customer-one-job.
+- **Customer merge is explicit, admin-only, and non-destructive (B4 — storage
+  foundation built in B4-1; execution deferred to B4-2).** Duplicates are never
+  auto-merged or silently combined. A merge moves the **loser's** records to the
+  **winner** and soft-deletes the loser (`merged_into_customer_id` → winner; never
+  hard-deleted). The **winner's** contact/address fields stay **authoritative**
+  (never overwritten from the loser); the loser's notes/internal_notes are
+  **appended to the winner's internal notes with a provenance header**. `merged_into`
+  is **immutable**; there is **no unmerge**; merges are **single-pair** (one loser →
+  one winner). B4-1 adds only the storage/audit columns + a read-only chain resolver
+  (`resolve_active_customer`) — no jobs/tasks/documents/activities/import links are
+  reassigned yet.
 - **Every job has a unique case number** in the form `SCS-YYYY-00001`, generated
   automatically at creation, searchable across the system. The sequence resets
   per calendar year.
@@ -196,8 +207,10 @@ explains intent; protect important explicit decisions with tests, not docs alone
   in the import review only.
 - Parser/note rules apply to **future** parses; existing staged/committed rows need
   a re-ingest to reflect a parser change.
-- **v1 scope:** one Customer per Job (no dedup/merge — *multi-client matching is
-  proposed, not built*), salesperson/installer kept as text, single-line address.
+- **v1 scope:** one Customer per Job (no **auto**-dedup/merge — *multi-client matching
+  is proposed, not built*; an **explicit admin merge** has its storage foundation in
+  B4-1, execution deferred to B4-2), salesperson/installer kept as text, single-line
+  address.
   No NAS matching, reference catalogs, StaffDirectory, status-label tables, or
   CustomerContact.
 

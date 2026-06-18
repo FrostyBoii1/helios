@@ -44,6 +44,8 @@ the physical schema is produced by Alembic migrations.
 | email / phone | varchar, indexed | searchable |
 | address_line1/2, suburb, state, postcode | varchar | suburb/postcode indexed |
 | notes | text | |
+| merged_into_customer_id | int FK → customers.id null, indexed | **B4-1 (storage only):** set when this customer is the **loser** of an explicit admin merge → the winner it was merged into. NULL = live / never merged; immutable once set; NO ACTION self-FK. No execution reads/writes it yet (deferred to B4-2). |
+| merged_at | timestamptz null | **B4-1:** when the merge happened |
 | timestamps + deleted_at | | |
 
 ### jobs
@@ -174,8 +176,9 @@ approval label (the structured approval control enforces this).
 > attributes); `customers.internal_notes`; `import_rows.internal_notes_override`
 > (the reviewer's editable On-Commit notes). Several additive migrations have
 > followed `legacy_reference` (the column additions above, the two `job_label_*`
-> tables + approval-label renames, the B2-1 customer-resolution columns, and the
-> B3-2 `import_customer_groups` table) — see **Migrations** for the ordered chain
+> tables + approval-label renames, the B2-1 customer-resolution columns, the
+> B3-2 `import_customer_groups` table, and the B4-1 `customers.merged_into_customer_id`
+> / `merged_at` merge-pointer columns) — see **Migrations** for the ordered chain
 > and current head.
 
 ## Relationships
@@ -195,11 +198,14 @@ users 1 ───< activities (actor), documents (uploaded_by)
 - A customer may have **many** jobs over time (installs, maintenance, upgrades,
   support). The model never assumes one job per customer.
 - Tasks, activities, and documents can attach to a customer and/or a job.
+- **B4-1 (storage only):** `customers.merged_into_customer_id` is a **self-reference**
+  (merge loser → winner). It is inert until B4-2 merge execution; the pure-read
+  `resolve_active_customer()` helper walks the chain to the live winner.
 
 ## Indexing (initial)
 
 Indexed for search/filtering: `users.email`, `customers.full_name/email/phone/
-suburb/postcode`, `jobs.case_number/status/install_date/salesperson_id/
+suburb/postcode` (+ `merged_into_customer_id`, B4-1), `jobs.case_number/status/install_date/salesperson_id/
 assigned_user_id`, `tasks.status/priority/due_date/assigned_to_id`,
 `activities.activity_type/actor_id/customer_id/job_id`, `documents.category/
 customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
@@ -227,7 +233,9 @@ customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
   **`c7d8e9f0a1b2` `import_rows` customer-resolution columns** (B2-1:
   `resolved_customer_id`, `customer_resolution_mode`, `customer_resolution_reason`,
   `resolved_by_id`, `resolved_at`) → **`d8e9f0a1b2c3` `import_customer_groups` table
-  + `import_rows.customer_group_id`** (B3-2). The current Alembic **head is
-  `d8e9f0a1b2c3`**. The commit-to-live, reverse, and case-year-guard work (and the
+  + `import_rows.customer_group_id`** (B3-2) → **`e9f0a1b2c3d4` `customers.merged_into_customer_id`
+  + `customers.merged_at`** (B4-1: customer-merge storage foundation — additive nullable
+  columns + index + self-FK, no backfill, reversible; no execution). The current Alembic
+  **head is `e9f0a1b2c3d4`**. The commit-to-live, reverse, and case-year-guard work (and the
   later B2-2/B2-3, B3-3/B3-4 wiring) added **no** further migrations — they read the
   existing columns at commit/preview/reverse and in the UI (string-enum values only).

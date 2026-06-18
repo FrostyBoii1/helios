@@ -22,6 +22,43 @@ def get_customer(db: Session, customer_id: int) -> Customer | None:
     return db.scalar(stmt)
 
 
+def resolve_active_customer(db: Session, customer_id: int) -> Customer | None:
+    """Walk the ``merged_into_customer_id`` chain to the live winner customer.
+
+    B4-1 pure read helper. Given a (possibly merged, soft-deleted, or missing)
+    customer id, follow merge pointers loser -> winner until the chain ends and
+    return the final customer only when it is genuinely active.
+
+    Returns:
+      * the customer itself — when it exists, is not merged, and is not deleted
+        (a normal active customer resolves to itself);
+      * the final winner of a one-or-more-hop merge chain — when that winner is
+        active;
+      * ``None`` — when the id does not exist, when the chain terminates at a
+        soft-deleted customer (no active customer to resolve to), or when a cycle
+        is detected (guarded — the walk visits each id at most once and never
+        loops).
+
+    Intermediate losers are followed regardless of their own ``deleted_at`` (a
+    merged loser is itself soft-deleted); only the FINAL node's active state
+    decides the result. Never mutates. NOT used by merge execution — there is no
+    merge execution yet (B4-2+).
+    """
+    seen: set[int] = set()
+    current = db.get(Customer, customer_id)
+    while current is not None:
+        if current.id in seen:
+            # Corrupt chain (cycle) — refuse to loop; there is no safe winner.
+            return None
+        seen.add(current.id)
+        next_id = current.merged_into_customer_id
+        if next_id is None:
+            # End of the chain: active only when not soft-deleted.
+            return current if current.deleted_at is None else None
+        current = db.get(Customer, next_id)
+    return None
+
+
 def list_customers(
     db: Session,
     *,

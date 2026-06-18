@@ -112,7 +112,10 @@ def clear_live_crm(db: Session) -> dict[str, int]:
         review_status committed -> approved (B1/C);
       * manual same-customer resolutions: null import_rows.resolved_customer_id and
         clear the 'existing' mode back to unresolved (B2);
-      * pending-row groups: null import_customer_groups.committed_customer_id (B3-3).
+      * pending-row groups: null import_customer_groups.committed_customer_id (B3-3);
+      * customer merge pointers: null customers.merged_into_customer_id so the
+        self-referential FK never blocks the customer delete (B4-1; normally a
+        no-op until merge execution exists).
     Step 2 — DELETE (child -> parent FK order): job_label_assignments, activities,
     tasks, documents, jobs, customers.
 
@@ -147,10 +150,21 @@ def clear_live_crm(db: Session) -> dict[str, int]:
         .where(ImportCustomerGroup.committed_customer_id.isnot(None))
         .values(committed_customer_id=None)
     ).rowcount
+    # B4-1: null any customer -> customer merge pointer (merged_into_customer_id)
+    # BEFORE deleting customers, so the self-referential FK can never block or
+    # orphan the hard delete. No merge execution exists yet (B4-2+), so this is
+    # normally a no-op (all NULL); it is forward-compatible defense-in-depth for
+    # once a merge can set it.
+    merge_pointers_detached = db.execute(
+        update(Customer)
+        .where(Customer.merged_into_customer_id.isnot(None))
+        .values(merged_into_customer_id=None)
+    ).rowcount
     return {
         "import_rows_detached": detached,
         "import_rows_resolution_detached": resolution_detached,
         "import_groups_detached": groups_detached,
+        "customers_merge_detached": merge_pointers_detached,
         "job_label_assignments": db.execute(delete(JobLabelAssignment)).rowcount,
         "activities": db.execute(delete(Activity)).rowcount,
         "tasks": db.execute(delete(Task)).rowcount,

@@ -7,6 +7,7 @@ for clear_live_crm, all import batch/row/issue CONTENT).
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from sqlalchemy import func, select
@@ -218,6 +219,32 @@ def test_clear_live_crm_detaches_grouped_committed_customer(db_session: Session)
     assert row_after.customer_resolution_mode is None
     assert deleted["import_groups_detached"] >= 1
     assert deleted["import_rows_resolution_detached"] >= 1
+
+
+def test_clear_live_crm_detaches_customer_merge_pointer(db_session: Session):
+    """clear_live_crm must null customers.merged_into_customer_id (B4-1) BEFORE
+    deleting customers, so the self-referential FK never blocks the hard delete.
+    No merge execution exists yet, so the post-merge state is simulated by setting
+    the storage columns directly: a soft-deleted loser pointing at a live winner."""
+    winner = Customer(full_name="Merge Winner")
+    loser = Customer(full_name="Merge Loser")
+    db_session.add_all([winner, loser])
+    db_session.flush()
+    now = datetime.now(timezone.utc)
+    loser.merged_into_customer_id = winner.id
+    loser.merged_at = now
+    loser.deleted_at = now
+    db_session.flush()
+
+    deleted = dev_reset.clear_live_crm(db_session)
+    db_session.flush()
+
+    # the merge pointer was nulled + counted, and BOTH customers hard-deleted with
+    # no self-referential FK violation
+    assert deleted["customers_merge_detached"] >= 1
+    assert _count(db_session, Customer) == 0
+    assert db_session.get(Customer, winner.id) is None
+    assert db_session.get(Customer, loser.id) is None
 
 
 # --------------------------------------------------------------------------- #

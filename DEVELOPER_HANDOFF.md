@@ -169,8 +169,17 @@ These are stubbed/absent and represent the next phases:
   address + `details.site`, contact (emails/phones), dates/approval, group status, and a
   committed-customer link (new tab) if it already committed — read-only, dismiss-only, no
   navigation away. A `batch_row` always previews the staged row; a pure `live_customer`
-  candidate previews the customer. **(B4 — proposed)** auto-link/merge for identical
-  names; existing-customer merge.
+  candidate previews the customer. **(B4-1 — built, storage foundation only)** schema +
+  helper scaffolding for a future explicit admin **existing-customer merge**, with **no
+  execution**: `customers.merged_into_customer_id` (nullable, indexed, self-FK, NO ACTION) +
+  `customers.merged_at`, `ActivityType.CUSTOMER_MERGED`, a pure-read cycle-guarded
+  `resolve_active_customer(db, id)` chain-walk helper (loser→winner; no callers yet), and
+  `dev_reset.clear_live_crm` nulling `merged_into_customer_id` before deleting customers. No
+  endpoint/service/UI, **no reassignment** of jobs/tasks/documents/activities/import links,
+  and **no loser soft-delete** — merge **execution is deferred to B4-2** (winner fields
+  authoritative; loser notes appended with a provenance header at execution; `merged_into`
+  immutable; unmerge deferred; single-pair only). **(B4 — proposed)** auto-link/merge for
+  identical names.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

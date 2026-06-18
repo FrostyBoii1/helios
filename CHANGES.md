@@ -9,6 +9,40 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-18 — B4-1: existing-customer merge — storage foundation only (no execution)
+
+- **What:** schema + helper scaffolding for a future explicit admin **customer merge**, with
+  **no merge execution**. Adds `customers.merged_into_customer_id` (nullable, indexed,
+  self-FK → `customers.id`, NO ACTION) and `customers.merged_at` (nullable timestamptz);
+  `ActivityType.CUSTOMER_MERGED`; a pure-read `resolve_active_customer(db, id)` helper that
+  walks the `merged_into` loser→winner chain to the live winner (cycle-guarded; returns
+  `None` for missing / cycle / chain-ends-at-soft-deleted), **currently called by no
+  execution path**; and `dev_reset.clear_live_crm` now **nulls `merged_into_customer_id`
+  before deleting customers** so the self-FK can't block the reset.
+- **Why:** lay a non-destructive, reversible storage/audit foundation so B4-2 merge execution
+  can be built and verified against an existing schema, without risking live data now.
+- **Scope (what this does NOT do):** no merge endpoint, no merge service/execution, **no
+  reassignment** of Job/Task/Document/Activity `customer_id` or import links, **no
+  soft-delete of any loser**, no frontend UI, and **no change** to search/get/list or import
+  commit/preview/reverse behaviour. Merge execution is **deferred to B4-2**.
+- **Owner decisions (recorded for B4-2):** winner contact/address fields remain
+  **authoritative** (never auto-overwritten from the loser); loser `notes`/`internal_notes`
+  will be **appended into the winner's internal_notes with a provenance header** at execution;
+  `merged_into` is **immutable** for B4; **unmerge deferred**; **single-pair** merge only
+  (one loser → one winner).
+- **Migration:** `e9f0a1b2c3d4` (revises `d8e9f0a1b2c3`) — additive nullable columns + index
+  + self-FK only, no data backfill, fully reversible. `CUSTOMER_MERGED` needs no DB type
+  migration (`activity_type` is a varchar column). New Alembic head: **`e9f0a1b2c3d4`**.
+- **Files:** `backend/app/models/customer.py`, `backend/app/models/enums.py`,
+  `backend/app/services/customers.py` (helper), `backend/app/services/dev_reset.py`,
+  `backend/alembic/versions/e9f0a1b2c3d4_add_customer_merge_columns.py` (new),
+  `backend/tests/test_customer_merge_storage.py` (new), `backend/tests/test_dev_reset.py`
+  (+ docs).
+- **Temporary or permanent:** Permanent (foundation).
+- **Risks / follow-up:** the new columns are inert until B4-2; `resolve_active_customer` has
+  no callers by design (B4-2 will consume it). An unrelated pre-existing model↔DB drift on
+  `job_label_definitions.key` (unique flag) was noted during the audit — separate follow-up.
+
 ## 2026-06-18 — D: reverse-then-recommit via an explicit "Prepare recommit" (no migration)
 
 - **What:** a reversed import row is no longer permanently terminal. A new admin action

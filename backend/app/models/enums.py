@@ -70,6 +70,10 @@ class ActivityType(str, enum.Enum):
     CUSTOMER_CREATED = "customer_created"
     CUSTOMER_UPDATED = "customer_updated"
     CUSTOMER_DELETED = "customer_deleted"
+    # B4-1: one append-only event per explicit admin customer merge (loser ->
+    # winner). The merge EXECUTION that emits it is B4-2 (not implemented yet);
+    # the value is defined now so the audit vocabulary exists.
+    CUSTOMER_MERGED = "customer_merged"
     TASK_CREATED = "task_created"
     TASK_UPDATED = "task_updated"
     TASK_ASSIGNED = "task_assigned"
