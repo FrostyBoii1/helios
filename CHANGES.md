@@ -41,6 +41,31 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
   sanctioned ONLY inside this dedicated action and the prior ids are preserved in audit.
   Recommit mints a new case number — the old one is permanently retired.
 
+## 2026-06-18 — H2: extend read-only Preview to staged batch-row candidates
+
+- **What:** the "Possible same customer" Preview now also works for **`batch_row`
+  candidates** (those with a `row_id` but no live customer yet — e.g. pending sibling
+  rows). Previously Preview appeared only for live/committed-customer candidates. The
+  button now shows whenever a candidate has a `row_id` **or** a `customer_id`; a
+  `batch_row` opens a new **`CandidateRowPreviewModal`** showing that staged row's
+  parsed/review data, a pure `live_customer` keeps the existing `CandidatePreviewModal`.
+- **Why:** let reviewers inspect a staged candidate directly — name, source row #/ref,
+  review status, parsed address + `details.site`, contact (emails/phones), dates/approval,
+  group status, and a committed-customer link if it already committed — without leaving
+  the current import row.
+- **How (no backend change):** reuses the existing read-only `useImportRow(batchId,
+  rowId)` hook (`GET /imports/{batch}/rows/{id}` → `ImportRowRead`), which already carries
+  every needed field (`parsed`, `review_status`, `source_row_index`, `legacy_reference`,
+  `committed_*`, `customer_group_id`, `internal_notes_override`, `context_text`).
+- **Read-only by construction:** the modal holds NO action callbacks and performs NO
+  mutation — no approve/reject/skip/group/join/use-customer; dismissal only (✕ / Escape /
+  backdrop / Close). The optional committed-customer link opens in a new tab, so the
+  current import row is never navigated away from. The H live-customer preview is
+  unchanged.
+- **Files:** `frontend/src/components/imports/CandidateRowPreviewModal.tsx` (new),
+  `frontend/src/components/imports/MatchCandidatesPanel.tsx`.
+- **Temporary or permanent:** Permanent.
+
 ## 2026-06-18 — H: read-only candidate customer preview in the import review modal
 
 - **What:** In the "Possible same customer" panel (`MatchCandidatesPanel`), each candidate

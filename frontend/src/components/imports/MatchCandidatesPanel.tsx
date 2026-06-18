@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { CandidatePreviewModal } from '@/components/imports/CandidatePreviewModal'
+import { CandidateRowPreviewModal } from '@/components/imports/CandidateRowPreviewModal'
 import { useRowMatchCandidates } from '@/hooks/useImports'
 
 const CONF_BOX: Record<string, string> = {
@@ -53,9 +54,14 @@ export function MatchCandidatesPanel({
   busy = false,
 }: MatchCandidatesPanelProps) {
   const { data, isLoading } = useRowMatchCandidates(batchId, rowId)
-  // H: read-only preview of a candidate's existing customer. Independent of the
-  // mutating actions below — it only opens a presentational modal.
-  const [preview, setPreview] = useState<{ customerId: number; name: string } | null>(null)
+  // H/H2: read-only preview of a candidate — a live/committed customer (by customer_id)
+  // OR a staged batch row (by row_id). Independent of the mutating actions below; it only
+  // opens a presentational modal and never mutates.
+  const [preview, setPreview] = useState<
+    | { kind: 'customer'; customerId: number; name: string }
+    | { kind: 'row'; rowId: number; name: string }
+    | null
+  >(null)
   const candidates = data ?? []
   if (isLoading || candidates.length === 0) return null
 
@@ -111,13 +117,17 @@ export function MatchCandidatesPanel({
                 ) : (
                   <span className="text-faint">batch row #{c.source_row_index}</span>
                 )}
-                {/* H: read-only preview — only for candidates with a committed customer. */}
-                {liveId != null && (
+                {/* H/H2: read-only preview — a staged batch-row candidate (by row_id)
+                    OR a live/committed customer candidate (by customer_id). A batch_row
+                    always previews the staged row (even if it already committed a customer,
+                    which the row preview links to). */}
+                {(c.row_id != null || liveId != null) && (
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation()
-                      setPreview({ customerId: liveId, name: c.name })
+                      if (c.row_id != null) setPreview({ kind: 'row', rowId: c.row_id, name: c.name })
+                      else setPreview({ kind: 'customer', customerId: liveId!, name: c.name })
                     }}
                     className="rounded border border-line bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-muted hover:text-fg"
                   >
@@ -177,9 +187,17 @@ export function MatchCandidatesPanel({
           )
         })}
       </ul>
-      {preview && (
+      {preview?.kind === 'customer' && (
         <CandidatePreviewModal
           customerId={preview.customerId}
+          candidateName={preview.name}
+          onClose={() => setPreview(null)}
+        />
+      )}
+      {preview?.kind === 'row' && (
+        <CandidateRowPreviewModal
+          batchId={batchId}
+          rowId={preview.rowId}
           candidateName={preview.name}
           onClose={() => setPreview(null)}
         />

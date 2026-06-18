@@ -155,9 +155,16 @@ These are stubbed/absent and represent the next phases:
   it composes the existing read-only GETs `useCustomer(id)` + `useJobs({customer_id})`
   to show the customer's name/contact/headline address and their jobs (each with the
   job's own `details.site`, status, labels) — no new endpoint, no action callbacks, no
-  mutation; dismissal only. Pending/group candidates (`customer_id` null) show no
-  Preview button; previewing a pending row's parsed import data is deferred. **(B4 —
-  proposed)** auto-link/merge for identical names; existing-customer merge.
+  mutation; dismissal only. **(H2 — built)** Preview now ALSO works for staged
+  `batch_row` candidates (those with a `row_id`, e.g. pending sibling rows that have no
+  live customer yet): the button opens `CandidateRowPreviewModal`, which composes the
+  existing read-only `useImportRow(batchId, rowId)` (`GET /rows/{id}`) to show that
+  candidate row's parsed/review data — name, source row #/ref, review status, parsed
+  address + `details.site`, contact (emails/phones), dates/approval, group status, and a
+  committed-customer link (new tab) if it already committed — read-only, dismiss-only, no
+  navigation away. A `batch_row` always previews the staged row; a pure `live_customer`
+  candidate previews the customer. **(B4 — proposed)** auto-link/merge for identical
+  names; existing-customer merge.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.
