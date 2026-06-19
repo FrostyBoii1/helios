@@ -3,6 +3,7 @@
 
 import type { TaskPriority, TaskStatus } from '@/types'
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   open: 'Open',
   in_progress: 'In progress',
@@ -10,6 +11,7 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   cancelled: 'Cancelled',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   low: 'Low',
   normal: 'Normal',
@@ -17,7 +19,9 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   urgent: 'Urgent',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const TASK_STATUS_ORDER: TaskStatus[] = ['open', 'in_progress', 'completed', 'cancelled']
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const TASK_PRIORITY_ORDER: TaskPriority[] = ['low', 'normal', 'high', 'urgent']
 
 const STATUS_CLASSES: Record<TaskStatus, string> = {

@@ -8,12 +8,14 @@ const SEVERITY_STYLES: Record<ImportIssueSeverity, string> = {
   info: 'bg-sky-500/15 text-sky-300',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const SEVERITY_LABELS: Record<ImportIssueSeverity, string> = {
   error: 'Error',
   warning: 'Warning',
   info: 'Info',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const SEVERITY_ORDER: ImportIssueSeverity[] = ['error', 'warning', 'info']
 
 /** Inline counts of unresolved issues by severity. Resolved issues are excluded. */

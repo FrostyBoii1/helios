@@ -11,6 +11,7 @@ const REVIEW_STATUS_STYLES: Record<ImportRowReviewStatus, string> = {
   reversed: 'bg-zinc-500/20 text-zinc-300',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const REVIEW_STATUS_LABELS: Record<ImportRowReviewStatus, string> = {
   pending: 'Pending',
   approved: 'Approved',
@@ -20,6 +21,7 @@ export const REVIEW_STATUS_LABELS: Record<ImportRowReviewStatus, string> = {
   reversed: 'Reversed',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const REVIEW_STATUS_ORDER: ImportRowReviewStatus[] = [
   'pending',
   'approved',
@@ -46,6 +48,7 @@ const ROW_CLASS_STYLES: Record<ImportRowClass, string> = {
   blank: 'bg-elevated text-faint',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const ROW_CLASS_LABELS: Record<ImportRowClass, string> = {
   job: 'Job',
   ambiguous: 'Ambiguous',
@@ -53,6 +56,7 @@ export const ROW_CLASS_LABELS: Record<ImportRowClass, string> = {
   blank: 'Blank',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const ROW_CLASS_ORDER: ImportRowClass[] = ['job', 'ambiguous', 'divider', 'blank']
 
 export function RowClassBadge({ rowClass }: { rowClass: ImportRowClass }) {

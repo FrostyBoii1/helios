@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import type { FieldRegistry, FieldSpec, ParsedDetails } from '@/types/imports'
 
 /** "<section>.<key>" path for a job.details.* storage path. */
+// eslint-disable-next-line react-refresh/only-export-components -- path helper co-located with its view
 export function detailsPath(storage: string): string {
   return storage.startsWith('job.details.') ? storage.slice('job.details.'.length) : storage
 }

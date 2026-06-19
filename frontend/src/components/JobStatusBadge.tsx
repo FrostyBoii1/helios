@@ -3,6 +3,7 @@
 
 import type { JobStatus } from '@/types'
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   new: 'New',
   awaiting_approval: 'Awaiting approval',
@@ -17,6 +18,7 @@ export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   cancelled: 'Cancelled',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- display lookup co-located with its badge
 export const JOB_STATUS_ORDER: JobStatus[] = [
   'new',
   'awaiting_approval',
