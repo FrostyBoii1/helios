@@ -126,8 +126,16 @@ and its customer-level CONTACT identity (name/email/phone) differs from the targ
 `details.site`, job-scoped). Reversing that import row archives the variant it contributed.
 `source_customer_id` / `source_import_row_id` / `source_document_id` are stored for audit but are
 NOT exposed by the read API. `dev_reset.clear_live_crm` deletes this table before `customers`
-(it FKs `customers`). Document/NAS capture, backfill, and promote-to-primary are later stages; no
-migration was needed (the table + `import_row` enum value + `source_import_row_id` already exist).
+(it FKs `customers`); `dev_reset.clear_imports` nulls `source_import_row_id` on live variants
+before deleting `import_rows` (detach, preserving the live variant). **(Editable + provenance,
+migration `b2c3d4e5f6a7`)** Known Customer Details are now EDITABLE via admin
+`PATCH /customers/{id}/contact-variants/{variant_id}` (any source_type) — it updates only the
+variant + stamps `edited_at`/`edited_by_id`, never the primary customer/job/import-row/provenance.
+The read API adds SAFE computed provenance for `import_row` variants — `source_row_number`
+(ImportRow.source_row_index, NOT a PK), `source_job_case_number`, `source_job_id`, `source_reversed`
+— so the UI shows which import row/job contributed a detail; the raw source FK ids remain hidden.
+Reverse of an import row archives a contributed variant ONLY while `edited_at IS NULL` (an edited
+detail survives). Promote-to-primary, backfill, and document/NAS capture are later stages.
 
 | column | type | notes |
 |--------|------|-------|
@@ -143,6 +151,8 @@ migration was needed (the table + `import_row` enum value + `source_import_row_i
 | source_document_id | int FK → documents.id null | |
 | note | text null | short provenance/context |
 | created_by_id | int FK → users.id null | |
+| edited_at | timestamptz null | set when a user edited this detail (NULL ⇒ pristine; survives source-row reversal) |
+| edited_by_id | int FK → users.id null | who last edited (audit) |
 | timestamps + deleted_at | | soft-delete = archive |
 
 ### import staging (parse → review → commit pipeline)
@@ -275,8 +285,10 @@ customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
   (cleanup: reconcile the `job_label_definitions.key` model↔DB drift — collapse the redundant
   unique-constraint + non-unique-index into the single UNIQUE index the model declares; no data
   change, reversible) → **`a1b2c3d4e5f6`** (Stage 2: the new `customer_contact_variants` table
-  — additive, creates the table + its FKs/indexes only, no backfill, reversible). The current
-  Alembic **head is `a1b2c3d4e5f6`**. The commit-to-live,
+  — additive, creates the table + its FKs/indexes only, no backfill, reversible) →
+  **`b2c3d4e5f6a7`** (editable Known Customer Details: adds nullable `edited_at` +
+  `edited_by_id` FK to `customer_contact_variants` — additive, no backfill, round-trip
+  reversible). The current Alembic **head is `b2c3d4e5f6a7`**. The commit-to-live,
   reverse, and case-year-guard work (and the later B2-2/B2-3, B3-3/B3-4 wiring) added **no**
   further migrations — they read the existing columns at commit/preview/reverse and in the UI
   (string-enum values only). **B4-2/B4-3/B4-4 (customer-merge execution, UI, merged-loser URL

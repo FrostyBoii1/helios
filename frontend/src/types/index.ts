@@ -114,6 +114,15 @@ export interface CustomerContactVariant {
   note: string | null
   created_at: string
   updated_at: string
+  // Set when a user has edited this detail (null => pristine snapshot).
+  edited_at: string | null
+  // SAFE, API-computed source provenance for an import_row variant (which import row/job
+  // contributed it, whether that row was reversed) — NOT raw internal FK ids. Null/false
+  // for manual/merged/document variants.
+  source_row_number: number | null
+  source_job_case_number: string | null
+  source_job_id: number | null
+  source_reversed: boolean
 }
 
 export interface CustomerContactVariantList {
@@ -121,8 +130,9 @@ export interface CustomerContactVariantList {
   total: number
 }
 
-// Stage 4: manual-add input. source_type is forced to 'manual' by the backend and the
-// source FK ids are not accepted (not part of this shape).
+// Add/edit input for a Known Customer Detail. For add, source_type is forced to 'manual'
+// by the backend; for edit (PATCH) the source_type + source FK ids are immutable and not
+// part of this shape.
 export interface ContactVariantInput {
   label?: string | null
   display_name?: string | null

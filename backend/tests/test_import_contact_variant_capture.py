@@ -24,6 +24,8 @@ from app.models.enums import (
     ImportRowReviewStatus,
 )
 from app.models.import_staging import ImportBatch, ImportRow
+from app.models.job import Job
+from app.services import customers as customers_service
 from app.services import import_commit, import_review, import_reverse
 
 
@@ -262,3 +264,64 @@ def test_reverse_archives_contributed_variant(users, db_session: Session):
     archived = db_session.get(CustomerContactVariant, vid)
     assert archived.deleted_at is not None                        # soft-deleted, not hard-deleted
     assert _variants(db_session, cust.id) == []                   # excluded from active reads
+
+
+# --------------------------------------------------------------------------- #
+# Source provenance is exposed safely (no raw internal FK ids)
+# --------------------------------------------------------------------------- #
+def test_import_variant_exposes_safe_provenance(users, client_for, db_session: Session):
+    cust = _customer(db_session, full_name="Prov Cust", email="p@x.com")
+    parsed = {
+        "customer_name": "Prov Alt", "sale_date": "01/06/2025",
+        "emails": ["prov-alt@x.com"], "address": "1 Rd",
+    }
+    b, row = _attach_row(db_session, customer_id=cust.id, parsed=parsed, ref="PROV0001")
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+
+    row = db_session.get(ImportRow, row.id)
+    job = db_session.get(Job, row.committed_job_id)
+    item = client_for(users["support"]).get(
+        f"/api/v1/customers/{cust.id}/contact-variants"
+    ).json()["items"][0]
+    # Safe, API-computed provenance — workbook row number + committed job, not raw FK ids.
+    assert item["source_row_number"] == row.source_row_index
+    assert item["source_job_case_number"] == job.case_number
+    assert item["source_job_id"] == job.id
+    assert item["source_reversed"] is False
+    assert "source_import_row_id" not in item   # raw internal FK id stays hidden
+
+
+def test_reverse_preserves_edited_import_variant(users, client_for, db_session: Session):
+    # An EDITED import_row variant is curated customer info: reversing the source row must NOT
+    # archive/hide it; its provenance then reports the source row as reversed.
+    cust = _customer(db_session, full_name="Edit Keeper", email="ek@x.com", phone="0400 1")
+    parsed = {
+        "customer_name": "Edited Alt", "sale_date": "01/06/2025",
+        "phones": [{"number": "0499 9"}], "address": "1 Rd",
+    }
+    b, row = _attach_row(db_session, customer_id=cust.id, parsed=parsed, ref="EDIT0001")
+    import_commit.commit_batch(db_session, b, actor_id=users["admin"].id)
+    vid = _variants(db_session, cust.id)[0].id
+
+    # Admin edits the variant -> it becomes curated (edited_at set).
+    edit = client_for(users["admin"]).patch(
+        f"/api/v1/customers/{cust.id}/contact-variants/{vid}",
+        json={"phone": "0488 8 (corrected)"},
+    )
+    assert edit.status_code == 200 and edit.json()["edited_at"] is not None
+
+    # Reverse the source import row.
+    row = db_session.get(ImportRow, row.id)
+    out = import_reverse.reverse_row(db_session, row, actor_id=users["admin"].id)
+    assert out["status"] == "reversed"
+
+    # The edited variant SURVIVES (not archived) and now reports its source row as reversed.
+    survivor = db_session.get(CustomerContactVariant, vid)
+    assert survivor.deleted_at is None
+    assert survivor.phone == "0488 8 (corrected)"
+    prov = customers_service.variant_provenance(db_session, survivor)
+    assert prov["source_reversed"] is True
+    item = client_for(users["support"]).get(
+        f"/api/v1/customers/{cust.id}/contact-variants"
+    ).json()["items"][0]
+    assert item["id"] == vid and item["source_reversed"] is True

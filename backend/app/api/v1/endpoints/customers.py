@@ -22,6 +22,7 @@ from app.schemas.customer import (
     CustomerContactVariantCreate,
     CustomerContactVariantList,
     CustomerContactVariantRead,
+    CustomerContactVariantUpdate,
     CustomerCreate,
     CustomerList,
     CustomerMergeResult,
@@ -36,6 +37,15 @@ router = APIRouter()
 
 # Roles permitted to create/update customer records.
 can_write = require_roles(RoleName.ADMIN, RoleName.SALES_ADMIN)
+
+
+def _variant_read(db: Session, variant) -> CustomerContactVariantRead:
+    """Serialise a CustomerContactVariant + its SAFE API-computed source provenance (which
+    import row/job contributed it, whether that row was reversed) — never the raw source FK ids."""
+    prov = customers_service.variant_provenance(db, variant)
+    for key, value in prov.items():
+        setattr(variant, key, value)
+    return CustomerContactVariantRead.model_validate(variant)
 
 
 @router.get("", response_model=CustomerList)
@@ -116,7 +126,7 @@ def list_customer_contact_variants(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
     variants = customers_service.list_contact_variants(db, customer)
     return CustomerContactVariantList(
-        items=[CustomerContactVariantRead.model_validate(v) for v in variants],
+        items=[_variant_read(db, v) for v in variants],
         total=len(variants),
     )
 
@@ -149,7 +159,41 @@ def create_customer_contact_variant(
         raise HTTPException(status_code=exc.http_status, detail=exc.reason)
     db.commit()
     db.refresh(variant)
-    return CustomerContactVariantRead.model_validate(variant)
+    return _variant_read(db, variant)
+
+
+@router.patch(
+    "/{customer_id}/contact-variants/{variant_id}",
+    response_model=CustomerContactVariantRead,
+)
+def update_customer_contact_variant(
+    customer_id: int,
+    variant_id: int,
+    payload: CustomerContactVariantUpdate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
+) -> CustomerContactVariantRead:
+    """Admin-only: EDIT a Known Customer Detail (any source_type — manual OR source-derived).
+    Updates ONLY the variant row and stamps `edited_at`/`edited_by_id`; the customer's primary
+    fields, the job, the import row, and the variant's provenance (`source_type` + source FK ids)
+    are never changed. 404 for a missing / soft-deleted / merged-loser customer, or a missing /
+    archived / other-customer variant; 400 when the edit would leave every detail field blank."""
+    customer = customers_service.get_customer(db, customer_id)
+    if customer is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+    try:
+        variant = customers_service.update_contact_variant(
+            db, customer=customer, variant_id=variant_id,
+            data=payload.model_dump(exclude_unset=True), actor_id=actor.id,
+        )
+    except customers_service.VariantError as exc:
+        # Raised BEFORE any mutation (the empty-result check is first) — nothing to roll back.
+        raise HTTPException(status_code=exc.http_status, detail=exc.reason)
+    if variant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+    db.commit()
+    db.refresh(variant)
+    return _variant_read(db, variant)
 
 
 @router.delete(
@@ -175,7 +219,7 @@ def archive_customer_contact_variant(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
     db.commit()
     db.refresh(variant)
-    return CustomerContactVariantRead.model_validate(variant)
+    return _variant_read(db, variant)
 
 
 @router.patch("/{customer_id}", response_model=CustomerRead)

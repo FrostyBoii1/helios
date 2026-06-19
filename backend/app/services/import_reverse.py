@@ -149,16 +149,19 @@ def reversibility(db: Session, row: ImportRow) -> dict:
 
 
 def _archive_row_contact_variants(db: Session, row_id: int) -> None:
-    """Corrective pass: when a row is reversed, archive (soft-delete) any ``import_row``
-    contact variant it contributed (matched by ``source_import_row_id``), so a reversed
-    import leaves no stale customer-level detail behind. Soft-delete only; scoped to this
-    row; never hard-deletes; a no-op when the row contributed no variant (the usual case
-    for a 'new' row, whose customer is soft-deleted separately)."""
+    """When a row is reversed, archive (soft-delete) the ``import_row`` contact variant it
+    contributed (matched by ``source_import_row_id``) so a reversed import leaves no stale
+    customer-level detail behind — BUT ONLY while the variant is still a pristine snapshot
+    (``edited_at IS NULL``). An EDITED variant is curated customer information: it is PRESERVED
+    (its provenance — including that the source row was reversed — is still derivable from the
+    row). Soft-delete only; scoped to this row; never hard-deletes; a no-op when the row
+    contributed no (unedited) variant."""
     now = datetime.now(timezone.utc)
     variants = db.scalars(
         select(CustomerContactVariant).where(
             CustomerContactVariant.source_import_row_id == row_id,
             CustomerContactVariant.deleted_at.is_(None),
+            CustomerContactVariant.edited_at.is_(None),
         )
     ).all()
     for v in variants:

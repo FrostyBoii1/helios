@@ -11,6 +11,7 @@ import {
   listCustomers,
   mergeCustomer,
   updateCustomer,
+  updateCustomerContactVariant,
   type ListCustomersParams,
 } from '@/lib/customers'
 import type { ContactVariantInput, CustomerInput } from '@/types'
@@ -51,6 +52,20 @@ export function useCreateContactVariant(customerId: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: ContactVariantInput) => createCustomerContactVariant(customerId, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['customers', 'contact-variants', customerId] })
+      void qc.invalidateQueries({ queryKey: keys.detail(customerId) })
+    },
+  })
+}
+
+// Edit a Known Customer Detail (admin-only on the backend), then refresh this customer's
+// variants + detail.
+export function useUpdateContactVariant(customerId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ variantId, input }: { variantId: number; input: ContactVariantInput }) =>
+      updateCustomerContactVariant(customerId, variantId, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['customers', 'contact-variants', customerId] })
       void qc.invalidateQueries({ queryKey: keys.detail(customerId) })

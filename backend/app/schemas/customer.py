@@ -106,6 +106,16 @@ class CustomerContactVariantRead(BaseModel):
     note: str | None
     created_at: datetime
     updated_at: datetime
+    # `edited_at` is set when a user has edited this variant (NULL => pristine snapshot).
+    edited_at: datetime | None = None
+    # SAFE, API-computed source provenance for an `import_row` variant (so the UI can show
+    # which import row/job contributed the detail) — NOT raw internal FK ids. The raw
+    # source_import_row_id stays hidden; `source_row_number` is the workbook row index and
+    # `source_job_*` come from the row's committed job. All None for non-import variants.
+    source_row_number: int | None = None
+    source_job_case_number: str | None = None
+    source_job_id: int | None = None
+    source_reversed: bool = False
 
 
 class CustomerContactVariantList(BaseModel):
@@ -118,6 +128,25 @@ class CustomerContactVariantCreate(BaseModel):
     source FK ids are NOT accepted from the client (not declared here, so any are dropped).
     At least one DETAIL field (name/email/phone/address/suburb/state/postcode) must be
     non-blank — a label or note alone does not create a variant (enforced in the service).
+    Max lengths mirror the table columns."""
+
+    label: str | None = Field(default=None, max_length=120)
+    display_name: str | None = Field(default=None, max_length=160)
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=40)
+    address_line1: str | None = Field(default=None, max_length=255)
+    address_line2: str | None = Field(default=None, max_length=255)
+    suburb: str | None = Field(default=None, max_length=120)
+    state: str | None = Field(default=None, max_length=60)
+    postcode: str | None = Field(default=None, max_length=20)
+    note: str | None = None
+
+
+class CustomerContactVariantUpdate(BaseModel):
+    """Admin edit of a Known Customer Detail (any source_type). Partial — only the fields
+    sent are changed (`model_dump(exclude_unset=True)`); a sent empty string clears that
+    field to NULL. `source_type` and the source FK ids are NOT editable (immutable provenance).
+    The edit must leave at least one DETAIL field non-blank (enforced in the service).
     Max lengths mirror the table columns."""
 
     label: str | None = Field(default=None, max_length=120)

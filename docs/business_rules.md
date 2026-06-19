@@ -60,8 +60,19 @@ explains intent; protect important explicit decisions with tests, not docs alone
   when something differs, never mutating the primary fields; reversing the row archives the variant
   it contributed. A row's ADDRESS is the JOB's site (`Job.details.site`, job-scoped) and is NOT
   captured as a customer variant — so a multi-site customer does not accrue job-site "contact"
-  variants. Editing an existing variant, document/NAS capture, backfill of already-merged/imported
-  customers, and promoting a variant to primary remain deferred.
+  variants. **(Editable + provenance)** Known Customer Details are EDITABLE customer-level records:
+  an admin can edit any one (manual OR source-derived) via the Customer page. **Editing a Known
+  Customer Detail changes only that record — it never changes the primary Customer (the source of
+  truth), the job, the import row, merge history, or the detail's own provenance** (`source_type`
+  and the source links are immutable; an edit is stamped `edited_at`/`edited_by_id`). Each detail
+  shows **source provenance** so a user can tell which import row/job contributed it (e.g. "Source
+  row #23 · Job SCS-2023-00002"); the raw internal source ids are never exposed — only safe
+  computed fields (workbook row number, job case number/id, whether the source row was reversed).
+  **An edited source-derived detail survives reversal of its source import row** (an UNEDITED
+  import detail is still archived when its row is reversed; an EDITED one is kept as curated
+  customer information and its provenance then shows the source as reversed). Document/NAS capture,
+  backfill of already-merged/imported customers, and **promoting a variant to the primary Customer
+  (promote-to-primary) remain deferred** — editing a detail never promotes it.
 - **Every job has a unique case number** in the form `SCS-YYYY-00001`, generated
   automatically at creation, searchable across the system. The sequence resets
   per calendar year.

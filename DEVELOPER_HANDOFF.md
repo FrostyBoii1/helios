@@ -219,9 +219,19 @@ These are stubbed/absent and represent the next phases:
   `details.site`, kept job-scoped). Reversing the row archives the variant it contributed.
   `dev_reset.clear_live_crm` now clears `customer_contact_variants` before customers. The
   Customer-Detail card is reframed as **"Known customer details"** (compact one-line sets, neutral
-  source labels, primary Details stays the source of truth). Edit-an-existing-variant,
-  promote-to-primary, backfill of existing merged/imported customers, and document/NAS capture
-  remain deferred. **(B4 — proposed)** auto-link/merge for identical names.
+  source labels, primary Details stays the source of truth). **(Editable + provenance pass built,
+  migration `b2c3d4e5f6a7`)** Known Customer Details are now EDITABLE customer-level records: admin
+  `PATCH /customers/{id}/contact-variants/{variant_id}` edits ANY source_type (manual OR source-
+  derived) — updating only the variant + stamping `edited_at`/`edited_by_id`, NEVER the primary
+  Customer, the job, the import row, or the variant's provenance (`source_type`/source ids stay
+  immutable). The read API adds SAFE computed provenance (`source_row_number` = workbook row index,
+  `source_job_case_number`, `source_job_id`, `source_reversed`) so the card shows which import
+  row/job contributed each detail (raw source FK ids still DB-only). Reverse now archives a
+  contributed `import_row` variant ONLY while unedited — an EDITED detail SURVIVES reversal (its
+  provenance then shows the source row as reversed). `dev_reset.clear_imports` detaches
+  `source_import_row_id` from live variants before deleting import rows (FK-gap fix). **Promote-to-
+  primary remains deferred** (an edit never touches the primary Customer), as do backfill and
+  document/NAS capture. **(B4 — proposed)** auto-link/merge for identical names.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

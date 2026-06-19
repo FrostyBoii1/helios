@@ -20,7 +20,9 @@ to avoid an ambiguous multi-customer-FK relationship config — the service quer
 """
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, String, Text
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base_class import Base
@@ -68,6 +70,13 @@ class CustomerContactVariant(IntPkMixin, TimestampMixin, SoftDeleteMixin, Base):
 
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    # Manual-edit marker. NULL => never edited (a pristine source-derived/manual snapshot);
+    # set => a user edited this variant's customer-level fields. An EDITED variant is treated
+    # as curated customer information: it is preserved (NOT archived) when its originating
+    # import row is later reversed. source_type / source_*_id are never changed by an edit.
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    edited_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (

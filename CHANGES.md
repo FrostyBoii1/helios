@@ -9,6 +9,51 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — Known Customer Details: editable + source provenance + survive reversal
+
+- **Why:** Known Customer Details preserved differing contact info, but the user still could not
+  (a) tell WHICH import row/job contributed a given detail, nor (b) CORRECT it — and a source-
+  derived detail vanished if its import row was later reversed. These are real customer records,
+  so they need an edit path and clear provenance, and an edited detail must not be lost on reverse.
+- **What (editable):** new admin-only **`PATCH /customers/{id}/contact-variants/{variant_id}`**
+  edits a Known Customer Detail of ANY `source_type` (manual OR source-derived). It updates ONLY
+  the variant row and stamps `edited_at`/`edited_by_id`; it NEVER changes the primary Customer
+  fields, the job, the import row, merge history, or the variant's provenance (`source_type` +
+  source FK ids are immutable and not accepted). An edit that would blank every detail field → 400.
+  Backend enforces admin (`require_admin`) — frontend gating is not relied upon. Manual variants
+  remain editable + archivable; archive stays manual-only.
+- **What (provenance):** the read API now returns SAFE, computed source fields for `import_row`
+  variants — `source_row_number` (the workbook row index, not a PK), `source_job_case_number`,
+  `source_job_id`, and `source_reversed` — so the UI shows e.g. "Source row #23 · Job
+  SCS-2023-00002". Raw internal `source_import_row_id`/`source_customer_id`/`source_document_id`
+  stay DB-only (still not exposed). The Customer-Detail card shows a source line before each entry
+  (job case links to the job), an "edited" marker, an "import reversed" marker, and an admin Edit
+  action on every entry.
+- **What (reverse preservation):** reversing an import row now archives the contributed
+  `import_row` variant ONLY while it is unedited (`edited_at IS NULL`). An EDITED variant is
+  preserved as curated customer detail; its provenance then shows the source row as reversed.
+- **Migration:** **`b2c3d4e5f6a7`** adds two nullable columns (`edited_at`, `edited_by_id` FK
+  users) to `customer_contact_variants`. Additive + reversible (round-trip verified); no data
+  backfill (existing rows are NULL/unedited). Head moves a1b2c3d4e5f6 → **`b2c3d4e5f6a7`**.
+- **dev_reset:** `clear_imports` now DETACHES (nulls) `customer_contact_variants.source_import_row_id`
+  before deleting `import_rows` — closes a pre-existing latent FK gap (the prior pass began
+  populating that link; deleting the staging row while a live variant referenced it FK-violated).
+  The live variant is preserved; only the now-gone provenance link is cleared.
+- **NOT in scope (still deferred):** promote-to-primary (a Known Customer Detail still never
+  overwrites the primary Customer), backfill of existing variants, import/document/NAS capture,
+  batch tooling.
+- **Files:** backend `models/customer_contact_variant.py`, `alembic/versions/b2c3d4e5f6a7_*`,
+  `schemas/customer.py` (`CustomerContactVariantUpdate` + Read provenance/`edited_at` fields),
+  `services/customers.py` (`update_contact_variant` + `variant_provenance`),
+  `api/v1/endpoints/customers.py` (PATCH + `_variant_read` enrichment),
+  `services/import_reverse.py` (preserve edited), `services/dev_reset.py` (detach variant link),
+  `tests/test_customer_contact_variants.py` + `tests/test_import_contact_variant_capture.py`;
+  frontend `types/index.ts`, `lib/customers.ts`, `hooks/useCustomers.ts`,
+  `components/EditContactVariantModal.tsx` (new), `components/AlternateContactDetailsCard.tsx`.
+  Permanent.
+
+---
+
 ## 2026-06-19 — Corrective pass: capture differing customer details on import commit + "Known customer details" UI
 
 - **Why:** the Customer page is the source of truth for ALL known customer-level details, but

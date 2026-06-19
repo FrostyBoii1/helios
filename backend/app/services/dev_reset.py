@@ -88,8 +88,21 @@ def clear_imports(db: Session) -> dict[str, int]:
     at its group via ``customer_group_id``, and the group points back at its primary
     row via ``primary_row_id``. Break the cycle before deleting: clear the rows'
     group pointer, delete the groups, then delete the rows (and their issues/batches).
+
+    A LIVE Known Customer Detail variant can also point back at a row via
+    ``customer_contact_variants.source_import_row_id`` (import-captured provenance). That is
+    live-CRM data, so it is NOT deleted here — its source link is DETACHED (nulled) before the
+    rows go, preserving the variant while removing the staging row.
     """
     issues = db.execute(delete(ImportIssue)).rowcount
+    # Detach any Known Customer Detail variant from the import rows about to be deleted —
+    # null source_import_row_id so the LIVE variant survives (its captured contact detail
+    # stays; only the now-gone provenance link is cleared). Preserves live CRM.
+    variants_detached = db.execute(
+        update(CustomerContactVariant)
+        .where(CustomerContactVariant.source_import_row_id.isnot(None))
+        .values(source_import_row_id=None)
+    ).rowcount
     # Null the rows -> group FK so the groups can be deleted, then delete groups
     # before rows (groups.primary_row_id references rows).
     db.execute(update(ImportRow).values(customer_group_id=None))
@@ -98,6 +111,7 @@ def clear_imports(db: Session) -> dict[str, int]:
     batches = db.execute(delete(ImportBatch)).rowcount
     return {
         "import_issues": issues,
+        "contact_variants_detached": variants_detached,
         "import_customer_groups": groups,
         "import_rows": rows,
         "import_batches": batches,

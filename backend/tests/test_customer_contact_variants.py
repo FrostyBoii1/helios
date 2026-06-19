@@ -282,3 +282,107 @@ def test_archive_already_archived_404(customer, client_for, users, db_session: S
         f"/api/v1/customers/{customer.id}/contact-variants/{v.id}"
     )
     assert resp.status_code == 404  # idempotent-safe
+
+
+# --------------------------------------------------------------------------- #
+# Edit (PATCH) — Known Customer Details are editable customer-level records
+# --------------------------------------------------------------------------- #
+def test_admin_can_edit_manual_variant(customer, client_for, users, db_session: Session):
+    v = _variant(db_session, customer.id, display_name="Old Name", phone="0400 1")
+    db_session.flush()
+    resp = client_for(users["admin"]).patch(
+        f"/api/v1/customers/{customer.id}/contact-variants/{v.id}",
+        json={"display_name": "New Name", "email": "new@example.com"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["display_name"] == "New Name"
+    assert body["email"] == "new@example.com"
+    assert body["phone"] == "0400 1"            # untouched field preserved
+    assert body["edited_at"] is not None        # edit marker stamped
+    assert body["source_type"] == "manual"      # provenance unchanged
+    db_session.refresh(v)
+    assert v.display_name == "New Name" and v.edited_by_id == users["admin"].id
+
+
+def test_edit_variant_non_admin_forbidden(customer, client_for, users, db_session: Session):
+    v = _variant(db_session, customer.id, display_name="Keep", phone="0400 1")
+    db_session.flush()
+    for role in ("support", "sales", "scheduling", "approvals"):
+        resp = client_for(users[role]).patch(
+            f"/api/v1/customers/{customer.id}/contact-variants/{v.id}",
+            json={"display_name": "Hacked"},
+        )
+        assert resp.status_code == 403, role
+    db_session.refresh(v)
+    assert v.display_name == "Keep" and v.edited_at is None  # unchanged
+
+
+def test_edit_changes_only_variant_not_customer(customer, client_for, users, db_session: Session):
+    name_before, email_before = customer.full_name, customer.email
+    v = _variant(db_session, customer.id, display_name="Alt", email="alt@example.com")
+    db_session.flush()
+    resp = client_for(users["admin"]).patch(
+        f"/api/v1/customers/{customer.id}/contact-variants/{v.id}",
+        json={"display_name": "Alt Edited", "email": "alt-edited@example.com"},
+    )
+    assert resp.status_code == 200
+    db_session.refresh(customer)
+    assert customer.full_name == name_before    # primary customer NOT mutated
+    assert customer.email == email_before
+
+
+def test_edit_source_derived_variant_preserves_provenance(customer, client_for, users, db_session: Session):
+    # A merged_customer (source-derived) variant is now EDITABLE; the edit must keep its
+    # source_type + source FK id (immutable provenance) while stamping the edit marker.
+    other = Customer(full_name="Merge Source Cust")
+    db_session.add(other)
+    db_session.flush()
+    v = _variant(
+        db_session, customer.id, display_name="Merged Alt", email="merged@example.com",
+        source_type=CustomerContactVariantSource.MERGED_CUSTOMER.value, source_customer_id=other.id,
+    )
+    db_session.flush()
+    resp = client_for(users["admin"]).patch(
+        f"/api/v1/customers/{customer.id}/contact-variants/{v.id}",
+        json={"phone": "0411 222 333"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["source_type"] == "merged_customer"   # provenance label preserved
+    assert resp.json()["edited_at"] is not None
+    assert "source_customer_id" not in resp.json()           # still DB-only
+    db_session.refresh(v)
+    assert v.source_type == "merged_customer"
+    assert v.source_customer_id == other.id                  # source link untouched
+    assert v.phone == "0411 222 333"
+
+
+def test_edit_rejects_emptying_all_detail_fields(customer, client_for, users, db_session: Session):
+    v = _variant(db_session, customer.id, display_name="Only Field")
+    db_session.flush()
+    # Clearing the only detail field would leave an empty variant -> 400, nothing changed.
+    resp = client_for(users["admin"]).patch(
+        f"/api/v1/customers/{customer.id}/contact-variants/{v.id}",
+        json={"display_name": ""},
+    )
+    assert resp.status_code == 400
+    db_session.refresh(v)
+    assert v.display_name == "Only Field" and v.edited_at is None
+
+
+def test_edit_missing_or_other_customer_variant_404(customer, client_for, users, db_session: Session):
+    # missing variant
+    assert client_for(users["admin"]).patch(
+        f"/api/v1/customers/{customer.id}/contact-variants/999999", json={"phone": "1"}
+    ).status_code == 404
+    # variant that belongs to ANOTHER customer
+    other = Customer(full_name="Other Edit Cust")
+    db_session.add(other)
+    db_session.flush()
+    v = _variant(db_session, other.id, phone="0400 1")
+    db_session.flush()
+    resp = client_for(users["admin"]).patch(
+        f"/api/v1/customers/{customer.id}/contact-variants/{v.id}", json={"phone": "2"}
+    )
+    assert resp.status_code == 404
+    assert db_session.get(CustomerContactVariant, v.id).phone == "0400 1"  # untouched

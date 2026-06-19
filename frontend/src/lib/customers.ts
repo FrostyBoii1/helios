@@ -66,6 +66,19 @@ export function createCustomerContactVariant(
   })
 }
 
+// Edit a Known Customer Detail (any source_type; admin-only on the backend). Updates only
+// the variant — never the primary Customer, the job, or the variant's provenance.
+export function updateCustomerContactVariant(
+  customerId: number,
+  variantId: number,
+  input: ContactVariantInput,
+): Promise<CustomerContactVariant> {
+  return apiFetch<CustomerContactVariant>(
+    `/customers/${customerId}/contact-variants/${variantId}`,
+    { method: 'PATCH', body: input },
+  )
+}
+
 // Stage 4: archive (soft-delete) a manual variant (admin-only on the backend).
 export function archiveCustomerContactVariant(
   customerId: number,

@@ -17,7 +17,7 @@ from app.models.activity import Activity
 from app.models.customer import Customer
 from app.models.customer_contact_variant import CustomerContactVariant
 from app.models.document import Document
-from app.models.enums import ActivityType, CustomerContactVariantSource
+from app.models.enums import ActivityType, CustomerContactVariantSource, ImportRowReviewStatus
 from app.models.import_staging import ImportCustomerGroup, ImportRow
 from app.models.job import Job
 from app.models.task import Task
@@ -147,6 +147,78 @@ def archive_contact_variant(
         return None
     variant.deleted_at = datetime.now(timezone.utc)
     return variant
+
+
+def update_contact_variant(
+    db: Session, *, customer: Customer, variant_id: int, data: dict[str, Any], actor_id: int
+) -> CustomerContactVariant | None:
+    """Edit a Known Customer Detail (any ``source_type``) for a LIVE customer. Partial update:
+    only the keys in ``data`` are changed; a trimmed-empty string clears that field to NULL.
+    Updates ONLY the variant row — NEVER the customer's primary fields, the job, the import row,
+    or the variant's provenance (``source_type`` / source FK ids are immutable and not accepted
+    here). Stamps ``edited_at`` + ``edited_by_id`` so the variant counts as curated (and survives
+    a later reverse of its source row). Raises ``VariantError('empty_variant', 400)`` if the edit
+    would leave every DETAIL field blank. Returns None (-> 404) when no such ACTIVE variant
+    belongs to this customer."""
+    variant = db.scalar(
+        select(CustomerContactVariant).where(
+            CustomerContactVariant.id == variant_id,
+            CustomerContactVariant.customer_id == customer.id,
+            CustomerContactVariant.deleted_at.is_(None),
+        )
+    )
+    if variant is None:
+        return None
+    cleaned = {
+        k: (v.strip() or None) if isinstance(v, str) else v
+        for k, v in data.items()
+    }
+    # The RESULTING detail fields (current values overlaid with the requested changes) must
+    # keep at least one non-blank value — an edit cannot empty the variant out. Checked BEFORE
+    # any mutation, so a rejected edit leaves the transaction clean (no rollback needed).
+    resulting = {
+        f: (cleaned[f] if f in cleaned else getattr(variant, f))
+        for f in _MANUAL_VARIANT_DETAIL_FIELDS
+    }
+    if not any((resulting[f] or "").strip() for f in _MANUAL_VARIANT_DETAIL_FIELDS):
+        raise VariantError("empty_variant", 400)
+    for key, value in cleaned.items():
+        setattr(variant, key, value)
+    variant.edited_at = datetime.now(timezone.utc)
+    variant.edited_by_id = actor_id
+    return variant
+
+
+def variant_provenance(db: Session, variant: CustomerContactVariant) -> dict[str, Any]:
+    """SAFE, API-computed source provenance for a variant — so the UI can show WHICH import
+    row / job contributed an `import_row` detail without exposing raw internal FK ids. Returns
+    ``{source_row_number, source_job_case_number, source_job_id, source_reversed}``:
+      * ``source_row_number`` = the originating ImportRow's workbook row index (not its PK);
+      * ``source_job_*`` = the row's committed job (case number + id, both already public);
+      * ``source_reversed`` = whether that import row has since been reversed.
+    All None/False for manual / merged / document variants (no import-row provenance). Pure read."""
+    prov: dict[str, Any] = {
+        "source_row_number": None,
+        "source_job_case_number": None,
+        "source_job_id": None,
+        "source_reversed": False,
+    }
+    if (
+        variant.source_type == CustomerContactVariantSource.IMPORT_ROW.value
+        and variant.source_import_row_id is not None
+    ):
+        row = db.get(ImportRow, variant.source_import_row_id)
+        if row is not None:
+            prov["source_row_number"] = row.source_row_index
+            prov["source_reversed"] = (
+                row.review_status == ImportRowReviewStatus.REVERSED.value
+            )
+            if row.committed_job_id is not None:
+                job = db.get(Job, row.committed_job_id)
+                if job is not None:
+                    prov["source_job_id"] = job.id
+                    prov["source_job_case_number"] = job.case_number
+    return prov
 
 
 # Customer-level IDENTITY/CONTACT fields an IMPORT row can contribute as a variant, with
