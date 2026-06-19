@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.models.activity import Activity
 from app.models.customer import Customer
+from app.models.customer_contact_variant import CustomerContactVariant
 from app.models.document import Document
 from app.models.enums import ImportRowReviewStatus
 from app.models.import_staging import (
@@ -70,6 +71,7 @@ def reset_counts(db: Session) -> dict[str, Any]:
             "tasks": _count(db, Task),
             "documents": _count(db, Document),
             "jobs": _count(db, Job),
+            "customer_contact_variants": _count(db, CustomerContactVariant),
             "customers": _count(db, Customer),
             # Committed import rows that will be DETACHED (links nulled + reverted to
             # approved) — NOT deleted; their parsed/raw/review content is preserved.
@@ -117,7 +119,12 @@ def clear_live_crm(db: Session) -> dict[str, int]:
         self-referential FK never blocks the customer delete (B4-1; normally a
         no-op until merge execution exists).
     Step 2 — DELETE (child -> parent FK order): job_label_assignments, activities,
-    tasks, documents, jobs, customers.
+    tasks, documents, jobs, customer_contact_variants, customers.
+
+    ``customer_contact_variants`` is deleted BEFORE customers: it carries FKs to
+    ``customers`` (customer_id + source_customer_id), so the customer hard-delete would
+    otherwise fail. It references ``import_rows`` (source_import_row_id) too, but those are
+    DETACHED/preserved here, not deleted — deleting the child variant simply drops that link.
 
     Touches no import batches/rows/issues/groups CONTENT, users, roles, or label
     definitions. Caller commits.
@@ -170,5 +177,7 @@ def clear_live_crm(db: Session) -> dict[str, int]:
         "tasks": db.execute(delete(Task)).rowcount,
         "documents": db.execute(delete(Document)).rowcount,
         "jobs": db.execute(delete(Job)).rowcount,
+        # Before customers — variants FK customers (customer_id + source_customer_id).
+        "customer_contact_variants": db.execute(delete(CustomerContactVariant)).rowcount,
         "customers": db.execute(delete(Customer)).rowcount,
     }

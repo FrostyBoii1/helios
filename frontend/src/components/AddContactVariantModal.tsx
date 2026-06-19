@@ -1,6 +1,8 @@
-// Stage 4: admin-only modal to add a MANUAL alternate-contact variant for a customer.
-// The backend forces source_type='manual' and rejects an all-blank entry (a label or
-// note alone is not a variant). The primary customer details are never touched here.
+// Stage 4: admin-only modal to add a MANUAL set of customer-level contact details.
+// These are CUSTOMER-level details (another name, phone, email or postal address for this
+// customer) — NOT a job site. The backend forces source_type='manual' and rejects an
+// all-blank entry (a label or note alone is not enough). The primary customer details are
+// never touched here.
 
 import { useState } from 'react'
 import { ApiError } from '@/lib/api'
@@ -52,13 +54,13 @@ export function AddContactVariantModal({ customerId, onClose, onAdded }: AddCont
       onAdded()
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
-        setError('You do not have permission to add alternate details.')
+        setError('You do not have permission to add contact details.')
       } else if (err instanceof ApiError && err.status === 400) {
         setError('Enter at least one contact or address field.')
       } else if (err instanceof ApiError && err.status === 404) {
         setError('This customer no longer exists.')
       } else {
-        setError('Could not add alternate details. Please try again.')
+        setError('Could not add contact details. Please try again.')
       }
     }
   }
@@ -71,9 +73,11 @@ export function AddContactVariantModal({ customerId, onClose, onAdded }: AddCont
       onClick={onClose}
     >
       <div className="card w-full max-w-lg p-6 shadow-2xl shadow-black/40" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-1 text-lg font-semibold text-fg">Add alternate contact details</h2>
+        <h2 className="mb-1 text-lg font-semibold text-fg">Add customer contact details</h2>
         <p className="mb-4 text-sm text-muted">
-          A manual alternate set for this customer. The primary details are not changed.
+          Record another name, phone, email or postal address for this customer — for example a
+          second contact or a previous detail. These are customer-level details, not a job site.
+          The primary details stay the source of truth.
         </p>
 
         {error && (

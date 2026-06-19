@@ -256,9 +256,11 @@ export function CustomerDetailPage() {
             )}
           </div>
 
-          {/* Stage 2: read-only alternate customer-level contact/address variants
-              (from merges/imports/manual/documents in later stages). Hidden when
-              there are none. Does not touch the primary Details above. */}
+          {/* "Known customer details": additional customer-LEVEL contact sets on record
+              for this customer (from merges, imports and manual entry), part of the same
+              customer-details area as the primary Details above — which stays the source of
+              truth. Job-site addresses are NOT shown here (see the Job sites panel). Hidden
+              for non-admins when there are none. */}
           <AlternateContactDetailsCard customerId={customer.id} />
 
           <TasksPanel customerId={customer.id} />

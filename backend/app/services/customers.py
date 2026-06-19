@@ -149,6 +149,89 @@ def archive_contact_variant(
     return variant
 
 
+# Customer-level IDENTITY/CONTACT fields an IMPORT row can contribute as a variant, with
+# their column caps. Address is deliberately EXCLUDED: in the import pipeline a row's
+# address becomes the JOB's site (Job.details.site, job-scoped), not a customer-level
+# mailing address, so capturing it here would duplicate a job site as a customer detail.
+# Caps mirror the table columns so an over-long legacy value can never overflow and fail
+# the row's commit.
+_IMPORT_VARIANT_CAPS = {"display_name": 160, "email": 255, "phone": 40}
+
+
+def capture_import_contact_variant(
+    db: Session,
+    *,
+    customer: Customer,
+    row_id: int,
+    full_name: str | None,
+    emails: list[str] | tuple[str, ...] = (),
+    phones: list[str] | tuple[str, ...] = (),
+    actor_id: int,
+) -> CustomerContactVariant | None:
+    """Corrective pass: preserve an import row's DIFFERING customer-level contact identity
+    (name + any email/phone the customer does not already hold) as one ``import_row``
+    variant on the target customer — for when a row attaches to an EXISTING customer or is a
+    grouped DEPENDENT, where the row's contact details would otherwise be discarded.
+
+    Conservative + additive: captures only NON-empty values that differ from the customer's
+    primary field; returns None (no redundant variant) when nothing customer-level differs.
+    NEVER mutates the customer's primary fields. Address is NOT captured (the import address
+    is the job's site — kept job-scoped in Job.details.site). ``source_import_row_id`` is
+    stored for audit/cleanup but is NOT exposed by the read API. Values are trimmed and
+    capped to the column lengths so a long legacy value can't overflow and fail the commit.
+    """
+
+    def _fit(value: str, key: str) -> str:
+        return value[: _IMPORT_VARIANT_CAPS[key]]
+
+    def _new_values(values: list[str] | tuple[str, ...], primary: str) -> list[str]:
+        # Trimmed, de-duplicated (case-insensitive) values the customer doesn't already
+        # hold as its primary — first-seen order preserved.
+        primary_cf = primary.casefold()
+        seen: set[str] = set()
+        out: list[str] = []
+        for raw in values:
+            v = (raw or "").strip()
+            if not v or v.casefold() == primary_cf or v.casefold() in seen:
+                continue
+            seen.add(v.casefold())
+            out.append(v)
+        return out
+
+    captured: dict[str, str] = {}
+    note_bits: list[str] = []
+
+    name = (full_name or "").strip()
+    if name and name != (customer.full_name or "").strip():
+        captured["display_name"] = _fit(name, "display_name")
+
+    new_emails = _new_values(emails, (customer.email or "").strip())
+    if new_emails:
+        captured["email"] = _fit(new_emails[0], "email")
+        if len(new_emails) > 1:
+            note_bits.append("Other emails: " + ", ".join(new_emails[1:]))
+    new_phones = _new_values(phones, (customer.phone or "").strip())
+    if new_phones:
+        captured["phone"] = _fit(new_phones[0], "phone")
+        if len(new_phones) > 1:
+            note_bits.append("Other phones: " + ", ".join(new_phones[1:]))
+
+    if not captured:
+        return None  # nothing customer-level differs -> no redundant variant
+
+    variant = CustomerContactVariant(
+        customer_id=customer.id,
+        source_type=CustomerContactVariantSource.IMPORT_ROW.value,
+        source_import_row_id=row_id,
+        label="Imported contact details",
+        note="; ".join(note_bits) or None,
+        created_by_id=actor_id,
+        **captured,
+    )
+    db.add(variant)
+    return variant
+
+
 def merged_winner_for(db: Session, customer_id: int) -> Customer | None:
     """If ``customer_id`` is a MERGED loser, return the final LIVE winner it resolves
     to; else None. Pure read (B4-4).

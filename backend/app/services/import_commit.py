@@ -35,7 +35,7 @@ from app.models.job import Job
 from app.services import job_labels as job_labels_service
 from app.services import jobs as jobs_service
 from app.services.activity import log_activity
-from app.services.customers import create_customer, get_customer
+from app.services.customers import capture_import_contact_variant, create_customer, get_customer
 from app.services.import_commit_preview import (
     case_year_source,
     classify_row,
@@ -227,6 +227,19 @@ def _commit_one(db: Session, row: ImportRow, *, actor_id: int, batch_id: int, cu
         if use_existing:
             # Use the existing/group customer as-is; never created, never mutated.
             customer = target_customer
+            # Corrective pass: preserve THIS row's DIFFERING customer-level contact identity
+            # (name / email / phone + extras) as an import_row variant on the existing/group
+            # customer, so an attach / grouped-dependent row's contact details are no longer
+            # silently discarded. Additive only — the customer's primary fields are untouched.
+            # Address is NOT captured (the row's address is the job's site, kept job-scoped in
+            # Job.details.site). Returns None (no variant) when nothing customer-level differs.
+            pv = map_customer_preview(parsed, raw)
+            emails = ([pv["email"]] if pv["email"] else []) + list(pv["extra_emails"])
+            phones = ([pv["phone"]] if pv["phone"] else []) + list(pv["extra_phones"])
+            capture_import_contact_variant(
+                db, customer=customer, row_id=rid,
+                full_name=pv["full_name"], emails=emails, phones=phones, actor_id=actor_id,
+            )
         else:
             customer = create_customer(
                 db, data=build_customer_data(parsed, raw, batch_id=batch_id, source_row_index=sidx)

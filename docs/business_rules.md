@@ -39,21 +39,29 @@ explains intent; protect important explicit decisions with tests, not docs alone
   loser notes, soft-deletes the loser, and logs a `CUSTOMER_MERGED` activity on the winner —
   no migration. A merged job is then **non-reversible** (the reverse engine's `job_modified`
   / `job_customer_mismatch` guards protect the winner); use **Prepare recommit** to correct.
-- **Alternate customer-level details are preserved as structured variants, not notes
-  (Stage 2 — storage + read only).** When the same real customer is known by a different
-  name/email/phone/address (a merged-away duplicate, an import row, manual entry, or a
-  document), those alternate details belong in `customer_contact_variants` with explicit
-  provenance — NOT parsed out of or buried in the customer's free-text notes, and NOT in
-  job-specific notes/sites (those stay on Jobs). The **primary** customer fields stay
-  authoritative and are never overwritten by a variant. A read-only "Alternate contact details"
-  card on Customer Detail displays them (hidden when none). **(Stage 3)** a B4 **merge** now
-  CAPTURES the loser's meaningfully-different customer-level fields as a `merged_customer` variant
-  on the winner — only when something differs (no redundant variants), winner primary fields
-  unchanged, the loser's id stored as provenance but never exposed by the read API. **(Stage 4)**
-  admins can manually ADD a variant and ARCHIVE **manual** variants (soft-delete) from Customer
-  Detail; source-derived (merged) variants are immutable and not archivable, the primary fields
-  are never touched, and a manual add needs at least one detail field. Editing an existing
-  variant, import/document capture, backfill, and promoting a variant to primary remain deferred.
+- **The Customer page is the source of truth for ALL known customer-level details.** Every
+  customer-level identity/contact detail on record for a customer — the primary record PLUS any
+  additional known sets — is shown on the Customer page. When the same real customer is known by a
+  different name/email/phone/address (a merged-away duplicate, an import row, manual entry, or a
+  document), those additional details are preserved as structured `customer_contact_variants` with
+  explicit provenance — NOT parsed out of or buried in the customer's free-text notes, and NOT in
+  job-specific notes/sites (those stay on Jobs). The **primary** customer fields stay authoritative
+  and are never overwritten by a variant; variants are additive, NOT "lesser alternates". The
+  Customer-Detail **"Known customer details"** card displays them beside the primary Details
+  (hidden for non-admins when none). **(Stage 3)** a B4 **merge** CAPTURES the loser's
+  meaningfully-different customer-level fields as a `merged_customer` variant on the winner — only
+  when something differs (no redundant variants), winner primary fields unchanged, the loser's id
+  stored as provenance but never exposed by the read API. **(Stage 4)** admins can manually ADD a
+  variant and ARCHIVE **manual** variants (soft-delete); source-derived variants are immutable and
+  not archivable, the primary fields are never touched, and a manual add needs at least one detail
+  field. **(Corrective pass)** when an import row is COMMITTED into an existing customer (B2 attach)
+  or as a grouped DEPENDENT, its DIFFERING customer-level CONTACT identity (name + any email/phone
+  the customer doesn't already hold) is captured as an `import_row` variant on that customer — only
+  when something differs, never mutating the primary fields; reversing the row archives the variant
+  it contributed. A row's ADDRESS is the JOB's site (`Job.details.site`, job-scoped) and is NOT
+  captured as a customer variant — so a multi-site customer does not accrue job-site "contact"
+  variants. Editing an existing variant, document/NAS capture, backfill of already-merged/imported
+  customers, and promoting a variant to primary remain deferred.
 - **Every job has a unique case number** in the form `SCS-YYYY-00001`, generated
   automatically at creation, searchable across the system. The sequence resets
   per calendar year.

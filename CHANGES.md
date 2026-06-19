@@ -9,6 +9,50 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — Corrective pass: capture differing customer details on import commit + "Known customer details" UI
+
+- **Why:** the Customer page is the source of truth for ALL known customer-level details, but
+  when an import row was **attached to an existing customer** (B2) or was a **grouped DEPENDENT**,
+  the row's customer-level contact identity (name/email/phone) was silently DISCARDED — the
+  existing customer was used as-is and nothing was preserved. So "committing a different client
+  into Stuart White" showed that other client's contact info nowhere. The UI also framed the
+  variant card as lesser "alternate" details rather than as known customer details.
+- **What (capture):** on commit, an attach / grouped-dependent row now preserves its DIFFERING
+  customer-level CONTACT identity (name + any email/phone the customer doesn't already hold,
+  extras folded into a note) as one `import_row` `CustomerContactVariant` on the target customer.
+  Conservative + additive: captures only non-empty values that differ from the customer's primary
+  field; creates NO variant when nothing differs or is empty; NEVER mutates the customer's primary
+  fields. `source_import_row_id` is stored DB-side for provenance/cleanup (not exposed by the read
+  API). Reversing the row archives the variant it contributed (soft-delete).
+- **Address stays job-scoped:** a row's address is the JOB's site (`Job.details.site`) — it is
+  deliberately NOT captured as a customer variant, so a multi-site customer doesn't accrue
+  job-site "contact" variants. `Job.details.site` is unchanged.
+- **What (UI):** the Customer-Detail card is reframed from "Alternate contact details" to
+  **"Known customer details"** — additional names/phones/emails on record for this customer, shown
+  as compact one-line summaries (collapsible past 4) with a neutral source label
+  (Manual / From merged customer / From import row), part of the same customer-details area as the
+  primary Details (which stays the source of truth). The manual-add modal copy now states these
+  are customer-level details, not a job site.
+- **dev_reset:** `clear_live_crm` now deletes `customer_contact_variants` BEFORE customers
+  (the variant FKs `customers`). This closes a pre-existing latent gap (the table has existed
+  since Stage 2; nothing exercised a variant-before-clear path until import capture did) — without
+  it the customer hard-delete FK-violates.
+- **Permissions unchanged:** capture is part of the existing admin-only import commit; reads stay
+  open to any authenticated user; manual add/archive stay admin-only.
+- **No migration:** reuses the Stage-2 table (`source_type='import_row'`, `source_import_row_id`
+  already exist); head stays **`a1b2c3d4e5f6`**, `alembic check` clean.
+- **NOT in scope (deferred):** promote-to-primary, edit-existing-variant, backfill of already-merged/
+  already-imported customers, document/NAS-sourced capture.
+- **Files:** backend `services/customers.py` (`capture_import_contact_variant`),
+  `services/import_commit.py` (capture in the attach/group branch), `services/import_reverse.py`
+  (archive contributed variant on reverse), `services/dev_reset.py` (clear variants before
+  customers), `tests/test_import_contact_variant_capture.py`; frontend
+  `components/AlternateContactDetailsCard.tsx` (reframed "Known customer details"),
+  `components/AddContactVariantModal.tsx` (customer-level copy), `pages/CustomerDetailPage.tsx`
+  (comment). Permanent.
+
+---
+
 ## 2026-06-19 — Stage 4: manual add + archive of alternate customer contact details
 
 - **What:** admins can now MANUALLY add and ARCHIVE alternate customer-level contact/address

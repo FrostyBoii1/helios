@@ -119,9 +119,15 @@ job notes or per-job sites, and never a parse of free-text notes. Soft-deletable
 loser's differing fields. **(Stage 4)** admins can also manually add a `manual` variant
 (`POST /customers/{id}/contact-variants`) and archive **manual** variants
 (`DELETE …/{variant_id}`, soft-delete only; source-derived variants are immutable and not
-archivable). Import / document capture and promote-to-primary are later stages.
+archivable). **(Corrective pass)** import COMMIT writes an `import_row` variant (with
+`source_import_row_id`) when a row attaches to an existing customer (B2) or is a grouped DEPENDENT
+and its customer-level CONTACT identity (name/email/phone) differs from the target customer — name
++ any email/phone the customer doesn't already hold; address is NOT captured (it is the job's
+`details.site`, job-scoped). Reversing that import row archives the variant it contributed.
 `source_customer_id` / `source_import_row_id` / `source_document_id` are stored for audit but are
-NOT exposed by the read API.
+NOT exposed by the read API. `dev_reset.clear_live_crm` deletes this table before `customers`
+(it FKs `customers`). Document/NAS capture, backfill, and promote-to-primary are later stages; no
+migration was needed (the table + `import_row` enum value + `source_import_row_id` already exist).
 
 | column | type | notes |
 |--------|------|-------|

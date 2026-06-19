@@ -13,11 +13,14 @@ with a reason and changes nothing.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.activity import Activity
 from app.models.customer import Customer
+from app.models.customer_contact_variant import CustomerContactVariant
 from app.models.document import Document
 from app.models.enums import ActivityType, ImportRowReviewStatus
 from app.models.import_staging import ImportCustomerGroup, ImportRow
@@ -145,6 +148,23 @@ def reversibility(db: Session, row: ImportRow) -> dict:
     return {**base, "reversible": True, "reason": None, "delete_customer": delete_customer}
 
 
+def _archive_row_contact_variants(db: Session, row_id: int) -> None:
+    """Corrective pass: when a row is reversed, archive (soft-delete) any ``import_row``
+    contact variant it contributed (matched by ``source_import_row_id``), so a reversed
+    import leaves no stale customer-level detail behind. Soft-delete only; scoped to this
+    row; never hard-deletes; a no-op when the row contributed no variant (the usual case
+    for a 'new' row, whose customer is soft-deleted separately)."""
+    now = datetime.now(timezone.utc)
+    variants = db.scalars(
+        select(CustomerContactVariant).where(
+            CustomerContactVariant.source_import_row_id == row_id,
+            CustomerContactVariant.deleted_at.is_(None),
+        )
+    ).all()
+    for v in variants:
+        v.deleted_at = now
+
+
 def _reconcile_group_after_reverse(db: Session, group_id: int, *, reversed_row_id: int) -> None:
     """D (stabilization): keep a group's continuity after reversing one of its rows.
 
@@ -207,6 +227,9 @@ def reverse_row(db: Session, row: ImportRow, *, actor_id: int) -> dict:
     soft_delete_job(db, job)
     if delete_customer:
         soft_delete_customer(db, customer)
+    # Corrective pass: also archive any import_row contact variant this row contributed
+    # (additive cleanup) — reversing the import undoes its customer-level detail too.
+    _archive_row_contact_variants(db, row.id)
     row.review_status = ImportRowReviewStatus.REVERSED.value
     # D: keep group continuity — if this was the group's primary and committed siblings
     # remain, re-promote the lowest-source-index one; if none remain, clear the group's
