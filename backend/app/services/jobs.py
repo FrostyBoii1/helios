@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.activity import Activity
 from app.models.customer import Customer
 from app.models.enums import ActivityType, JobStatus
+from app.models.import_staging import ImportRow
 from app.models.job import Job
 from app.models.job_label import JobLabelAssignment, JobLabelDefinition
 from app.services.case_number import next_case_number
@@ -119,6 +120,13 @@ def labels_for_jobs(db: Session, job_ids: list[int]) -> dict[int, list[JobLabelD
     return out
 
 
+def _norm_name(value: str) -> str:
+    """Normalise a customer name for SAME-NAME comparison: collapse whitespace + casefold.
+    Used by BOTH the merge and import source-name helpers so suppression is CONSISTENT —
+    never used for display (the original name is always shown)."""
+    return " ".join(value.split()).casefold()
+
+
 def merge_source_names_for_jobs(db: Session, jobs: list[Job]) -> dict[int, str]:
     """``{job_id: source_customer_name}`` for jobs that a customer MERGE moved into their
     CURRENT customer under a DIFFERENT (loser/source) name — so a merged customer file can
@@ -136,8 +144,8 @@ def merge_source_names_for_jobs(db: Session, jobs: list[Job]) -> dict[int, str]:
         return {}
     job_ids = {j.id for j in jobs}
     customer_ids = {j.customer_id for j in jobs}
-    current_name = {
-        j.id: (j.customer.full_name if j.customer else "").strip() for j in jobs
+    current_norm = {
+        j.id: _norm_name(j.customer.full_name if j.customer else "") for j in jobs
     }
 
     # Earliest-first (created_at, then id as a same-transaction tiebreaker) so the ORIGINAL
@@ -162,12 +170,58 @@ def merge_source_names_for_jobs(db: Session, jobs: list[Job]) -> dict[int, str]:
             if jid in job_ids and jid not in source:
                 source[jid] = loser_name
 
-    # Suppress a source that matches the job's CURRENT customer name (e.g. a same-name merge).
+    # Suppress a source that matches the job's CURRENT customer name (NORMALISED same-name —
+    # the SAME rule the import helper uses, so suppression is consistent across both paths).
+    # The original loser_name is kept for display.
     return {
         jid: name
         for jid, name in source.items()
-        if name and name != current_name.get(jid, "")
+        if name and _norm_name(name) != current_norm.get(jid, "")
     }
+
+
+def import_source_names_for_jobs(db: Session, jobs: list[Job]) -> dict[int, str]:
+    """``{job_id: source_customer_name}`` for IMPORTED jobs whose originating import row carried
+    a customer name DIFFERENT from the job's current customer — e.g. a row committed/attached
+    into an existing customer (B2) or a grouped row, where the legacy name differs.
+
+    COMPUTE-ON-READ from ``ImportRow.parsed['customer_name']`` matched via
+    ``ImportRow.committed_job_id``; writes NOTHING. Source is the import row itself (NOT a
+    CustomerContactVariant, whose capture is conditional/incomplete). A job is OMITTED when it
+    has no import row, a blank parsed name, or a name that normalises to its current customer
+    name (not meaningful to show). The original (un-normalised) name is returned for display.
+    """
+    if not jobs:
+        return {}
+    job_ids = {j.id for j in jobs}
+    current_norm = {
+        j.id: _norm_name(j.customer.full_name if j.customer else "") for j in jobs
+    }
+    rows = db.scalars(
+        select(ImportRow)
+        .where(ImportRow.committed_job_id.in_(job_ids))
+        .order_by(ImportRow.id)
+    ).all()
+
+    out: dict[int, str] = {}
+    for row in rows:
+        jid = row.committed_job_id
+        if jid not in job_ids or jid in out:
+            continue
+        name = ((row.parsed or {}).get("customer_name") or "").strip()
+        if not name or _norm_name(name) == current_norm.get(jid, ""):
+            continue
+        out[jid] = name
+    return out
+
+
+def source_customer_names_for_jobs(db: Session, jobs: list[Job]) -> dict[int, str]:
+    """Combined per-job ORIGINAL/source customer name for the read model: customer-MERGE
+    provenance takes PRECEDENCE; for jobs not introduced by a merge, the IMPORT row's name is
+    used. Read-only; writes nothing. Jobs with neither (and same-name jobs) are absent (null)."""
+    merge = merge_source_names_for_jobs(db, jobs)
+    imported = import_source_names_for_jobs(db, [j for j in jobs if j.id not in merge])
+    return {**imported, **merge}  # merge wins on any (theoretical) overlap
 
 
 def customer_is_active(db: Session, customer_id: int) -> bool:

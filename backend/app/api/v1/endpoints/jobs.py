@@ -97,9 +97,10 @@ def list_jobs(
     # Batch-load each job's labels (one query) and attach for serialization, so the
     # list carries chips without a per-row /jobs/{id}/labels round-trip.
     labels_by_job = jobs_service.labels_for_jobs(db, [j.id for j in items])
-    # Compute-on-read: a merge-derived original/source customer name per job (when a job
-    # was moved into its current customer under a different name). Read-only; no writes.
-    source_by_job = jobs_service.merge_source_names_for_jobs(db, items)
+    # Compute-on-read: a per-job original/source customer name (when a job belongs to its
+    # current customer under a different name) — from a customer MERGE, else the IMPORT row.
+    # Read-only; no writes.
+    source_by_job = jobs_service.source_customer_names_for_jobs(db, items)
     for j in items:
         j.labels = labels_by_job.get(j.id, [])
         j.source_customer_name = source_by_job.get(j.id)
@@ -155,8 +156,8 @@ def get_job(
     job = jobs_service.get_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job not found")
-    # Same compute-on-read merge-source provenance as the list (read-only; no writes).
-    job.source_customer_name = jobs_service.merge_source_names_for_jobs(db, [job]).get(job.id)
+    # Same compute-on-read source provenance as the list (merge, else import; read-only).
+    job.source_customer_name = jobs_service.source_customer_names_for_jobs(db, [job]).get(job.id)
     return JobRead.model_validate(job)
 
 

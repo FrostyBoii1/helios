@@ -9,6 +9,34 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — Job-list source name also covers IMPORTED (attach/grouped) jobs
+
+- **Why:** the previous slice only surfaced `source_customer_name` from B4 customer-merge metadata.
+  The live case (Stuart White, job SCS-2022-00002 / 48 Barry Street) actually came from an IMPORT
+  ATTACH — the original name ("Stephen Pipka") lives on the `ImportRow`, not in a `CUSTOMER_MERGED`
+  activity — so it showed nothing. Imported jobs whose row name differs from the current customer
+  should also show "Originally <name>".
+- **What:** extended the read-model derivation only. New `import_source_names_for_jobs` reads
+  `ImportRow.parsed['customer_name']` matched by `ImportRow.committed_job_id`, exposing it when it
+  differs (whitespace/case-normalised) from the job's current customer name. A combined
+  `source_customer_names_for_jobs` applies **MERGE precedence** (merge name if present, else the
+  import-row name, else null) and is now wired into the jobs list + detail endpoints. The
+  CustomerContactVariant is deliberately NOT used as the source (its capture is conditional/
+  incomplete). Same-name suppression is now shared (`_norm_name` = collapse-whitespace + casefold)
+  across BOTH the merge and import paths, so a same-name source differing only by case/spacing is
+  consistently suppressed (the merge helper's suppression was tightened to this shared rule; its
+  derivation — earliest-merge-wins from CUSTOMER_MERGED metadata — is otherwise unchanged).
+- **No migration, no data mutation, no frontend change:** pure read-side derivation (a batch
+  `ImportRow` query); nothing written to jobs, customers, import rows, activities, or variants; the
+  job's real `customer` is untouched. `JobsTable` already renders `source_customer_name`, so the
+  frontend was not touched. Verified live: Stuart White's 48 Barry Street job now resolves to
+  "Stephen Pipka"; its three same-name import-group jobs stay null.
+- **Files:** backend `services/jobs.py` (`import_source_names_for_jobs` + combined
+  `source_customer_names_for_jobs`), `api/v1/endpoints/jobs.py` (list + detail call the combined
+  helper), `tests/test_job_source_customer_name.py`; docs. Permanent.
+
+---
+
 ## 2026-06-19 — Job lists show the original/source customer name for merged-in jobs
 
 - **Why:** after a customer merge, every job points at the surviving (winner) customer, so a
