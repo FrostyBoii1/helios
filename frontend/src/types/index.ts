@@ -121,6 +121,21 @@ export interface CustomerContactVariantList {
   total: number
 }
 
+// Stage 4: manual-add input. source_type is forced to 'manual' by the backend and the
+// source FK ids are not accepted (not part of this shape).
+export interface ContactVariantInput {
+  label?: string | null
+  display_name?: string | null
+  email?: string | null
+  phone?: string | null
+  address_line1?: string | null
+  address_line2?: string | null
+  suburb?: string | null
+  state?: string | null
+  postcode?: string | null
+  note?: string | null
+}
+
 export type JobStatus =
   | 'new'
   | 'awaiting_approval'

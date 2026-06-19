@@ -206,9 +206,13 @@ These are stubbed/absent and represent the next phases:
   soft-deletable) without overwriting the primary fields or stuffing them into notes. **(Stage 3
   built)** a B4 merge now CAPTURES the loser's meaningfully-different customer-level fields as a
   `merged_customer` variant on the winner (only when something differs; winner primary fields
-  unchanged; `source_customer_id` stored but never exposed by the read API). Manual add/edit/
-  archive, promote-to-primary, backfill of existing merged losers, and import/document capture
-  remain deferred. **(B4 — proposed)** auto-link/merge for identical names.
+  unchanged; `source_customer_id` stored but never exposed by the read API). **(Stage 4 built)**
+  admins can manually ADD a variant (`POST /customers/{id}/contact-variants`, forced
+  `source_type=manual`, rejects an all-blank entry) and ARCHIVE manual variants
+  (`DELETE …/{variant_id}`, soft-delete only) from the Customer-Detail card — source-derived
+  (merged) variants are immutable and NOT archivable; admin-only writes, reads unchanged.
+  Edit-an-existing-variant, promote-to-primary, backfill of existing merged losers, and
+  import/document capture remain deferred. **(B4 — proposed)** auto-link/merge for identical names.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

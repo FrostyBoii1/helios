@@ -87,6 +87,68 @@ def list_contact_variants(db: Session, customer: Customer) -> list[CustomerConta
     return list(db.scalars(stmt).all())
 
 
+# Detail fields that decide whether a manual variant is "non-empty" — a label/note alone
+# does not create a variant.
+_MANUAL_VARIANT_DETAIL_FIELDS = (
+    "display_name", "email", "phone", "address_line1", "address_line2", "suburb", "state", "postcode",
+)
+
+
+class VariantError(Exception):
+    """A Stage-4 manual-variant guard failure (carries the HTTP status to surface)."""
+
+    def __init__(self, reason: str, http_status: int) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.http_status = http_status
+
+
+def create_contact_variant(
+    db: Session, *, customer: Customer, data: dict[str, Any], actor_id: int
+) -> CustomerContactVariant:
+    """Stage 4: create a MANUAL alternate-contact variant for a LIVE customer. Forces
+    ``source_type=manual`` and the source FK ids stay None (never set from client input).
+    Raises ``VariantError('empty_variant', 400)`` when every DETAIL field is blank (a
+    label/note alone is not a variant). Values are trimmed; blanks become NULL. The caller
+    resolves the active customer first (``get_customer``)."""
+    if not any((data.get(f) or "").strip() for f in _MANUAL_VARIANT_DETAIL_FIELDS):
+        raise VariantError("empty_variant", 400)
+    cleaned = {
+        k: (v.strip() or None) if isinstance(v, str) else None
+        for k, v in data.items()
+    }
+    variant = CustomerContactVariant(
+        customer_id=customer.id,
+        source_type=CustomerContactVariantSource.MANUAL.value,
+        created_by_id=actor_id,
+        **cleaned,
+    )
+    db.add(variant)
+    return variant
+
+
+def archive_contact_variant(
+    db: Session, *, customer: Customer, variant_id: int
+) -> CustomerContactVariant | None:
+    """Stage 4: archive (soft-delete) an ACTIVE, MANUAL variant that belongs to ``customer``.
+    Returns the archived variant, or None when no such variant exists — i.e. it is missing,
+    already archived, belongs to another customer, OR is source-derived (merged/import/
+    document variants are immutable and NOT archivable in Stage 4). Never hard-deletes; the
+    caller maps None -> 404."""
+    variant = db.scalar(
+        select(CustomerContactVariant).where(
+            CustomerContactVariant.id == variant_id,
+            CustomerContactVariant.customer_id == customer.id,
+            CustomerContactVariant.source_type == CustomerContactVariantSource.MANUAL.value,
+            CustomerContactVariant.deleted_at.is_(None),
+        )
+    )
+    if variant is None:
+        return None
+    variant.deleted_at = datetime.now(timezone.utc)
+    return variant
+
+
 def merged_winner_for(db: Session, customer_id: int) -> Customer | None:
     """If ``customer_id`` is a MERGED loser, return the final LIVE winner it resolves
     to; else None. Pure read (B4-4).

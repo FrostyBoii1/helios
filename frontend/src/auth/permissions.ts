@@ -22,6 +22,12 @@ export function canMergeCustomers(role: RoleName | undefined): boolean {
   return role === 'admin'
 }
 
+// Manual add/archive of alternate customer contact variants (Stage 4): admin-only,
+// mirrors the backend require_admin guard. Reads stay open to any authenticated user.
+export function canManageCustomerVariants(role: RoleName | undefined): boolean {
+  return role === 'admin'
+}
+
 // ---- Jobs (mirror the approved Jobs permission matrix) ----
 export function canCreateJobs(role: RoleName | undefined): boolean {
   return role === 'admin' || role === 'sales_admin'

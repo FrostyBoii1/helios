@@ -49,8 +49,11 @@ explains intent; protect important explicit decisions with tests, not docs alone
   card on Customer Detail displays them (hidden when none). **(Stage 3)** a B4 **merge** now
   CAPTURES the loser's meaningfully-different customer-level fields as a `merged_customer` variant
   on the winner — only when something differs (no redundant variants), winner primary fields
-  unchanged, the loser's id stored as provenance but never exposed by the read API. Manual
-  add/edit/archive, import/document capture, and promoting a variant to primary remain deferred.
+  unchanged, the loser's id stored as provenance but never exposed by the read API. **(Stage 4)**
+  admins can manually ADD a variant and ARCHIVE **manual** variants (soft-delete) from Customer
+  Detail; source-derived (merged) variants are immutable and not archivable, the primary fields
+  are never touched, and a manual add needs at least one detail field. Editing an existing
+  variant, import/document capture, backfill, and promoting a variant to primary remain deferred.
 - **Every job has a unique case number** in the form `SCS-YYYY-00001`, generated
   automatically at creation, searchable across the system. The sequence resets
   per calendar year.

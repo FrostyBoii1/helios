@@ -2,7 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  archiveCustomerContactVariant,
   createCustomer,
+  createCustomerContactVariant,
   deleteCustomer,
   getCustomer,
   listCustomerContactVariants,
@@ -11,7 +13,7 @@ import {
   updateCustomer,
   type ListCustomersParams,
 } from '@/lib/customers'
-import type { CustomerInput } from '@/types'
+import type { ContactVariantInput, CustomerInput } from '@/types'
 
 const keys = {
   all: ['customers'] as const,
@@ -41,6 +43,29 @@ export function useCustomerContactVariants(id: number) {
     queryKey: ['customers', 'contact-variants', id] as const,
     queryFn: () => listCustomerContactVariants(id),
     enabled: Number.isFinite(id) && id > 0,
+  })
+}
+
+// Stage 4: add a manual variant, then refresh this customer's variants + detail.
+export function useCreateContactVariant(customerId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: ContactVariantInput) => createCustomerContactVariant(customerId, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['customers', 'contact-variants', customerId] })
+      void qc.invalidateQueries({ queryKey: keys.detail(customerId) })
+    },
+  })
+}
+
+// Stage 4: archive (soft-delete) a manual variant, then refresh this customer's variants.
+export function useArchiveContactVariant(customerId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (variantId: number) => archiveCustomerContactVariant(customerId, variantId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['customers', 'contact-variants', customerId] })
+    },
   })
 }
 

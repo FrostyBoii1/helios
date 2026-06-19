@@ -19,6 +19,7 @@ from app.db.session import get_db
 from app.models.enums import ActivityType, RoleName
 from app.models.user import User
 from app.schemas.customer import (
+    CustomerContactVariantCreate,
     CustomerContactVariantList,
     CustomerContactVariantRead,
     CustomerCreate,
@@ -118,6 +119,63 @@ def list_customer_contact_variants(
         items=[CustomerContactVariantRead.model_validate(v) for v in variants],
         total=len(variants),
     )
+
+
+@router.post(
+    "/{customer_id}/contact-variants",
+    response_model=CustomerContactVariantRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_customer_contact_variant(
+    customer_id: int,
+    payload: CustomerContactVariantCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
+) -> CustomerContactVariantRead:
+    """Admin-only (Stage 4): add a MANUAL alternate-contact variant to a LIVE customer.
+    `source_type` is forced to 'manual'; source FK ids are not accepted. 404 for a
+    missing / soft-deleted / merged-loser id; 400 when every detail field is blank."""
+    customer = customers_service.get_customer(db, customer_id)
+    if customer is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+    try:
+        variant = customers_service.create_contact_variant(
+            db, customer=customer, data=payload.model_dump(), actor_id=actor.id
+        )
+    except customers_service.VariantError as exc:
+        # VariantError is raised BEFORE any mutation (the empty-variant check is first),
+        # so there is nothing to roll back — and a rollback here would also discard the
+        # request's read state.
+        raise HTTPException(status_code=exc.http_status, detail=exc.reason)
+    db.commit()
+    db.refresh(variant)
+    return CustomerContactVariantRead.model_validate(variant)
+
+
+@router.delete(
+    "/{customer_id}/contact-variants/{variant_id}",
+    response_model=CustomerContactVariantRead,
+)
+def archive_customer_contact_variant(
+    customer_id: int,
+    variant_id: int,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
+) -> CustomerContactVariantRead:
+    """Admin-only (Stage 4): archive (soft-delete) an active MANUAL variant that belongs
+    to this customer. Never hard-deletes. Returns 404 when the customer is missing /
+    soft-deleted / a merged loser, or when the variant is missing / already archived /
+    another customer's / source-derived (merge/import/document variants are immutable and
+    not archivable in Stage 4)."""
+    customer = customers_service.get_customer(db, customer_id)
+    if customer is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+    variant = customers_service.archive_contact_variant(db, customer=customer, variant_id=variant_id)
+    if variant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+    db.commit()
+    db.refresh(variant)
+    return CustomerContactVariantRead.model_validate(variant)
 
 
 @router.patch("/{customer_id}", response_model=CustomerRead)

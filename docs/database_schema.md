@@ -116,9 +116,12 @@ same real customer is known by a different name/email/phone/address). The primar
 `customers` columns stay authoritative; variants are additive read-only context — never
 job notes or per-job sites, and never a parse of free-text notes. Soft-deletable (archive).
 **Populated by B4 merge capture (Stage 3)** — a merge writes a `merged_customer` variant from the
-loser's differing fields; import / manual / document capture and promote-to-primary are later
-stages. `source_customer_id` / `source_import_row_id` / `source_document_id` are stored for audit
-but are NOT exposed by the read API.
+loser's differing fields. **(Stage 4)** admins can also manually add a `manual` variant
+(`POST /customers/{id}/contact-variants`) and archive **manual** variants
+(`DELETE …/{variant_id}`, soft-delete only; source-derived variants are immutable and not
+archivable). Import / document capture and promote-to-primary are later stages.
+`source_customer_id` / `source_import_row_id` / `source_document_id` are stored for audit but are
+NOT exposed by the read API.
 
 | column | type | notes |
 |--------|------|-------|

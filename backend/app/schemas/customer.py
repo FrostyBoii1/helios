@@ -111,3 +111,22 @@ class CustomerContactVariantRead(BaseModel):
 class CustomerContactVariantList(BaseModel):
     items: list[CustomerContactVariantRead]
     total: int
+
+
+class CustomerContactVariantCreate(BaseModel):
+    """Stage 4 manual-add input. `source_type` is forced to 'manual' server-side and the
+    source FK ids are NOT accepted from the client (not declared here, so any are dropped).
+    At least one DETAIL field (name/email/phone/address/suburb/state/postcode) must be
+    non-blank — a label or note alone does not create a variant (enforced in the service).
+    Max lengths mirror the table columns."""
+
+    label: str | None = Field(default=None, max_length=120)
+    display_name: str | None = Field(default=None, max_length=160)
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=40)
+    address_line1: str | None = Field(default=None, max_length=255)
+    address_line2: str | None = Field(default=None, max_length=255)
+    suburb: str | None = Field(default=None, max_length=120)
+    state: str | None = Field(default=None, max_length=60)
+    postcode: str | None = Field(default=None, max_length=20)
+    note: str | None = None

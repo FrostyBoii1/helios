@@ -2,7 +2,9 @@
 
 import { apiFetch } from '@/lib/api'
 import type {
+  ContactVariantInput,
   Customer,
+  CustomerContactVariant,
   CustomerContactVariantList,
   CustomerInput,
   CustomerListResponse,
@@ -51,4 +53,26 @@ export function mergeCustomer(loserId: number, winnerId: number): Promise<Custom
 // Stage 2: read-only alternate contact/address variants for an active customer.
 export function listCustomerContactVariants(id: number): Promise<CustomerContactVariantList> {
   return apiFetch<CustomerContactVariantList>(`/customers/${id}/contact-variants`)
+}
+
+// Stage 4: add a manual alternate-contact variant (admin-only on the backend).
+export function createCustomerContactVariant(
+  id: number,
+  input: ContactVariantInput,
+): Promise<CustomerContactVariant> {
+  return apiFetch<CustomerContactVariant>(`/customers/${id}/contact-variants`, {
+    method: 'POST',
+    body: input,
+  })
+}
+
+// Stage 4: archive (soft-delete) a manual variant (admin-only on the backend).
+export function archiveCustomerContactVariant(
+  customerId: number,
+  variantId: number,
+): Promise<CustomerContactVariant> {
+  return apiFetch<CustomerContactVariant>(
+    `/customers/${customerId}/contact-variants/${variantId}`,
+    { method: 'DELETE' },
+  )
 }

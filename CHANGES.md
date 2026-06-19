@@ -9,6 +9,41 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — Stage 4: manual add + archive of alternate customer contact details
+
+- **What:** admins can now MANUALLY add and ARCHIVE alternate customer-level contact/address
+  variants from Customer Detail. New admin-only endpoints:
+  `POST /customers/{id}/contact-variants` (create a `manual` variant) and
+  `DELETE /customers/{id}/contact-variants/{variant_id}` (soft-delete a manual variant). The
+  read-only card gains an admin "Add alternate details" button + a per-manual-variant "Archive"
+  control; reads stay open to any authenticated user.
+- **Create rules:** `source_type` is forced to `manual` server-side; the source FK ids are NOT
+  accepted from the client (and stay NULL); at least one DETAIL field (name/email/phone/
+  address/suburb/state/postcode) must be non-blank — a label/note alone is rejected (400);
+  values are trimmed; a missing / soft-deleted / merged-loser customer → 404.
+- **Archive rules:** **manual variants only** — source-derived (`merged_customer`/import/document)
+  variants are **immutable** and NOT archivable in Stage 4 (the safer choice: archiving a
+  merge-provenance snapshot could hide audit evidence). Archive is a soft-delete (`deleted_at`),
+  never a hard delete; an other-customer / already-archived / source-derived / missing variant →
+  404 (idempotent-safe). Archived variants drop out of the read list.
+- **Admin-only writes; reads unchanged:** both write endpoints require admin (`require_admin`);
+  read access is unchanged (any authenticated user). The frontend gates the Add/Archive controls
+  on `canManageCustomerVariants` (admin). Source FK ids remain DB-only (not in the read schema /
+  frontend type).
+- **No migration:** uses the Stage-2 table; head stays **`a1b2c3d4e5f6`**, `alembic check` clean.
+- **Deferred:** edit-an-existing-variant, promote-to-primary, backfill of existing merged losers,
+  import-grouping / document-NAS capture.
+- **Files:** backend `schemas/customer.py` (`CustomerContactVariantCreate`), `services/customers.py`
+  (`VariantError` + `create_contact_variant` + `archive_contact_variant`),
+  `api/v1/endpoints/customers.py` (POST + DELETE), `tests/test_customer_contact_variants.py`;
+  frontend `auth/permissions.ts` (`canManageCustomerVariants`), `types/index.ts`
+  (`ContactVariantInput`), `lib/customers.ts`, `hooks/useCustomers.ts`,
+  `components/AddContactVariantModal.tsx` (new), `components/AlternateContactDetailsCard.tsx`
+  (+ docs).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** none beyond the deferred stages; the card now always shows for admins
+  (with an Add button) even when a customer has no variants yet.
+
 ## 2026-06-19 — Stage 3: capture alternate customer details on B4 merge (no migration)
 
 - **What:** an explicit admin customer merge now PRESERVES the loser's meaningfully-different
