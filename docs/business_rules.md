@@ -45,10 +45,12 @@ explains intent; protect important explicit decisions with tests, not docs alone
   document), those alternate details belong in `customer_contact_variants` with explicit
   provenance — NOT parsed out of or buried in the customer's free-text notes, and NOT in
   job-specific notes/sites (those stay on Jobs). The **primary** customer fields stay
-  authoritative and are never overwritten by a variant. Stage 2 only stores + displays variants
-  (a read-only "Alternate contact details" card on Customer Detail, hidden when none); capturing
-  them from merges/imports/manual entry, archiving, and promoting a variant to primary are
-  deferred later stages.
+  authoritative and are never overwritten by a variant. A read-only "Alternate contact details"
+  card on Customer Detail displays them (hidden when none). **(Stage 3)** a B4 **merge** now
+  CAPTURES the loser's meaningfully-different customer-level fields as a `merged_customer` variant
+  on the winner — only when something differs (no redundant variants), winner primary fields
+  unchanged, the loser's id stored as provenance but never exposed by the read API. Manual
+  add/edit/archive, import/document capture, and promoting a variant to primary remain deferred.
 - **Every job has a unique case number** in the form `SCS-YYYY-00001`, generated
   automatically at creation, searchable across the system. The sequence resets
   per calendar year.

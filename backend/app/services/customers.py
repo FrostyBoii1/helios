@@ -17,7 +17,7 @@ from app.models.activity import Activity
 from app.models.customer import Customer
 from app.models.customer_contact_variant import CustomerContactVariant
 from app.models.document import Document
-from app.models.enums import ActivityType
+from app.models.enums import ActivityType, CustomerContactVariantSource
 from app.models.import_staging import ImportCustomerGroup, ImportRow
 from app.models.job import Job
 from app.models.task import Task
@@ -193,6 +193,55 @@ def _build_merge_note(loser: Customer, *, merged_at: datetime) -> str | None:
     return header + "\n" + "\n".join(parts)
 
 
+# Customer-level fields captured into a merge variant: (loser/winner attr, variant attr).
+# full_name maps to the variant's display_name; everything else maps 1:1. Job-specific
+# notes and Job.details.site are deliberately NOT captured here.
+_MERGE_VARIANT_FIELDS: tuple[tuple[str, str], ...] = (
+    ("full_name", "display_name"),
+    ("email", "email"),
+    ("phone", "phone"),
+    ("address_line1", "address_line1"),
+    ("address_line2", "address_line2"),
+    ("suburb", "suburb"),
+    ("state", "state"),
+    ("postcode", "postcode"),
+)
+
+
+def _capture_merge_variant(
+    db: Session, *, loser: Customer, winner: Customer, merged_at: datetime, actor_id: int
+) -> CustomerContactVariant | None:
+    """Stage 3: preserve the LOSER's meaningfully-different customer-level fields as one
+    ``CustomerContactVariant`` on the WINNER (``source_type=merged_customer``,
+    ``source_customer_id=loser``).
+
+    Conservative + deterministic: a field is captured only when the loser value (trimmed)
+    is NON-empty AND differs from the winner's same field (trimmed) — identical or empty
+    fields are skipped, and NO variant is created when nothing meaningfully differs. NEVER
+    touches the winner's primary fields; never captures job notes or Job.details.site.
+    ``source_customer_id`` is stored for audit but is NOT exposed by the read API (Stage 2).
+    """
+    captured: dict[str, str] = {}
+    for attr, variant_attr in _MERGE_VARIANT_FIELDS:
+        loser_val = (getattr(loser, attr) or "").strip()
+        winner_val = (getattr(winner, attr) or "").strip()
+        if loser_val and loser_val != winner_val:
+            captured[variant_attr] = loser_val
+    if not captured:
+        return None
+    variant = CustomerContactVariant(
+        customer_id=winner.id,
+        source_type=CustomerContactVariantSource.MERGED_CUSTOMER.value,
+        source_customer_id=loser.id,
+        label="Merged customer details",
+        note=f"From merged customer {loser.full_name} (#{loser.id}) on {merged_at:%Y-%m-%d}",
+        created_by_id=actor_id,
+        **captured,
+    )
+    db.add(variant)
+    return variant
+
+
 def _repoint_returning_ids(
     db: Session,
     model: Any,
@@ -305,6 +354,12 @@ def merge_customers(db: Session, *, loser_id: int, winner_id: int, actor_id: int
             winner.internal_notes = f"{winner.internal_notes}\n\n{note_block}"
         else:
             winner.internal_notes = note_block
+
+    # Stage 3: also preserve the loser's meaningfully-different customer-level identity/
+    # contact/address fields as a structured CustomerContactVariant on the winner (only
+    # when something differs). This is additive — the winner's primary fields and the
+    # notes-append above are unchanged.
+    _capture_merge_variant(db, loser=loser, winner=winner, merged_at=merged_at, actor_id=actor_id)
 
     # Soft-delete the loser + record the immutable merge pointer. Never hard-delete.
     loser.deleted_at = merged_at

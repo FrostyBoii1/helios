@@ -115,8 +115,10 @@ Alternate customer-level identity/contact/address sets for a LIVE customer (when
 same real customer is known by a different name/email/phone/address). The primary
 `customers` columns stay authoritative; variants are additive read-only context — never
 job notes or per-job sites, and never a parse of free-text notes. Soft-deletable (archive).
-**Storage only in Stage 2** — no writer yet (merge capture / import / manual / promote are
-later stages).
+**Populated by B4 merge capture (Stage 3)** — a merge writes a `merged_customer` variant from the
+loser's differing fields; import / manual / document capture and promote-to-primary are later
+stages. `source_customer_id` / `source_import_row_id` / `source_document_id` are stored for audit
+but are NOT exposed by the read API.
 
 | column | type | notes |
 |--------|------|-------|

@@ -9,6 +9,33 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — Stage 3: capture alternate customer details on B4 merge (no migration)
+
+- **What:** an explicit admin customer merge now PRESERVES the loser's meaningfully-different
+  customer-level identity/contact/address fields as one `CustomerContactVariant` on the winner
+  (`source_type=merged_customer`, `source_customer_id`=loser), instead of leaving them only on the
+  soft-deleted loser row or in prose notes. The winner's primary fields stay authoritative.
+- **Difference rule (conservative + deterministic):** per field (full_name→display_name, email,
+  phone, address_line1/2, suburb, state, postcode), the loser value is captured only when it is
+  non-empty (trimmed) AND differs from the winner's same field (trimmed) — identical/empty fields
+  are skipped, and NO variant is created when nothing meaningfully differs (no redundant variants).
+  A loser value where the winner is blank counts as a difference. Job notes / Job.details.site are
+  never captured.
+- **All B4 merge behavior unchanged:** FK repoints, the loser-notes append, the loser soft-delete,
+  `merged_into_customer_id`/`merged_at`, the `CUSTOMER_MERGED` activity, and reverse-safety all
+  remain intact; the capture is additive in the same transaction (rolled back atomically on any
+  merge failure). `source_customer_id` is stored for audit but is **NOT** exposed by the read API
+  (Stage 2 already kept source FK ids DB-only) — so the merged-loser id stays hidden.
+- **No migration:** uses the Stage-2 `customer_contact_variants` table; head stays
+  **`a1b2c3d4e5f6`**, `alembic check` clean.
+- **Still deferred:** manual add/edit/archive, promote-to-primary, backfill of existing merged
+  losers, import-grouping capture, document/NAS capture.
+- **Files:** `backend/app/services/customers.py` (`_capture_merge_variant` + call in
+  `merge_customers`), `backend/tests/test_customer_merge.py` (+ docs).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** none beyond the deferred stages; capture only on a real difference avoids
+  redundant variants.
+
 ## 2026-06-19 — Stage 2: CustomerContactVariant storage foundation + read-only display
 
 - **What:** a new `customer_contact_variants` table stores an **alternate** set of

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.activity import Activity
 from app.models.customer import Customer
+from app.models.customer_contact_variant import CustomerContactVariant
 from app.models.document import Document
 from app.models.enums import (
     ActivityType,
@@ -375,3 +376,115 @@ def test_get_merged_loser_deadend_winner_deleted_plain_404(client_for, users, db
     resp = client_for(users["support"]).get(f"/api/v1/customers/{loser.id}")
     assert resp.status_code == 404
     assert resp.json()["detail"] == "Customer not found"  # falls back to plain 404
+
+
+# --------------------------------------------------------------------------- #
+# Stage 3: capture the loser's differing customer-level fields as a variant
+# --------------------------------------------------------------------------- #
+def _variants_for(db: Session, customer_id: int) -> list[CustomerContactVariant]:
+    return list(
+        db.scalars(
+            select(CustomerContactVariant).where(
+                CustomerContactVariant.customer_id == customer_id,
+                CustomerContactVariant.deleted_at.is_(None),
+            )
+        ).all()
+    )
+
+
+def test_merge_captures_variant_when_loser_differs(users, db_session: Session):
+    admin_id = users["admin"].id
+    loser = _customer(
+        db_session, "Stuart White", email="stuart.old@example.com", phone="0400 111 222", suburb="Sunbury"
+    )
+    winner = _customer(
+        db_session, "Stuart W", email="stuart@example.com", phone="0400 111 222", suburb="Sunbury"
+    )
+    db_session.flush()
+    customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=winner.id, actor_id=admin_id)
+    db_session.flush()
+
+    variants = _variants_for(db_session, winner.id)
+    assert len(variants) == 1
+    v = variants[0]
+    assert v.source_type == "merged_customer"
+    assert v.source_customer_id == loser.id           # stored in DB (not exposed via API)
+    assert v.display_name == "Stuart White"           # name differs -> captured
+    assert v.email == "stuart.old@example.com"        # email differs -> captured
+    assert v.phone is None                            # phone identical -> NOT captured
+    assert v.suburb is None                           # suburb identical -> NOT captured
+    assert v.label == "Merged customer details"
+
+
+def test_merge_captures_when_winner_field_blank(users, db_session: Session):
+    admin_id = users["admin"].id
+    loser = _customer(db_session, "Jane Doe", phone="0411 000 000")
+    winner = _customer(db_session, "Jane Doe")  # same name, no phone on the winner
+    db_session.flush()
+    customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=winner.id, actor_id=admin_id)
+    db_session.flush()
+
+    variants = _variants_for(db_session, winner.id)
+    assert len(variants) == 1
+    assert variants[0].phone == "0411 000 000"  # loser has it, winner blank -> meaningful difference
+    assert variants[0].display_name is None     # identical name -> NOT captured
+
+
+def test_merge_no_variant_when_identical(users, db_session: Session):
+    admin_id = users["admin"].id
+    loser = _customer(db_session, "Same Person", email="same@example.com", phone="0400 999 888")
+    winner = _customer(db_session, "Same Person", email="same@example.com", phone="0400 999 888")
+    db_session.flush()
+    customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=winner.id, actor_id=admin_id)
+    db_session.flush()
+    assert _variants_for(db_session, winner.id) == []  # nothing differs -> no variant
+
+
+def test_merge_no_variant_when_loser_fields_empty(users, db_session: Session):
+    admin_id = users["admin"].id
+    loser = _customer(db_session, "Winner Co")  # same name, no contact fields
+    winner = _customer(db_session, "Winner Co", email="contact@winner.example", phone="0400 1")
+    db_session.flush()
+    customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=winner.id, actor_id=admin_id)
+    db_session.flush()
+    assert _variants_for(db_session, winner.id) == []
+
+
+def test_merge_winner_primary_fields_unchanged(users, db_session: Session):
+    admin_id = users["admin"].id
+    loser = _customer(
+        db_session, "Loser Name", email="loser@example.com", phone="0400 000 111", suburb="Oldtown"
+    )
+    winner = _customer(
+        db_session, "Winner Name", email="winner@example.com", phone="0400 222 333", suburb="Newtown"
+    )
+    db_session.flush()
+    customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=winner.id, actor_id=admin_id)
+    db_session.flush()
+
+    wi = db_session.get(Customer, winner.id)
+    assert wi.full_name == "Winner Name"
+    assert wi.email == "winner@example.com"
+    assert wi.phone == "0400 222 333"
+    assert wi.suburb == "Newtown"  # winner's primary fields are never overwritten by the variant
+
+
+def test_merge_variant_source_id_not_exposed_by_endpoint(users, client_for, db_session: Session):
+    admin_id = users["admin"].id
+    loser = _customer(db_session, "Hidden Loser", email="hidden@example.com")
+    winner = _customer(db_session, "Visible Winner", email="visible@example.com")
+    db_session.flush()
+    customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=winner.id, actor_id=admin_id)
+    db_session.flush()
+
+    resp = client_for(users["support"]).get(f"/api/v1/customers/{winner.id}/contact-variants")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    item = body["items"][0]
+    assert item["source_type"] == "merged_customer"
+    assert item["display_name"] == "Hidden Loser"
+    # the merged-loser id stays hidden: source FK ids are never returned by the API
+    assert "source_customer_id" not in item
+    assert "source_import_row_id" not in item
+    assert "source_document_id" not in item
