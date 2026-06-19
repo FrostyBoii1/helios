@@ -94,6 +94,33 @@ export interface CustomerMergedDetail {
   merged_into_name: string
 }
 
+// Stage 2: an alternate customer-level identity/contact/address set (read-only).
+// Primary Customer fields stay authoritative; variants are additive context.
+export interface CustomerContactVariant {
+  id: number
+  customer_id: number
+  label: string | null
+  display_name: string | null
+  email: string | null
+  phone: string | null
+  address_line1: string | null
+  address_line2: string | null
+  suburb: string | null
+  state: string | null
+  postcode: string | null
+  source_type: string // merged_customer | import_row | manual | document
+  // Source FK ids are deliberately NOT returned by the API (a merged loser's id stays
+  // hidden); only the non-identifying source_type label is exposed.
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomerContactVariantList {
+  items: CustomerContactVariant[]
+  total: number
+}
+
 export type JobStatus =
   | 'new'
   | 'awaiting_approval'

@@ -3,6 +3,7 @@
 import { apiFetch } from '@/lib/api'
 import type {
   Customer,
+  CustomerContactVariantList,
   CustomerInput,
   CustomerListResponse,
   CustomerMergeResult,
@@ -45,4 +46,9 @@ export function mergeCustomer(loserId: number, winnerId: number): Promise<Custom
   return apiFetch<CustomerMergeResult>(`/customers/${loserId}/merge-into/${winnerId}`, {
     method: 'POST',
   })
+}
+
+// Stage 2: read-only alternate contact/address variants for an active customer.
+export function listCustomerContactVariants(id: number): Promise<CustomerContactVariantList> {
+  return apiFetch<CustomerContactVariantList>(`/customers/${id}/contact-variants`)
 }

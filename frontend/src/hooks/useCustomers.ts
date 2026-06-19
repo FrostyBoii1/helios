@@ -5,6 +5,7 @@ import {
   createCustomer,
   deleteCustomer,
   getCustomer,
+  listCustomerContactVariants,
   listCustomers,
   mergeCustomer,
   updateCustomer,
@@ -30,6 +31,15 @@ export function useCustomer(id: number) {
   return useQuery({
     queryKey: keys.detail(id),
     queryFn: () => getCustomer(id),
+    enabled: Number.isFinite(id) && id > 0,
+  })
+}
+
+// Stage 2: read-only alternate contact/address variants for a customer.
+export function useCustomerContactVariants(id: number) {
+  return useQuery({
+    queryKey: ['customers', 'contact-variants', id] as const,
+    queryFn: () => listCustomerContactVariants(id),
     enabled: Number.isFinite(id) && id > 0,
   })
 }

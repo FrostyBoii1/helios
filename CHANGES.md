@@ -9,6 +9,41 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — Stage 2: CustomerContactVariant storage foundation + read-only display
+
+- **What:** a new `customer_contact_variants` table stores an **alternate** set of
+  customer-level identity/contact/address details for a LIVE customer (name/email/phone/
+  address + provenance), for when the same real customer is known by different details
+  (a merged-away duplicate, an import row, manual entry, or a document). A read-only endpoint
+  `GET /customers/{id}/contact-variants` returns an active customer's active variants, and
+  Customer Detail shows a read-only **"Alternate contact details (N)"** card (hidden when
+  there are none). The primary `Customer` columns stay authoritative — variants never
+  overwrite them and are NOT job notes / per-job sites.
+- **Why:** a structured place to preserve and display differing customer-level details instead
+  of burying them in notes or losing them on a soft-deleted merge loser.
+- **Storage + read only:** nothing populates variants yet — **no** merge capture, **no**
+  backfill, **no** manual add/edit/archive, **no** promote-to-primary (all later stages).
+  Source-derived variants are immutable snapshots; archived via `deleted_at`.
+- **Fields:** `customer_id` (FK, required, indexed), `label`, `display_name`, `email`, `phone`,
+  `address_line1/2`, `suburb/state/postcode`, `source_type` (`CustomerContactVariantSource`:
+  merged_customer / import_row / manual / document, indexed), `source_customer_id` /
+  `source_import_row_id` / `source_document_id` (optional FKs), `note`, `created_by_id`,
+  timestamps + `deleted_at`. FK-only (no ORM relationships — multi-customer-FK).
+- **Read access:** any authenticated user; a missing / soft-deleted / merged-loser id returns a
+  plain 404 (no variants exposed for a non-active customer).
+- **Migration:** `a1b2c3d4e5f6` (revises `f0a1b2c3d4e5`) — additive: creates the new table +
+  its indexes/FKs only, no backfill, reversible. New head **`a1b2c3d4e5f6`**; `alembic check` clean.
+- **Files:** `backend/app/models/customer_contact_variant.py` (new), `app/models/enums.py`
+  (`CustomerContactVariantSource`), `app/db/base.py` (register),
+  `backend/alembic/versions/a1b2c3d4e5f6_add_customer_contact_variants.py` (new),
+  `app/schemas/customer.py`, `app/services/customers.py`, `app/api/v1/endpoints/customers.py`,
+  `backend/tests/test_customer_contact_variants.py` (new); frontend `types/index.ts`,
+  `lib/customers.ts`, `hooks/useCustomers.ts`, `components/AlternateContactDetailsCard.tsx`
+  (new), `pages/CustomerDetailPage.tsx` (+ docs).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** none — additive, read-only. Stage 3 (B4-merge capture), manual
+  add/edit/archive, and promote-to-primary remain deferred.
+
 ## 2026-06-19 — Jobs: "Other jobs for this customer" panel on Job Detail (frontend-only)
 
 - **What:** the Job Detail page now shows a compact, display-only **"Other jobs for this customer

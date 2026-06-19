@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.activity import Activity
 from app.models.customer import Customer
+from app.models.customer_contact_variant import CustomerContactVariant
 from app.models.document import Document
 from app.models.enums import ActivityType
 from app.models.import_staging import ImportCustomerGroup, ImportRow
@@ -65,6 +66,25 @@ def resolve_active_customer(db: Session, customer_id: int) -> Customer | None:
             return current if current.deleted_at is None else None
         current = db.get(Customer, next_id)
     return None
+
+
+def list_contact_variants(db: Session, customer: Customer) -> list[CustomerContactVariant]:
+    """Active (non-archived) alternate contact/address variants for a LIVE customer,
+    newest first. Read-only (Stage 2). The caller resolves the active customer first
+    (``get_customer``), so variants are never exposed for a missing / soft-deleted /
+    merged-loser id; archived (``deleted_at``) variants are excluded here too."""
+    stmt = (
+        select(CustomerContactVariant)
+        .where(
+            CustomerContactVariant.customer_id == customer.id,
+            CustomerContactVariant.deleted_at.is_(None),
+        )
+        .order_by(
+            CustomerContactVariant.created_at.desc(),
+            CustomerContactVariant.id.desc(),
+        )
+    )
+    return list(db.scalars(stmt).all())
 
 
 def merged_winner_for(db: Session, customer_id: int) -> Customer | None:

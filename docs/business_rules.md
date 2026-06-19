@@ -39,6 +39,16 @@ explains intent; protect important explicit decisions with tests, not docs alone
   loser notes, soft-deletes the loser, and logs a `CUSTOMER_MERGED` activity on the winner —
   no migration. A merged job is then **non-reversible** (the reverse engine's `job_modified`
   / `job_customer_mismatch` guards protect the winner); use **Prepare recommit** to correct.
+- **Alternate customer-level details are preserved as structured variants, not notes
+  (Stage 2 — storage + read only).** When the same real customer is known by a different
+  name/email/phone/address (a merged-away duplicate, an import row, manual entry, or a
+  document), those alternate details belong in `customer_contact_variants` with explicit
+  provenance — NOT parsed out of or buried in the customer's free-text notes, and NOT in
+  job-specific notes/sites (those stay on Jobs). The **primary** customer fields stay
+  authoritative and are never overwritten by a variant. Stage 2 only stores + displays variants
+  (a read-only "Alternate contact details" card on Customer Detail, hidden when none); capturing
+  them from merges/imports/manual entry, archiving, and promoting a variant to primary are
+  deferred later stages.
 - **Every job has a unique case number** in the form `SCS-YYYY-00001`, generated
   automatically at creation, searchable across the system. The sequence resets
   per calendar year.

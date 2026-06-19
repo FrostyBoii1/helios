@@ -163,3 +163,20 @@ class ImportIssueKind(str, enum.Enum):
     APPROVAL_PENDING_NO_DATE = "approval_pending_no_date"
     DATE_DAY_MISMATCH = "date_day_mismatch"
     DIVIDER_ORPHAN = "divider_orphan"
+
+
+# --------------------------------------------------------------------------- #
+# Customer alternate contact/address variants (Stage 2 — storage + read only)
+# --------------------------------------------------------------------------- #
+class CustomerContactVariantSource(str, enum.Enum):
+    """Where an alternate customer contact/identity/address variant came from.
+
+    Stored as a string. Stage 2 only DEFINES the vocabulary + table; nothing writes
+    variants yet — later stages populate them from a merge (``merged_customer``), an
+    import row (``import_row``), manual entry (``manual``), or a document (``document``).
+    """
+
+    MERGED_CUSTOMER = "merged_customer"
+    IMPORT_ROW = "import_row"
+    MANUAL = "manual"
+    DOCUMENT = "document"

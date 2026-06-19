@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { canDeleteCustomers, canMergeCustomers, canWriteCustomers } from '@/auth/permissions'
+import { AlternateContactDetailsCard } from '@/components/AlternateContactDetailsCard'
 import { CustomerJobsPanel } from '@/components/CustomerJobsPanel'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
 import { MergeCustomerModal } from '@/components/MergeCustomerModal'
@@ -254,6 +255,11 @@ export function CustomerDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Stage 2: read-only alternate customer-level contact/address variants
+              (from merges/imports/manual/documents in later stages). Hidden when
+              there are none. Does not touch the primary Details above. */}
+          <AlternateContactDetailsCard customerId={customer.id} />
 
           <TasksPanel customerId={customer.id} />
           <Timeline customerId={customer.id} />

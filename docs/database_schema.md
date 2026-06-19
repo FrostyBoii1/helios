@@ -109,6 +109,31 @@ the physical schema is produced by Alembic migrations.
 | uploaded_by_id | int FK → users.id null | |
 | timestamps + deleted_at | | |
 
+### customer_contact_variants  (Stage 2 — alternate customer details, read-only)
+
+Alternate customer-level identity/contact/address sets for a LIVE customer (when the
+same real customer is known by a different name/email/phone/address). The primary
+`customers` columns stay authoritative; variants are additive read-only context — never
+job notes or per-job sites, and never a parse of free-text notes. Soft-deletable (archive).
+**Storage only in Stage 2** — no writer yet (merge capture / import / manual / promote are
+later stages).
+
+| column | type | notes |
+|--------|------|-------|
+| id | int PK | |
+| customer_id | int FK → customers.id, indexed | the live customer this set belongs to |
+| label | varchar(120) null | optional human label |
+| display_name | varchar(160) null | name variation |
+| email / phone | varchar null | contact variation |
+| address_line1/2, suburb, state, postcode | varchar null | address variation |
+| source_type | varchar(20) indexed | `CustomerContactVariantSource`: merged_customer / import_row / manual / document |
+| source_customer_id | int FK → customers.id null | the merged loser (merged_customer source) |
+| source_import_row_id | int FK → import_rows.id null | |
+| source_document_id | int FK → documents.id null | |
+| note | text null | short provenance/context |
+| created_by_id | int FK → users.id null | |
+| timestamps + deleted_at | | soft-delete = archive |
+
 ### import staging (parse → review → commit pipeline)
 
 Staging tables hold the legacy-workbook import. They are **separate** from the
@@ -238,10 +263,13 @@ customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
   columns + index + self-FK, no backfill, reversible; no execution) → **`f0a1b2c3d4e5`**
   (cleanup: reconcile the `job_label_definitions.key` model↔DB drift — collapse the redundant
   unique-constraint + non-unique-index into the single UNIQUE index the model declares; no data
-  change, reversible). The current Alembic **head is `f0a1b2c3d4e5`**. The commit-to-live,
+  change, reversible) → **`a1b2c3d4e5f6`** (Stage 2: the new `customer_contact_variants` table
+  — additive, creates the table + its FKs/indexes only, no backfill, reversible). The current
+  Alembic **head is `a1b2c3d4e5f6`**. The commit-to-live,
   reverse, and case-year-guard work (and the later B2-2/B2-3, B3-3/B3-4 wiring) added **no**
   further migrations — they read the existing columns at commit/preview/reverse and in the UI
   (string-enum values only). **B4-2/B4-3/B4-4 (customer-merge execution, UI, merged-loser URL
   polish) likewise add NO migration** — they reuse the B4-1 `customers.merged_into_customer_id` /
-  `merged_at` columns and the `CUSTOMER_MERGED` string-enum value; the only later migration is the
-  `f0a1b2c3d4e5` job-label-key drift reconcile above.
+  `merged_at` columns and the `CUSTOMER_MERGED` string-enum value; the later migrations are the
+  `f0a1b2c3d4e5` job-label-key drift reconcile and the `a1b2c3d4e5f6` `customer_contact_variants`
+  table above.

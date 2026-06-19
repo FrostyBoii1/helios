@@ -199,8 +199,13 @@ These are stubbed/absent and represent the next phases:
   `resolve_active_customer`; Customer Detail shows a "merged into {name}" notice + link to the
   winner (no auto-navigation, no 3xx redirect, no soft-deleted loser data). Missing /
   normally-deleted / broken-chain / cyclic ids keep the plain 404; list/search and import
-  matching are unchanged. Still deferred: unmerge and batch merge. **(B4 — proposed)**
-  auto-link/merge for identical names.
+  matching are unchanged. Still deferred: unmerge and batch merge. **(Customer variants —
+  Stage 2 built)** a new `customer_contact_variants` table + read-only
+  `GET /customers/{id}/contact-variants` + a Customer-Detail "Alternate contact details" card
+  preserve/display alternate customer-level name/email/phone/address sets (provenance-linked,
+  soft-deletable) without overwriting the primary fields or stuffing them into notes; **storage
+  + read only** — CAPTURE (merge/import/manual), backfill, edit/archive, and promote-to-primary
+  are deferred later stages. **(B4 — proposed)** auto-link/merge for identical names.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

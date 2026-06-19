@@ -19,6 +19,8 @@ from app.db.session import get_db
 from app.models.enums import ActivityType, RoleName
 from app.models.user import User
 from app.schemas.customer import (
+    CustomerContactVariantList,
+    CustomerContactVariantRead,
     CustomerCreate,
     CustomerList,
     CustomerMergeResult,
@@ -96,6 +98,26 @@ def get_customer(
             )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
     return CustomerRead.model_validate(customer)
+
+
+@router.get("/{customer_id}/contact-variants", response_model=CustomerContactVariantList)
+def list_customer_contact_variants(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> CustomerContactVariantList:
+    """Read-only alternate contact/identity/address variants for an ACTIVE customer
+    (Stage 2). Returns a plain 404 for a missing / soft-deleted / merged-loser id (same
+    active-only path as GET /customers/{id}) so no variants are exposed for a non-active
+    customer. Active (non-archived) variants only; no create/update/delete in Stage 2."""
+    customer = customers_service.get_customer(db, customer_id)
+    if customer is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+    variants = customers_service.list_contact_variants(db, customer)
+    return CustomerContactVariantList(
+        items=[CustomerContactVariantRead.model_validate(v) for v in variants],
+        total=len(variants),
+    )
 
 
 @router.patch("/{customer_id}", response_model=CustomerRead)

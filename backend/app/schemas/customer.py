@@ -76,3 +76,38 @@ class CustomerMergeResult(BaseModel):
     moved: dict[str, MergeMovedCount]            # jobs / tasks / documents / activities
     repointed_import: dict[str, MergeMovedCount]  # rows_committed / rows_resolved / groups_committed
     notes_appended: bool
+
+
+# --------------------------------------------------------------------------- #
+# Stage 2: customer alternate contact/address variants (read-only)
+# --------------------------------------------------------------------------- #
+class CustomerContactVariantRead(BaseModel):
+    """A read view of one alternate contact/identity/address set for a customer.
+    `email` is a plain string (a stored variant is not re-validated as an EmailStr)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    customer_id: int
+    label: str | None
+    display_name: str | None
+    email: str | None
+    phone: str | None
+    address_line1: str | None
+    address_line2: str | None
+    suburb: str | None
+    state: str | None
+    postcode: str | None
+    source_type: str
+    # The source FK ids (source_customer_id / source_import_row_id / source_document_id)
+    # are intentionally NOT exposed in the read API: a merged loser's id must stay hidden
+    # (it would otherwise be enumerable here once merge capture populates it). They live on
+    # the table for backend/audit use only; source_type is the non-identifying label.
+    note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CustomerContactVariantList(BaseModel):
+    items: list[CustomerContactVariantRead]
+    total: int
