@@ -7,6 +7,7 @@ import {
   canEditJobDetails,
   canEditJobInstallDate,
 } from '@/auth/permissions'
+import { CustomerOtherJobsPanel } from '@/components/CustomerOtherJobsPanel'
 import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
@@ -525,6 +526,10 @@ export function JobDetailPage() {
           />
         </aside>
       </div>
+
+      {/* Other jobs for this multi-job customer — open a sibling job without going
+          back to the Customer page. Hidden when this is the customer's only job. */}
+      <CustomerOtherJobsPanel customerId={job.customer_id} currentJobId={job.id} />
 
       {/* Tasks + timeline are live; Documents remains a later phase. */}
       <div className="mt-6">

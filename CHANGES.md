@@ -9,6 +9,26 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — Jobs: "Other jobs for this customer" panel on Job Detail (frontend-only)
+
+- **What:** the Job Detail page now shows a compact, display-only **"Other jobs for this customer
+  (N)"** panel below the main details, listing the customer's other jobs (the current job
+  excluded) so a sibling job can be opened without returning to the Customer page. Reuses the
+  shared `JobsTable` + the existing `useJobs({ customer_id })` query; a "View all on customer →"
+  link points at the Customer page.
+- **Why:** smoother navigation for multi-job customers — Stage 1 of the customer-variants /
+  multi-job diagnosis, and the smallest, schema-free slice.
+- **Hidden when:** the customer has no other jobs (single-job customers see nothing — no clutter,
+  and no loading/error flash).
+- **Scope:** frontend only — **no** backend/API/migration/schema/model change, **no** new job
+  workflow; display/navigation-only. The larger alternate-customer-details
+  (`CustomerContactVariant`) system is **NOT** implemented — it remains a later staged design.
+- **Files:** `frontend/src/components/CustomerOtherJobsPanel.tsx` (new),
+  `frontend/src/pages/JobDetailPage.tsx` (mount) (+ docs).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** none — reuses existing read-only job/customer data; the
+  alternate-customer-details data model is the deferred Stage 2+.
+
 ## 2026-06-19 — Cleanup: reconcile job_label_definitions.key model↔DB drift (unique index)
 
 - **What:** a pre-existing model↔DB drift on `job_label_definitions.key` that kept surfacing in

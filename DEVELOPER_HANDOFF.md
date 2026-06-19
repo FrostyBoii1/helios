@@ -32,7 +32,9 @@ parser/review refinements** are implemented and pushed on `main` (HEAD
   retry, search/filter), endpoints (list/create/get/PATCH/status/soft-delete)
   with the approved per-field role matrix + activity logging; `Job` child
   cascades made non-destructive; React global `/jobs` page, `/jobs/:id` detail
-  shell (status/edit/reschedule/delete), and a Jobs panel on Customer detail.
+  shell (status/edit/reschedule/delete), a Jobs panel on Customer detail, and a
+  compact display-only "Other jobs for this customer" panel on Job detail (sibling
+  jobs, current excluded, hidden when none) for multi-job navigation.
 - **Activity Timeline** (priority #5) — read-only `list_activities` service +
   `GET /activities?customer_id=&job_id=` (newest-first, actor, raw meta); dark
   Timeline component wired into Customer and Job detail. Surfaces the existing
