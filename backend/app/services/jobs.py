@@ -13,8 +13,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.activity import Activity
 from app.models.customer import Customer
-from app.models.enums import JobStatus
+from app.models.enums import ActivityType, JobStatus
 from app.models.job import Job
 from app.models.job_label import JobLabelAssignment, JobLabelDefinition
 from app.services.case_number import next_case_number
@@ -116,6 +117,57 @@ def labels_for_jobs(db: Session, job_ids: list[int]) -> dict[int, list[JobLabelD
     for job_id, definition in rows:
         out.setdefault(job_id, []).append(definition)
     return out
+
+
+def merge_source_names_for_jobs(db: Session, jobs: list[Job]) -> dict[int, str]:
+    """``{job_id: source_customer_name}`` for jobs that a customer MERGE moved into their
+    CURRENT customer under a DIFFERENT (loser/source) name — so a merged customer file can
+    visibly show that a job originally came from a differently-named customer.
+
+    COMPUTE-ON-READ from existing ``CUSTOMER_MERGED`` activity metadata
+    (``meta['loser_name']`` + ``meta['moved']['jobs']['ids']``); writes NOTHING — no job,
+    customer, activity, variant, or details JSON is touched. The EARLIEST merge that moved a
+    job wins (its truly ORIGINAL source name; a merge repoints prior activities to the new
+    winner, so a chained merge's whole history stays queryable under the current customer).
+    A job is OMITTED (-> exposed as null) when it was never merged, carries no recorded
+    source, or the source name equals its current customer name (not meaningful to show).
+    """
+    if not jobs:
+        return {}
+    job_ids = {j.id for j in jobs}
+    customer_ids = {j.customer_id for j in jobs}
+    current_name = {
+        j.id: (j.customer.full_name if j.customer else "").strip() for j in jobs
+    }
+
+    # Earliest-first (created_at, then id as a same-transaction tiebreaker) so the ORIGINAL
+    # source name wins when a job was moved by more than one merge.
+    activities = db.scalars(
+        select(Activity)
+        .where(
+            Activity.activity_type == ActivityType.CUSTOMER_MERGED,
+            Activity.customer_id.in_(customer_ids),
+        )
+        .order_by(Activity.created_at.asc(), Activity.id.asc())
+    ).all()
+
+    source: dict[int, str] = {}
+    for act in activities:
+        meta = act.meta or {}
+        loser_name = (meta.get("loser_name") or "").strip()
+        if not loser_name:
+            continue
+        moved_ids = (((meta.get("moved") or {}).get("jobs") or {}).get("ids")) or []
+        for jid in moved_ids:
+            if jid in job_ids and jid not in source:
+                source[jid] = loser_name
+
+    # Suppress a source that matches the job's CURRENT customer name (e.g. a same-name merge).
+    return {
+        jid: name
+        for jid, name in source.items()
+        if name and name != current_name.get(jid, "")
+    }
 
 
 def customer_is_active(db: Session, customer_id: int) -> bool:

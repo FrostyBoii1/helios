@@ -181,6 +181,10 @@ export interface Job {
   case_number: string
   customer_id: number
   customer: CustomerRef
+  // Read-only, API-computed: the ORIGINAL/source customer name when a merge moved this job
+  // into its current customer under a DIFFERENT name (else null). The job's real customer
+  // (above) is unchanged — this is display-only merge provenance.
+  source_customer_name?: string | null
   status: JobStatus
   // Operational label chips for the Jobs list. Empty/absent on the detail fetch
   // (the Job detail page loads labels via /jobs/{id}/labels instead).

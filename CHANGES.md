@@ -9,6 +9,32 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — Job lists show the original/source customer name for merged-in jobs
+
+- **Why:** after a customer merge, every job points at the surviving (winner) customer, so a
+  job that originally belonged to a differently-named customer (e.g. "Steven Pipka" merged into
+  "Stuart White") showed no trace of its origin. The customer-specific job lists should make that
+  origin visible — without changing the real customer source of truth or inventing stored data.
+- **What:** `JobRead` gains an additive, **read-only computed** `source_customer_name`. The jobs
+  list + detail endpoints populate it COMPUTE-ON-READ from existing `CUSTOMER_MERGED` activity
+  metadata (`meta.loser_name` + `meta.moved.jobs.ids`): when a merge moved a job into its current
+  customer under a DIFFERENT name, that original name is surfaced. For chained merges the EARLIEST
+  merge that moved the job wins (its truly original source). Null for normal / same-name / unmerged
+  jobs. The frontend shows it as a small secondary line ("Originally <name>") under the case number
+  in the two customer-specific panels (Customer Detail Jobs panel + Job Detail other-jobs panel),
+  where the Name column is hidden. The global Jobs page layout from `889b377` is unchanged.
+- **No migration, no data mutation:** nothing is written to jobs, customers, activities, variants,
+  or details JSON — it is pure read-side derivation (a batch query alongside the existing label
+  batch-load). The job's real `customer` is untouched.
+- **NOT in scope (deferred):** the imported-job source name (`ImportRow.parsed.customer_name`) —
+  this slice is merge-provenance only.
+- **Files:** backend `services/jobs.py` (`merge_source_names_for_jobs`), `schemas/job.py`
+  (`JobRead.source_customer_name`), `api/v1/endpoints/jobs.py` (list + detail wiring),
+  `tests/test_job_source_customer_name.py`; frontend `types/index.ts`,
+  `components/JobsTable.tsx`. Permanent.
+
+---
+
 ## 2026-06-19 — Known Customer Details: editable + source provenance + survive reversal
 
 - **Why:** Known Customer Details preserved differing contact info, but the user still could not

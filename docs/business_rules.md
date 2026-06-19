@@ -39,6 +39,11 @@ explains intent; protect important explicit decisions with tests, not docs alone
   loser notes, soft-deletes the loser, and logs a `CUSTOMER_MERGED` activity on the winner —
   no migration. A merged job is then **non-reversible** (the reverse engine's `job_modified`
   / `job_customer_mismatch` guards protect the winner); use **Prepare recommit** to correct.
+  **Merge provenance is visible on job lists:** a job that a merge moved into a winner under a
+  DIFFERENT name shows that original/source customer name ("Originally <name>") in the customer's
+  job panels — a read-only field (`JobRead.source_customer_name`) computed from the
+  `CUSTOMER_MERGED` activity metadata (earliest merge wins for chains; null for normal/same-name
+  jobs). It does NOT change the job's real customer (the winner stays the source of truth).
 - **The Customer page is the source of truth for ALL known customer-level details.** Every
   customer-level identity/contact detail on record for a customer — the primary record PLUS any
   additional known sets — is shown on the Customer page. When the same real customer is known by a

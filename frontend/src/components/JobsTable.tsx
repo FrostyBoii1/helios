@@ -79,8 +79,16 @@ export function JobsTable({
                 onClick={() => navigate(`/jobs/${job.id}`)}
                 className="cursor-pointer border-b border-line/60 last:border-0 hover:bg-elevated"
               >
-                <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-brand-400">
-                  {job.case_number}
+                <td className="px-4 py-2 font-mono text-xs text-brand-400">
+                  <span className="whitespace-nowrap">{job.case_number}</span>
+                  {/* In the customer-specific panels (Name column hidden), surface a job's
+                      ORIGINAL/source customer name when a merge moved it here under a
+                      different name — display-only provenance. */}
+                  {!showCustomer && job.source_customer_name && (
+                    <span className="mt-0.5 block font-sans text-[11px] font-normal text-faint">
+                      Originally {job.source_customer_name}
+                    </span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-2 text-muted">
                   {showSite ? jobSite(job) : suburbState(job.customer)}

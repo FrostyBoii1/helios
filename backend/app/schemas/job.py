@@ -77,6 +77,12 @@ class JobRead(BaseModel):
     legacy_reference: str | None = None
     customer_id: int
     customer: CustomerRef
+    # Read-only, API-COMPUTED provenance: when a customer MERGE moved this job into its
+    # current customer under a DIFFERENT (loser/source) name, that original name — so a
+    # merged customer's job list can show "originally <name>". Null for normal/same-name/
+    # unmerged jobs. Derived from CUSTOMER_MERGED activity metadata; the job's real customer
+    # source of truth is unchanged. Populated by the list + detail endpoints only.
+    source_customer_name: str | None = None
     status: JobStatus
     # Operational labels (approval/decommission/admin/etc.) for the Jobs list. The
     # list endpoint batch-loads these; other JobRead producers leave it empty (the

@@ -78,9 +78,16 @@ parser/review refinements** are implemented and pushed on `main` (HEAD
   raw) on every job from the parsed address, persisted in `Job.details` (JSONB, NO
   migration). Each grouped/attached job keeps its OWN site while the Customer headline
   address stays the primary/new-customer address. Job detail prefers the job's site; the
-  customer page's jobs table shows per-job **Site** (the global Jobs list keeps the
-  customer Suburb/State for now — deferred). **Stage 2** (first-class queryable `Job`
-  site columns + migration/backfill, only if site must be filter/searchable in Section D)
+  customer page's jobs table shows per-job **Site**; the global Jobs list (since `889b377`)
+  is `Case # | Site | Name | Status | Labels | Install date`. **Merge provenance (read-model):**
+  `JobRead.source_customer_name` is an additive COMPUTE-ON-READ field (no migration, no writes)
+  derived from `CUSTOMER_MERGED` activity metadata — when a merge moved a job into its current
+  customer under a DIFFERENT name, the original/source name (earliest merge wins for chains;
+  `services/jobs.py merge_source_names_for_jobs`). The two customer-specific job panels (Customer
+  Detail + Job Detail other-jobs, which hide the Name column) render it as a small "Originally
+  <name>" line under the case number; null for normal/same-name/unmerged jobs. The imported-job
+  source name (`ImportRow.parsed.customer_name`) is deferred. **Stage 2** (first-class queryable
+  `Job` site columns + migration/backfill, only if site must be filter/searchable in Section D)
   remains optional future work — **not built**.
 - **Dev/system-admin reset tools** — admin-only, non-production **Clear imports** /
   **Clear live CRM** with an exact typed confirmation phrase (`/dev/reset/*`).
