@@ -9,6 +9,37 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — B4-3: existing-customer merge — frontend admin UI (no backend change)
+
+- **What:** an admin-only **"Merge into…"** action on the Customer Detail page that drives the
+  existing B4-2 backend merge. The button (admin-gated, beside Edit/Delete) opens a modal to
+  **search and select another live customer** (the winner); selecting one shows an explicit
+  **confirmation/preview** with warnings — the winner's contact/address fields stay
+  authoritative, the loser's notes/internal_notes are appended into the winner's internal notes,
+  the loser's jobs/tasks/documents/activities/import links move to the winner, the loser is
+  hidden (soft-deleted), and **unmerge is not built**. On confirm it `POST`s
+  `/customers/{loser_id}/merge-into/{winner_id}`, invalidates the
+  customer/jobs/tasks/activities/documents/imports caches, and **navigates to the winner**.
+- **Why:** the B4-2 backend could already merge customers, but there was no app workflow to do
+  it; this gives admins a safe, explicit UI.
+- **Safety / UX:** the merge is hard to trigger accidentally — the endpoint is called ONLY from
+  the explicit "Merge" confirm button (never on open/search/select), which stays disabled until
+  a valid winner is selected; a customer can never be merged into itself (the loser is excluded
+  from results and re-checked on confirm); the button is admin-only (`canMergeCustomers`), with
+  the backend `require_admin` as the real boundary (403 surfaced in the modal).
+- **Scope:** frontend only — the one non-frontend-typing addition is the `CustomerMergeResult`
+  type (mirrors the backend schema). NO backend/migration/model change; schema head stays
+  **`e9f0a1b2c3d4`**. Backend merge execution remains **B4-2**; B4-3 adds the UI only.
+- **Files:** `frontend/src/components/MergeCustomerModal.tsx` (new),
+  `frontend/src/pages/CustomerDetailPage.tsx` (gated button + modal),
+  `frontend/src/hooks/useCustomers.ts` (`useMergeCustomer` + invalidation),
+  `frontend/src/lib/customers.ts` (`mergeCustomer`),
+  `frontend/src/auth/permissions.ts` (`canMergeCustomers`),
+  `frontend/src/types/index.ts` (`CustomerMergeResult`) (+ docs).
+- **Temporary or permanent:** Permanent.
+- **Still deferred:** stale merged-loser URL redirect / search chain-follow; unmerge; batch
+  merge; a browser-tested live merge flow (not run — it mutates live customer data).
+
 ## 2026-06-19 — B4-2: existing-customer merge — execution (admin-only, transactional, no migration)
 
 - **What:** the explicit admin **customer merge** is now executable. Admin-only

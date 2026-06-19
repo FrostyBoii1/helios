@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
-import { canDeleteCustomers, canWriteCustomers } from '@/auth/permissions'
+import { canDeleteCustomers, canMergeCustomers, canWriteCustomers } from '@/auth/permissions'
 import { CustomerJobsPanel } from '@/components/CustomerJobsPanel'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
+import { MergeCustomerModal } from '@/components/MergeCustomerModal'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
@@ -38,6 +39,7 @@ export function CustomerDetailPage() {
   const jobsQuery = useJobs({ customer_id: customerId, limit: 50 })
 
   const [editing, setEditing] = useState(false)
+  const [merging, setMerging] = useState(false)
   const [form, setForm] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
 
@@ -53,6 +55,7 @@ export function CustomerDetailPage() {
 
   const canWrite = canWriteCustomers(user?.role.name)
   const canDelete = canDeleteCustomers(user?.role.name)
+  const canMerge = canMergeCustomers(user?.role.name)
 
   if (isLoading) return <p className="text-muted">Loading…</p>
   if (isError || !customer) {
@@ -116,6 +119,14 @@ export function CustomerDetailPage() {
             <button onClick={() => setEditing(true)} className="btn-secondary px-3 py-1.5 text-sm">
               Edit
             </button>
+            {canMerge && (
+              <button
+                onClick={() => setMerging(true)}
+                className="btn-secondary px-3 py-1.5 text-sm"
+              >
+                Merge into…
+              </button>
+            )}
             {canDelete && (
               <button
                 onClick={handleDelete}
@@ -222,6 +233,17 @@ export function CustomerDetailPage() {
           />
         </aside>
       </div>
+
+      {merging && (
+        <MergeCustomerModal
+          loser={customer}
+          onClose={() => setMerging(false)}
+          onMerged={(winnerId) => {
+            setMerging(false)
+            navigate(`/customers/${winnerId}`)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import {
   deleteCustomer,
   getCustomer,
   listCustomers,
+  mergeCustomer,
   updateCustomer,
   type ListCustomersParams,
 } from '@/lib/customers'
@@ -60,6 +61,24 @@ export function useDeleteCustomer() {
     mutationFn: (id: number) => deleteCustomer(id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.all })
+    },
+  })
+}
+
+// B4-2: merge `loserId` into the chosen winner. The backend moves the loser's
+// jobs/tasks/documents/activities + import links to the winner and soft-deletes
+// the loser, so refresh every affected list/detail (broad prefix invalidation).
+export function useMergeCustomer(loserId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (winnerId: number) => mergeCustomer(loserId, winnerId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.all }) // ['customers']
+      void qc.invalidateQueries({ queryKey: ['jobs'] })
+      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void qc.invalidateQueries({ queryKey: ['activities'] })
+      void qc.invalidateQueries({ queryKey: ['documents'] })
+      void qc.invalidateQueries({ queryKey: ['imports'] })
     },
   })
 }

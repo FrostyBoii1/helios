@@ -1,7 +1,12 @@
 // Customer API calls (thin wrappers over apiFetch).
 
 import { apiFetch } from '@/lib/api'
-import type { Customer, CustomerInput, CustomerListResponse } from '@/types'
+import type {
+  Customer,
+  CustomerInput,
+  CustomerListResponse,
+  CustomerMergeResult,
+} from '@/types'
 
 export interface ListCustomersParams {
   q?: string
@@ -32,4 +37,12 @@ export function updateCustomer(id: number, input: Partial<CustomerInput>): Promi
 
 export function deleteCustomer(id: number): Promise<void> {
   return apiFetch<void>(`/customers/${id}`, { method: 'DELETE' })
+}
+
+// B4-2: explicitly merge the loser customer into the winner (admin-only on the
+// backend). Returns the merge summary (surviving winner + moved/repointed counts).
+export function mergeCustomer(loserId: number, winnerId: number): Promise<CustomerMergeResult> {
+  return apiFetch<CustomerMergeResult>(`/customers/${loserId}/merge-into/${winnerId}`, {
+    method: 'POST',
+  })
 }

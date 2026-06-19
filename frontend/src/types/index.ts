@@ -69,6 +69,22 @@ export interface CustomerListResponse {
   offset: number
 }
 
+// B4-2 customer merge result (mirrors backend schemas.customer.CustomerMergeResult).
+// `ids` is empty for kinds reported count-only (e.g. moved activities).
+export interface MergeMovedCount {
+  count: number
+  ids: number[]
+}
+
+export interface CustomerMergeResult {
+  winner: Customer
+  loser_id: number
+  merged_at: string
+  moved: Record<string, MergeMovedCount>            // jobs / tasks / documents / activities
+  repointed_import: Record<string, MergeMovedCount> // rows_committed / rows_resolved / groups_committed
+  notes_appended: boolean
+}
+
 export type JobStatus =
   | 'new'
   | 'awaiting_approval'

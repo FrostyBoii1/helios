@@ -185,9 +185,14 @@ These are stubbed/absent and represent the next phases:
   (head stays `e9f0a1b2c3d4`). **Reverse safety:** `reversibility()` gains a
   `job_customer_mismatch` guard and the merge bumps moved `Job.updated_at` so a post-merge
   reverse is blocked by `job_modified` — a merged job can never be reversed into deleting the
-  winner (Prepare recommit is the correction path). No frontend merge UI, no merged-loser
-  `GET`/search redirect, no unmerge yet. **(B4 — proposed)** auto-link/merge for identical
-  names.
+  winner (Prepare recommit is the correction path). **(B4-3 — built)** an admin-only
+  **"Merge into…"** action on Customer Detail drives this: a modal searches/selects another
+  live customer (the winner), shows an explicit confirmation/preview (winner fields stay
+  authoritative; loser notes appended; jobs/tasks/documents/activities/import links move; loser
+  hidden; no unmerge), then `POST`s the merge, invalidates caches, and navigates to the winner.
+  Frontend-only (+ a `CustomerMergeResult` type). Still deferred: stale merged-loser
+  `GET`/search redirect, unmerge, and batch merge. **(B4 — proposed)** auto-link/merge for
+  identical names.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.
