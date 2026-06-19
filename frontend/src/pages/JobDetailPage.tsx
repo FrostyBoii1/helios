@@ -266,10 +266,15 @@ export function JobDetailPage() {
         </div>
       )}
 
+      {/* Other jobs for this multi-job customer — surfaced near the top (mirrors the Customer
+          page showing the jobs list first) so sibling jobs are reachable without returning to
+          the Customer page. Excludes the current job; hidden when this is the only job. */}
+      <CustomerOtherJobsPanel customerId={job.customer_id} currentJobId={job.id} />
+
       {/* Two columns: status + details on the left, a tall manual internal-notes
           panel on the right (sticky). Tasks/documents/timeline stay full-width
           below this grid. */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="flex min-w-0 flex-col gap-4">
           {/* Status + install date controls */}
           <div className="grid gap-4 sm:grid-cols-2">
@@ -526,10 +531,6 @@ export function JobDetailPage() {
           />
         </aside>
       </div>
-
-      {/* Other jobs for this multi-job customer — open a sibling job without going
-          back to the Customer page. Hidden when this is the customer's only job. */}
-      <CustomerOtherJobsPanel customerId={job.customer_id} currentJobId={job.id} />
 
       {/* Tasks + timeline are live; Documents remains a later phase. */}
       <div className="mt-6">

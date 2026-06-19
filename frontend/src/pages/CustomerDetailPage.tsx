@@ -9,8 +9,6 @@ import { MergeCustomerModal } from '@/components/MergeCustomerModal'
 import { TasksPanel } from '@/components/TasksPanel'
 import { Timeline } from '@/components/Timeline'
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
-import { useJobs } from '@/hooks/useJobs'
-import { distinctJobSites } from '@/lib/addressDisplay'
 import { ApiError } from '@/lib/api'
 import type { CustomerInput, CustomerMergedDetail } from '@/types'
 
@@ -53,9 +51,6 @@ export function CustomerDetailPage() {
   const { data: customer, isLoading, isError, error: customerError } = useCustomer(customerId)
   const updateMutation = useUpdateCustomer(customerId)
   const deleteMutation = useDeleteCustomer()
-  // Stage 1: reuse the SAME jobs query key as CustomerJobsPanel (React Query dedupes →
-  // one fetch) to roll the customer's distinct job sites into a read-only summary card.
-  const jobsQuery = useJobs({ customer_id: customerId, limit: 50 })
 
   const [editing, setEditing] = useState(false)
   const [merging, setMerging] = useState(false)
@@ -141,10 +136,6 @@ export function CustomerDetailPage() {
     }
   }
 
-  // Distinct job-site addresses (deduped, first-seen order) for the read-only summary
-  // card below. Empty (and the card hidden) when no job has a usable details.site.
-  const jobSites = distinctJobSites(jobsQuery.data?.items ?? [])
-
   return (
     <div>
       <Link to="/customers" className="text-sm text-muted underline hover:text-fg">
@@ -199,22 +190,6 @@ export function CustomerDetailPage() {
           surfaced here. */}
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="flex min-w-0 flex-col gap-6">
-          {/* Stage 1: read-only roll-up of the customer's DISTINCT job sites (deduped
-              across jobs[].details.site). Complementary to the per-job Site column in the
-              Jobs panel above — no statuses/case numbers/labels/rows/actions. Hidden when
-              there are no usable job sites. */}
-          {jobSites.length > 0 && (
-            <div className="card p-5">
-              <h2 className="eyebrow mb-3">Job sites ({jobSites.length})</h2>
-              <ul className="flex flex-col gap-1 text-sm text-fg">
-                {jobSites.map((site, i) => (
-                  <li key={i} className="break-words">
-                    {site}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
           <div className="card p-5">
             <h2 className="eyebrow mb-3">Details</h2>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
@@ -259,7 +234,7 @@ export function CustomerDetailPage() {
           {/* "Known customer details": additional customer-LEVEL contact sets on record
               for this customer (from merges, imports and manual entry), part of the same
               customer-details area as the primary Details above — which stays the source of
-              truth. Job-site addresses are NOT shown here (see the Job sites panel). Hidden
+              truth. Per-job site addresses are shown in the Jobs table's Site column. Hidden
               for non-admins when there are none. */}
           <AlternateContactDetailsCard customerId={customer.id} />
 
