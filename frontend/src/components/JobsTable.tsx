@@ -10,11 +10,12 @@ import type { Job } from '@/types'
 
 interface JobsTableProps {
   jobs: Job[]
-  /** Whether to show the Customer column (hidden inside a customer's own panel). */
+  /** Whether to show the customer Name column (hidden inside a customer's own panel,
+   *  where the customer is already known). */
   showCustomer?: boolean
-  /** G (Stage 1): show each job's OWN site address (from details.site) instead of the
-   *  customer's suburb/state — used in a customer's jobs panel so multi-site jobs are
-   *  distinguishable. The global jobs list keeps the customer Suburb/State for now. */
+  /** Show each job's OWN site address (from details.site) instead of the customer's
+   *  suburb/state. Used by the customer jobs panels AND the global jobs list, so a job's
+   *  site is visible per row. */
   showSite?: boolean
   emptyMessage?: string
   loading?: boolean
@@ -46,7 +47,7 @@ export function JobsTable({
   error = false,
 }: JobsTableProps) {
   const navigate = useNavigate()
-  // Columns: Case # · [Customer] · Suburb/State · Status · Labels · Install date.
+  // Columns: Case # · Site/Suburb · [Name] · Status · Labels · Install date.
   const colSpan = showCustomer ? 6 : 5
 
   return (
@@ -55,8 +56,8 @@ export function JobsTable({
         <thead className="border-b border-line bg-elevated text-muted">
           <tr>
             <th className="px-4 py-2 font-medium">Case #</th>
-            {showCustomer && <th className="px-4 py-2 font-medium">Customer</th>}
             <th className="px-4 py-2 font-medium">{showSite ? 'Site' : 'Suburb/State'}</th>
+            {showCustomer && <th className="px-4 py-2 font-medium">Name</th>}
             <th className="px-4 py-2 font-medium">Status</th>
             <th className="px-4 py-2 font-medium">Labels</th>
             <th className="px-4 py-2 font-medium">Install date</th>
@@ -81,12 +82,12 @@ export function JobsTable({
                 <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-brand-400">
                   {job.case_number}
                 </td>
-                {showCustomer && (
-                  <td className="px-4 py-2 text-fg">{job.customer.full_name}</td>
-                )}
                 <td className="whitespace-nowrap px-4 py-2 text-muted">
                   {showSite ? jobSite(job) : suburbState(job.customer)}
                 </td>
+                {showCustomer && (
+                  <td className="px-4 py-2 text-fg">{job.customer.full_name}</td>
+                )}
                 <td className="px-4 py-2">
                   <JobStatusBadge status={job.status} />
                 </td>

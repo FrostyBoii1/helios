@@ -86,6 +86,7 @@ export function JobsListPage() {
       <JobsTable
         jobs={data?.items ?? []}
         showCustomer
+        showSite
         loading={isLoading}
         error={isError}
         emptyMessage={q || status || label ? 'No jobs match your filters.' : 'No jobs yet.'}
