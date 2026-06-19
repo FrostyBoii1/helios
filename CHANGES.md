@@ -9,6 +9,30 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — Cleanup: reconcile job_label_definitions.key model↔DB drift (unique index)
+
+- **What:** a pre-existing model↔DB drift on `job_label_definitions.key` that kept surfacing in
+  `alembic check` / autogenerate (noted across the B4 audits) is resolved. The model declares the
+  column `unique=True, index=True` (a single UNIQUE index), but the original Phase-L1 migration
+  (`e3c4d5f6a7b8`) redundantly created **both** a unique constraint (`uq_job_label_definitions_key`)
+  **and** a separate **non-unique** index (`ix_job_label_definitions_key`). New migration
+  **`f0a1b2c3d4e5`** collapses that pair into the single UNIQUE index the model expects (drops the
+  constraint + non-unique index, creates a unique index). `alembic check` is now clean for this table.
+- **Why:** the persistent drift kept appearing in schema checks; reconciling it closes the B4 area.
+- **Investigation (verified before applying):** uniqueness is **intended** (keys are stable
+  identifiers; the label service looks up by `key` and treats keys as unique) and was **already
+  enforced** (by the unique constraint), so this is a representational reconcile, **not** adding
+  missing uniqueness; **zero duplicate keys** exist; nothing references the dropped object names
+  (only the original migration did) and no FK targets `key` (FKs point at `id`).
+- **No data change:** DDL only on the label catalogue; the seeded rows are untouched. Reversible
+  (downgrade restores the original constraint + non-unique index). Head moves
+  `e9f0a1b2c3d4` → **`f0a1b2c3d4e5`**.
+- **Files:** `backend/alembic/versions/f0a1b2c3d4e5_unique_job_label_key.py` (new),
+  `backend/tests/test_job_labels.py` (a focused duplicate-key-rejected test protecting the
+  invariant), `docs/database_schema.md` (migration chain/head).
+- **Temporary or permanent:** Permanent.
+- **Risks / follow-up:** none — unrelated to B4 merge logic; merge/customer code untouched.
+
 ## 2026-06-19 — B4-4: existing-customer merge — merged-loser URL polish (no migration)
 
 - **What:** a stale/bookmarked URL for a customer that was **merged away** no longer feels like

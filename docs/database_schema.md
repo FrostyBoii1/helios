@@ -235,10 +235,13 @@ customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
   `resolved_by_id`, `resolved_at`) → **`d8e9f0a1b2c3` `import_customer_groups` table
   + `import_rows.customer_group_id`** (B3-2) → **`e9f0a1b2c3d4` `customers.merged_into_customer_id`
   + `customers.merged_at`** (B4-1: customer-merge storage foundation — additive nullable
-  columns + index + self-FK, no backfill, reversible; no execution). The current Alembic
-  **head is `e9f0a1b2c3d4`**. The commit-to-live, reverse, and case-year-guard work (and the
-  later B2-2/B2-3, B3-3/B3-4 wiring) added **no** further migrations — they read the
-  existing columns at commit/preview/reverse and in the UI (string-enum values only).
-  **B4-2 (customer-merge execution) likewise adds NO migration** — it reuses the B4-1
-  `customers.merged_into_customer_id` / `merged_at` columns and the `CUSTOMER_MERGED`
-  string-enum value, so the head stays **`e9f0a1b2c3d4`**.
+  columns + index + self-FK, no backfill, reversible; no execution) → **`f0a1b2c3d4e5`**
+  (cleanup: reconcile the `job_label_definitions.key` model↔DB drift — collapse the redundant
+  unique-constraint + non-unique-index into the single UNIQUE index the model declares; no data
+  change, reversible). The current Alembic **head is `f0a1b2c3d4e5`**. The commit-to-live,
+  reverse, and case-year-guard work (and the later B2-2/B2-3, B3-3/B3-4 wiring) added **no**
+  further migrations — they read the existing columns at commit/preview/reverse and in the UI
+  (string-enum values only). **B4-2/B4-3/B4-4 (customer-merge execution, UI, merged-loser URL
+  polish) likewise add NO migration** — they reuse the B4-1 `customers.merged_into_customer_id` /
+  `merged_at` columns and the `CUSTOMER_MERGED` string-enum value; the only later migration is the
+  `f0a1b2c3d4e5` job-label-key drift reconcile above.

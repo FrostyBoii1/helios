@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -74,6 +76,18 @@ def test_migration_seeded_default_labels_exist(db_session: Session):
 def test_label_keys_unique(db_session: Session):
     keys = [d.key for d in svc.list_label_definitions(db_session)]
     assert len(keys) == len(set(keys))
+
+
+def test_label_key_duplicate_rejected(db_session: Session):
+    """The DB enforces unique label keys (a unique constraint before the drift
+    reconcile, a single UNIQUE index after) — inserting a second definition with an
+    existing key must fail. Protects the uniqueness invariant across the migration."""
+    existing = svc.list_label_definitions(db_session)[0].key
+    sp = db_session.begin_nested()  # contain the integrity failure to a savepoint
+    db_session.add(JobLabelDefinition(key=existing, name="Dup", category=JobLabelCategory.CUSTOM))
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+    sp.rollback()
 
 
 def test_get_definitions_returns_seeded_in_stable_order(client_for, users):
