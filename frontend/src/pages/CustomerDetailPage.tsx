@@ -10,7 +10,8 @@ import { Timeline } from '@/components/Timeline'
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
 import { useJobs } from '@/hooks/useJobs'
 import { distinctJobSites } from '@/lib/addressDisplay'
-import type { CustomerInput } from '@/types'
+import { ApiError } from '@/lib/api'
+import type { CustomerInput, CustomerMergedDetail } from '@/types'
 
 // `notes` (imported source) and `internal_notes` (manual) are handled by their
 // own dedicated panels, NOT this editable grid.
@@ -25,13 +26,30 @@ const EDITABLE_FIELDS: { key: keyof CustomerInput; label: string }[] = [
   { key: 'postcode', label: 'Postcode' },
 ]
 
+// B4-4: read the structured "merged into X" detail off a 404 error, if present.
+// Returns null for any other error (generic 404, network, etc.).
+function mergedDetail(error: unknown): CustomerMergedDetail | null {
+  if (!(error instanceof ApiError) || error.status !== 404) return null
+  const d = error.detail
+  if (
+    d != null &&
+    typeof d === 'object' &&
+    (d as { reason?: unknown }).reason === 'merged' &&
+    typeof (d as { merged_into_customer_id?: unknown }).merged_into_customer_id === 'number' &&
+    typeof (d as { merged_into_name?: unknown }).merged_into_name === 'string'
+  ) {
+    return d as CustomerMergedDetail
+  }
+  return null
+}
+
 export function CustomerDetailPage() {
   const { id } = useParams()
   const customerId = Number(id)
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const { data: customer, isLoading, isError } = useCustomer(customerId)
+  const { data: customer, isLoading, isError, error: customerError } = useCustomer(customerId)
   const updateMutation = useUpdateCustomer(customerId)
   const deleteMutation = useDeleteCustomer()
   // Stage 1: reuse the SAME jobs query key as CustomerJobsPanel (React Query dedupes →
@@ -59,6 +77,26 @@ export function CustomerDetailPage() {
 
   if (isLoading) return <p className="text-muted">Loading…</p>
   if (isError || !customer) {
+    // B4-4: a stale/bookmarked URL for a customer that was MERGED away gets a clear
+    // "merged into X" notice + a link to the winner, instead of a mystery 404.
+    const merged = mergedDetail(customerError)
+    if (merged) {
+      const to = `/customers/${merged.merged_into_customer_id}`
+      return (
+        <div>
+          <p className="text-fg">
+            This customer was merged into{' '}
+            <Link to={to} className="text-brand-400 underline hover:text-fg">
+              {merged.merged_into_name}
+            </Link>
+            .
+          </p>
+          <Link to={to} className="btn-primary mt-3 inline-block px-3 py-1.5 text-sm">
+            Go to {merged.merged_into_name}
+          </Link>
+        </div>
+      )
+    }
     return (
       <div>
         <p className="text-red-400">Customer not found.</p>

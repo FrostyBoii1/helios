@@ -190,9 +190,15 @@ These are stubbed/absent and represent the next phases:
   live customer (the winner), shows an explicit confirmation/preview (winner fields stay
   authoritative; loser notes appended; jobs/tasks/documents/activities/import links move; loser
   hidden; no unmerge), then `POST`s the merge, invalidates caches, and navigates to the winner.
-  Frontend-only (+ a `CustomerMergeResult` type). Still deferred: stale merged-loser
-  `GET`/search redirect, unmerge, and batch merge. **(B4 — proposed)** auto-link/merge for
-  identical names.
+  Frontend-only (+ a `CustomerMergeResult` type). **(B4-4 — built)** a stale/bookmarked
+  merged-loser URL no longer feels like a mystery 404: `GET /customers/{merged_loser_id}` still
+  returns 404 (deleted stays hidden) but with an enriched detail `{reason:"merged",
+  merged_into_customer_id, merged_into_name}` resolved to the final live winner via
+  `resolve_active_customer`; Customer Detail shows a "merged into {name}" notice + link to the
+  winner (no auto-navigation, no 3xx redirect, no soft-deleted loser data). Missing /
+  normally-deleted / broken-chain / cyclic ids keep the plain 404; list/search and import
+  matching are unchanged. Still deferred: unmerge and batch merge. **(B4 — proposed)**
+  auto-link/merge for identical names.
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

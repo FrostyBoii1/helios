@@ -80,6 +80,20 @@ def get_customer(
 ) -> CustomerRead:
     customer = customers_service.get_customer(db, customer_id)
     if customer is None:
+        # B4-4: a merged loser is hidden (deleted_at) but should not feel like a
+        # mystery 404 — point a stale/bookmarked loser URL at the live winner it was
+        # merged into. Deleted customers stay hidden (no loser data is exposed); only
+        # genuinely-merged losers with a resolvable live winner get the enriched body.
+        winner = customers_service.merged_winner_for(db, customer_id)
+        if winner is not None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "reason": "merged",
+                    "merged_into_customer_id": winner.id,
+                    "merged_into_name": winner.full_name,
+                },
+            )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
     return CustomerRead.model_validate(customer)
 

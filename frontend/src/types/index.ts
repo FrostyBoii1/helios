@@ -85,6 +85,15 @@ export interface CustomerMergeResult {
   notes_appended: boolean
 }
 
+// B4-4: the structured detail body on a 404 for a MERGED loser customer (GET
+// /customers/{id}). Lets the detail page show a "merged into X" notice + link
+// instead of a mystery "Customer not found".
+export interface CustomerMergedDetail {
+  reason: 'merged'
+  merged_into_customer_id: number
+  merged_into_name: string
+}
+
 export type JobStatus =
   | 'new'
   | 'awaiting_approval'

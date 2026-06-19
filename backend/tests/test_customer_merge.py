@@ -171,7 +171,14 @@ def test_merge_logs_activity_with_meta(users, db_session: Session):
     customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=winner.id, actor_id=admin_id)
     db_session.flush()
 
-    act = db_session.scalar(select(Activity).where(Activity.activity_type == ActivityType.CUSTOMER_MERGED))
+    # Scope to THIS winner — the shared dev DB may already hold other CUSTOMER_MERGED
+    # activities (e.g. a real manual merge), so a type-only query is not unique.
+    act = db_session.scalar(
+        select(Activity).where(
+            Activity.activity_type == ActivityType.CUSTOMER_MERGED,
+            Activity.customer_id == winner.id,
+        )
+    )
     assert act is not None
     assert act.customer_id == winner.id  # attached to the surviving winner
     assert act.actor_id == admin_id
@@ -298,3 +305,73 @@ def test_merge_rolls_back_on_error(users, db_session: Session, monkeypatch):
     assert lo.merged_into_customer_id is None
     assert _count_where(db_session, Job, customer_id=loser.id) == 1
     assert _count_where(db_session, Job, customer_id=winner.id) == 0
+
+
+# --------------------------------------------------------------------------- #
+# B4-4: GET /customers/{id} merged-loser notice (enriched 404; deleted stay hidden)
+# --------------------------------------------------------------------------- #
+def test_get_active_customer_still_200(client_for, users, db_session: Session):
+    c = _customer(db_session, "Active GET")
+    db_session.flush()
+    resp = client_for(users["support"]).get(f"/api/v1/customers/{c.id}")
+    assert resp.status_code == 200
+    assert resp.json()["id"] == c.id
+
+
+def test_get_missing_customer_plain_404(client_for, users):
+    resp = client_for(users["support"]).get("/api/v1/customers/999999")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Customer not found"
+
+
+def test_get_soft_deleted_non_merged_plain_404(client_for, users, db_session: Session):
+    c = _customer(db_session, "Deleted Not Merged")
+    c.deleted_at = datetime.now(timezone.utc)  # deleted but NOT merged
+    db_session.flush()
+    resp = client_for(users["support"]).get(f"/api/v1/customers/{c.id}")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Customer not found"
+
+
+def test_get_merged_loser_enriched_404(client_for, users, db_session: Session):
+    admin_id = users["admin"].id
+    loser = _customer(db_session, "Merged Loser GET")
+    winner = _customer(db_session, "Merge Winner GET")
+    db_session.flush()
+    customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=winner.id, actor_id=admin_id)
+    db_session.flush()
+    resp = client_for(users["support"]).get(f"/api/v1/customers/{loser.id}")
+    assert resp.status_code == 404
+    detail = resp.json()["detail"]
+    assert detail["reason"] == "merged"
+    assert detail["merged_into_customer_id"] == winner.id
+    assert detail["merged_into_name"] == winner.full_name
+
+
+def test_get_merged_loser_multi_hop_resolves_to_final_winner(client_for, users, db_session: Session):
+    admin_id = users["admin"].id
+    loser = _customer(db_session, "Chain L")
+    mid = _customer(db_session, "Chain M")
+    winner = _customer(db_session, "Chain W")
+    db_session.flush()
+    customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=mid.id, actor_id=admin_id)
+    customers_service.merge_customers(db_session, loser_id=mid.id, winner_id=winner.id, actor_id=admin_id)
+    db_session.flush()
+    resp = client_for(users["support"]).get(f"/api/v1/customers/{loser.id}")
+    assert resp.status_code == 404
+    detail = resp.json()["detail"]
+    assert detail["reason"] == "merged"
+    assert detail["merged_into_customer_id"] == winner.id  # the FINAL winner, not the mid hop
+
+
+def test_get_merged_loser_deadend_winner_deleted_plain_404(client_for, users, db_session: Session):
+    admin_id = users["admin"].id
+    loser = _customer(db_session, "Deadend L")
+    winner = _customer(db_session, "Deadend W")
+    db_session.flush()
+    customers_service.merge_customers(db_session, loser_id=loser.id, winner_id=winner.id, actor_id=admin_id)
+    winner.deleted_at = datetime.now(timezone.utc)  # winner later soft-deleted -> chain dead-ends
+    db_session.flush()
+    resp = client_for(users["support"]).get(f"/api/v1/customers/{loser.id}")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Customer not found"  # falls back to plain 404

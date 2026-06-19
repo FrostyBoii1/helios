@@ -67,6 +67,24 @@ def resolve_active_customer(db: Session, customer_id: int) -> Customer | None:
     return None
 
 
+def merged_winner_for(db: Session, customer_id: int) -> Customer | None:
+    """If ``customer_id`` is a MERGED loser, return the final LIVE winner it resolves
+    to; else None. Pure read (B4-4).
+
+    A merged loser is a row that EXISTS, is soft-deleted, and carries
+    ``merged_into_customer_id``. For one, chain-walk ``merged_into`` to the live winner
+    via :func:`resolve_active_customer`. Returns None for a non-existent id, a normally
+    soft-deleted (non-merged) customer, or a chain that dead-ends at a deleted/cyclic
+    target — the caller (GET /customers/{id}) then falls back to a plain 404. Used only
+    to turn a stale merged-loser URL into an explicit "merged into X" notice; it never
+    exposes the loser's own (soft-deleted) data.
+    """
+    raw = db.get(Customer, customer_id)
+    if raw is None or raw.merged_into_customer_id is None:
+        return None
+    return resolve_active_customer(db, customer_id)
+
+
 def list_customers(
     db: Session,
     *,

@@ -9,6 +9,33 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-19 — B4-4: existing-customer merge — merged-loser URL polish (no migration)
+
+- **What:** a stale/bookmarked URL for a customer that was **merged away** no longer feels like
+  a mystery 404. `GET /customers/{merged_loser_id}` **still returns 404** (deleted customers stay
+  hidden), but when the loser resolves to a **live winner** the body is now an enriched detail
+  `{ reason: "merged", merged_into_customer_id, merged_into_name }` — chain-walked to the final
+  live winner via the (previously dormant) B4-1 `resolve_active_customer`. Customer Detail renders
+  a clear **"This customer was merged into {name}"** notice with a button/link to the winner.
+- **Why:** B4-2 already repointed every in-app reference to the winner, so the only rough edge was
+  a direct/external loser URL landing on a generic "Customer not found."
+- **Deliberate non-behaviors:** **no auto-navigation** (the user clicks the link); **no 3xx
+  redirect** (a `fetch`-following SPA would silently swap identity); **no 200 with soft-deleted
+  loser data** (the loser's own fields are never exposed — only the live winner's id + name).
+- **Unchanged / fallback:** missing customers, normally soft-deleted **non-merged** customers,
+  broken/dead-end chains, and cycles all keep the **plain** 404. `list`/search is unchanged
+  (already excludes losers via `deleted_at`); import matching is unchanged (B4-2 repoint already
+  makes it safe); merge execution is unchanged. **No** migration/model/schema change — schema head
+  stays **`e9f0a1b2c3d4`**.
+- **Files:** `backend/app/services/customers.py` (`merged_winner_for` helper),
+  `backend/app/api/v1/endpoints/customers.py` (enriched-404 branch),
+  `frontend/src/pages/CustomerDetailPage.tsx` (merged notice + strict guard),
+  `frontend/src/types/index.ts` (`CustomerMergedDetail`),
+  `backend/tests/test_customer_merge.py` (6 GET tests; a B4-2 activity test scoped to be robust
+  against real dev-DB merge data) (+ docs).
+- **Temporary or permanent:** Permanent.
+- **Still deferred:** unmerge; batch merge; any search/import chain-follow (not needed).
+
 ## 2026-06-19 — B4-3: existing-customer merge — frontend admin UI (no backend change)
 
 - **What:** an admin-only **"Merge into…"** action on the Customer Detail page that drives the
