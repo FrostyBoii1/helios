@@ -1,0 +1,4091 @@
+version: hardware_parser_runtime_rules_v9_validation_clean
+encoding_policy:
+  normalise_mojibake: true
+  replace:
+    ×: ×
+    ·: ·
+  ascii_safe_equivalents:
+    ×: x
+    ·: '-'
+output_shape:
+  inverters: []
+  batteries: []
+  metering: []
+  site_notes:
+    ct: []
+    export_limit: []
+    underground: []
+    comms: []
+    raw_misc: []
+  job_internal_notes_display: []
+  raw_evidence: null
+  parser_rule_version: hardware_parser_rules_v8
+confidence_levels:
+- exact
+- alias
+- inferred_from_capacity
+- unconfirmed_raw_text
+- manual_review
+- manual_correction
+parser_priority_order:
+- normalise_text_encoding
+- extract_quantities
+- extract_full_raw_test_fixture_matches
+- extract_batteries
+- extract_metering
+- extract_site_notes_ct_export_underground_wifi_comms
+- extract_inverters
+- preserve_unmatched_hardware_as_editable_raw_text
+- attach_warnings_and_rule_version
+manual_edit_rules:
+  hardware_fields_are_editable_textboxes: true
+  hardware_fields_are_not_dropdowns: true
+  parser_can_seed_blank_fields: true
+  parser_can_update_parser_owned_fields: true
+  parser_cannot_overwrite_manually_edited_hardware_without_confirmation: true
+  preserve_imported_raw_evidence: true
+  unmatched_hardware_goes_to_editable_hardware_textbox_not_internal_notes: true
+  continue_scanning_unmatched_strings_for_metering_ct_export_underground_comms: true
+hardware_catalog:
+- id: alpha_ess_smile_g3_b5_inv
+  category: inverter
+  canonical_model: Alpha ESS SMILE-G3-B5-INV
+  manufacturer: Alpha ESS
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - Alpha ESS SMILE-G3-B5-INV
+  loose_aliases: []
+  source_examples:
+  - Alpha ESS SMILE-G3-B5-INV + Alpha ESS SMILE-M-BAT-13.9P · 13.99kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: alpha_ess_smile_g3_s5_inv
+  category: inverter
+  canonical_model: Alpha ESS SMILE-G3-S5-INV
+  manufacturer: Alpha ESS
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - Alpha ESS SMILE-G3-S5-INV
+  loose_aliases: []
+  source_examples:
+  - Alpha ESS SMILE-G3-S5-INV + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh - 13.3p + ext
+  - Alpha ESS SMILE-G3-S5-INV + Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - Alpha ESS SMILE-G3-S5-INV + Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - Alpha ESS SMILE-G3-S5-INV + Alpha ESS SMILE-M-BAT-13.9P · 13.99kWh
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-G3-S5-INV + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: alpha_ess_smile_m5_inverter
+  category: inverter
+  canonical_model: Alpha ESS SMILE-M5 inverter
+  manufacturer: Alpha ESS
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - Alpha ESS SMILE-M5 inverter
+  - UPGRADE TO M5 30KW
+  loose_aliases: []
+  source_examples:
+  - 1 × Alpha ESS SMILE-M5 -INVERTER + 6 x SMILE M-BAT 5P BATTERIES - 30KW TOTAL
+  - 2 × Alpha ESS SMILE-BAT-13.9/M5 -5KW INVERTER
+  - 2 × Alpha ESS SMILE-BAT-13.9/M5 5KW INVERTER
+  - ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY and 5kw inverter - use 3 tracker one there - let andrew have the X1-Boost
+  - Alpha ESS M5 5kw inverter/Alpha ESS M5 13.9kw hr battery
+  - Alpha ESS SMILE-M-BAT-13.9P/M5 INVERTER
+  - Alpha ESS Smile M5 inverter/Alpha ESS SMILE-M-BAT-5PIII - 15kw batt
+  - ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: alpha_ess_smile_m5_s_inv
+  category: inverter
+  canonical_model: Alpha ESS SMILE-M5-S-INV
+  manufacturer: Alpha ESS
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - Alpha ESS SMILE-M5-S-INV
+  loose_aliases: []
+  source_examples:
+  - 2 × Alpha ESS SMILE-M5-S-INV + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-G3-BAT-10.1P · 10.1kWh - M5
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-13.9P · 13.99kWh
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P III · 15kWh
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh + 3p meter
+  - Alpha ESS Smile M5 inverter/Alpha ESS SMILE-M-BAT-5PIII - 15kw batt
+  - Alpha M5 Inv/Alpha M5 10kw Battery with 3 phase meter
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-M5-S-INV + 1 × Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE M5 20KW BATTERY
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-SMT-5K-G2+ Alpha ESS SMILE-M5-S-INV+ Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - Solis 5kw + Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P II · 10kWh
+  - Alpha ESS Smile M5/15kw Alpha Stack
+  - Alpha ESS Smile M5/30kw Alpha Stack
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: alpha_ess_smile_s5
+  category: inverter
+  canonical_model: Alpha ESS SMILE-S5
+  manufacturer: Alpha ESS
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - Alpha ESS SMILE-S5
+  loose_aliases: []
+  source_examples:
+  - Alpha ESS SMILE-S5 + Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - Alpha ESS 10.1/Smile 5
+  - Alpha ESS SMILE-S5/SMILE-BAT-13.3P
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: alpha_ess_smile_s5_iii
+  category: inverter
+  canonical_model: Alpha ESS SMILE-S5 III
+  manufacturer: Alpha ESS
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - Alpha ESS SMILE-S5 III
+  loose_aliases: []
+  source_examples:
+  - 1 × Alpha ESS SMILE-S5 III + 1 × Alpha ESS SMILE-BAT-13.3P
+  - Alpha ESS SMILE-S5 III + 2 × Alpha ESS SMILE-BAT-13.3P
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: alpha_ess_smile_s5_v
+  category: inverter
+  canonical_model: Alpha ESS SMILE-S5 V
+  manufacturer: Alpha ESS
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - Alpha ESS SMILE-S5 V
+  loose_aliases: []
+  source_examples:
+  - 1 × Alpha ESS SMILE-S5 V + 1 × Alpha ESS SMILE-BAT-13.3P + ext 13.3P
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: alpha_ess_smile5_inv
+  category: inverter
+  canonical_model: Alpha ESS SMILE5-INV
+  manufacturer: Alpha ESS
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - Alpha ESS SMILE5-INV
+  loose_aliases: []
+  source_examples:
+  - 1 X 13.3P ALPHA Smile 5 inv + Extension 13.3P
+  - 1 X 13.3P ALPHA Smile 5 inv + Extension 13.3P + 3p meter
+  - 2 x Smile 5 inverters and 2 x Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - 2 × Alpha ESS SMILE-BAT-13.3P batteries/Smile5 Inverters
+  - 3 x alpha ess 13.3p and smile5 inverter
+  - Alpha ESS SMILE-BAT-13.3P · 13.3kWh + SMILE5 INV + 3phase meter
+  - Alpha ESS SMILE5-INV (AS4777-2 2020) + Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - Alpha ESS SMILE5-INV + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - Alpha ESS SMILE5-INV + Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - Alpha ESS SMILE5-INV + Alpha ESS SMILE-BAT-13.3P · 13.34kWh + meter
+  - Alpha ESS SMILE5-INV + × Alpha ESS SMILE-BAT-13.3P
+  - Alpha ESS SMILE5-INV · 5000W + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh - 2 FULL 13.3
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: fronius_eco_25_0_3_s
+  category: inverter
+  canonical_model: Fronius Eco 25.0-3-S
+  manufacturer: Fronius
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - Fronius Eco 25.0-3-S
+  loose_aliases: []
+  source_examples:
+  - 1 x Fronius Eco 25.0-3-S/1 x Lite
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: fronius_primo_gen24_10_0
+  category: inverter
+  canonical_model: Fronius Primo GEN24 10.0
+  manufacturer: Fronius
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - Fronius Primo GEN24 10.0
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: fronius_symo
+  category: inverter
+  canonical_model: Fronius Symo
+  manufacturer: Fronius
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - Fronius Symo
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: fronius_symo_gen24_10_0_plus
+  category: inverter
+  canonical_model: Fronius Symo GEN24 10.0 Plus
+  manufacturer: Fronius
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - Fronius Symo GEN24 10.0 Plus
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: fronius_verto_33_3
+  category: inverter
+  canonical_model: Fronius Verto 33.3
+  manufacturer: Fronius
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - Fronius Verto 33.3
+  loose_aliases: []
+  source_examples:
+  - 3 × Fronius Verto 33.3
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: goodwe_10kw
+  category: inverter
+  canonical_model: GOODWE 10KW
+  manufacturer: GoodWe
+  phases: unknown
+  nominal_kw: 10.0
+  exact_aliases: []
+  loose_aliases:
+  - Goodwe 10kw 3 Phase
+  source_examples:
+  - Goodwe 10kw + 5kw smart meter
+  - Goodwe 10kw + export meter
+  - Goodwe 10kw + meter
+  - GOODWE 10KW
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: goodwe_8kw
+  category: inverter
+  canonical_model: GOODWE 8KW
+  manufacturer: GoodWe
+  phases: unknown
+  nominal_kw: 8.0
+  exact_aliases:
+  - GOODWE 8KW
+  loose_aliases: []
+  source_examples:
+  - Goodwe 8kw + smart meter 5kw export
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: goodwe_gw10k_ms
+  category: inverter
+  canonical_model: GOODWE GW10K-MS
+  manufacturer: GoodWe
+  phases: unknown
+  nominal_kw: 10.0
+  exact_aliases:
+  - GOODWE GW10K-MS
+  - Goodwe 10kW (GW10K-MS)
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: goodwe_gw10kau_dt
+  category: inverter
+  canonical_model: GOODWE GW10KAU-DT
+  manufacturer: GoodWe
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - GOODWE GW10KAU-DT
+  - Goodwe 10kW (GW10KAU-DT)
+  loose_aliases: []
+  source_examples:
+  - Goodwe (GW10KAU-DT) + meter
+  - Goodwe GW10KAU-DT/smart meter
+  - GoodWe GW10KAU-DT/3 phase CT
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: goodwe_gw3000t_ds
+  category: inverter
+  canonical_model: GOODWE GW3000T-DS
+  manufacturer: GoodWe
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - GOODWE GW3000T-DS
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: goodwe_gw8500k_ms
+  category: inverter
+  canonical_model: GOODWE GW8500K-MS
+  manufacturer: GoodWe
+  phases: unknown
+  nominal_kw: 8500.0
+  exact_aliases:
+  - GOODWE GW8500K-MS
+  - Goodwe (GW8500K - MS)
+  - Goodwe 8.5kw
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: neovolt_bw_inv_spb5k
+  category: inverter
+  canonical_model: Neovolt BW-INV-SPB5K
+  manufacturer: Neovolt
+  phases: unknown
+  nominal_kw: 5.0
+  exact_aliases:
+  - Neovolt BW-INV-SPB5K
+  loose_aliases: []
+  source_examples:
+  - Neovolt BW-INV-SPB5K + 2 × Neovolt BW-BAT-10.1P · 10.1kWh to 1 × Alpha ESS SMILE-BAT-13.3P + extension 13.3p
+  - Neovolt BW-INV-SPB5K + NEOVOLT BW-BAT-10.1
+  - Neovolt BW-INV-SPB5K + Neovolt BW-BAT-10.1 P
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: neovolt_bw_inv_sph5k
+  category: inverter
+  canonical_model: Neovolt BW-INV-SPH5K
+  manufacturer: Neovolt
+  phases: unknown
+  nominal_kw: 5.0
+  exact_aliases:
+  - Neovolt BW-INV-SPH5K
+  loose_aliases: []
+  source_examples:
+  - BW-INV-SPH5K + 2 x BW-BAT-9.6P
+  - NEOVOLT 5KW DC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1
+  - NEOVOLT 5KW DC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1 + meter 2 phase
+  - Neovolt BW-INV-SPH5K + NEOVOLT BW-BAT-10.1
+  - Neovolt BW-INV-SPH5K + NEOVOLT BW-BAT-9.6P I · 9.6kWh
+  - SolaX Power X1-SMT-10K-G2 +Neovolt BW-INV-SPH5K +2 × Neovolt BW-BAT-9.6P
+  - SolaX Power X1-SMT-5K-G2+ NEOVOLT 5KW DC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1
+  - Neovolt BW-INV-SPH5K +Neovolt BW-BAT-9.6P
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: neovolt_bw_inv_tph10k
+  category: inverter
+  canonical_model: Neovolt BW-INV-TPH10K
+  manufacturer: Neovolt
+  phases: unknown
+  nominal_kw: 10.0
+  exact_aliases:
+  - Neovolt BW-INV-TPH10K
+  loose_aliases: []
+  source_examples:
+  - 1 x Neovolt 10kw 3phase and 6 x 4.8kw hr neovolt batteries
+  - 2 × Neovolt BW-INV-TPH10K + 10 × Neovolt BW-BAT-4.8S · 4.8kWh
+  - Neovolt BW-INV-TPH10K · 10000W + 6 × Neovolt BW-BAT-4.8S · 4.8kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: s5_eh1p5k_l
+  category: inverter
+  canonical_model: S5-EH1P5K-L
+  manufacturer: Solis
+  phases: unknown
+  nominal_kw: 5.0
+  exact_aliases:
+  - S5-EH1P5K-L
+  loose_aliases: []
+  source_examples:
+  - Solis S5-EH1P5K-L + Dyness Powerbox Pro · 10.24kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: s5_gr1p10k
+  category: inverter
+  canonical_model: S5-GR1P10K
+  manufacturer: Solis
+  phases: single_phase
+  nominal_kw: 10.0
+  exact_aliases:
+  - 10kW S5-GR1P10K
+  - S5-GR1P10K
+  - Solis (S5-GR1P10K)
+  - Solis S5-GR1P10K
+  - Solis S5-GR1P10K-AU
+  loose_aliases:
+  - Solis 10kw
+  source_examples:
+  - 10kw Solis + CT
+  - 10kw Solis + meter
+  - Solis 10kw + 5kw export
+  - Solis 10kw + 5kw export with meter
+  - Solis 10kw + CT
+  - Solis 10kw + CT - underground
+  - Solis 10kw + CT and Wifi
+  - Solis 10kw + Meter
+  - Solis 10kw + smart meter
+  - Solis S5-GR1P10K + METER
+  - Solis S5-GR1P10K + meter 2kw export
+  - Solis S5-GR1P10K + smart meter
+  - Solis S5-GR1P10K/SMART METER
+  - Solis S5-GR1P10K - smart meter
+  - Solis 10kw with meter
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: s5_gr1p5k
+  category: inverter
+  canonical_model: S5-GR1P5K
+  manufacturer: Solis
+  phases: single_phase
+  nominal_kw: 5.0
+  exact_aliases:
+  - S5-GR1P5K
+  - Solis (S5-GR1P5K)
+  - Solis 5kW (GR1P5K)
+  - Solis 5kW (S5-GR1P5K)
+  - Solis S5-GR1P5K
+  loose_aliases:
+  - 5kw Solis
+  source_examples:
+  - 2 X 5KW SOLIS WITH 1 METER
+  - 2 x Solis (S5-GR1P5K)
+  - 2 x Solis 5kw
+  - 2 x Solis 5kw + 1 export meter
+  - 2x Solis 5kw + 2 x smart meter or 1
+  - Solis (S5-GR1P5K) x 2
+  - Solis 5kw + Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P II · 10kWh
+  - Solis 5kw x 2
+  - Solis 5kw x 2 + ct meter
+  - Solis S5-GR1P5K + 1 x Alpha-ESS Smile5battery
+  - Solis S5-GR1P5K + Neovolt BW-BAT-9.6P Battery
+  - Solis S5-GR1P5K + meter
+  - Solis S5-GR1P5K + smart meter
+  - Solis 5kw and Vast 10kw and 21.6kw - install Vast and batteries only - Solis 5kw was installed
+  - Solis S5-GR1P5K - Alpha 20W battery
+  - Solis 5kw
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: s5_gr1p6k
+  category: inverter
+  canonical_model: S5-GR1P6K
+  manufacturer: Solis
+  phases: single_phase
+  nominal_kw: 6.0
+  exact_aliases:
+  - S5-GR1P6K
+  - Solis S5-GR1P6K
+  loose_aliases: []
+  source_examples:
+  - Solis S5-GR1P6K - 3kw export
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: s5_gr3p10k_au
+  category: inverter
+  canonical_model: S5-GR3P10K-AU
+  manufacturer: Solis
+  phases: three_phase
+  nominal_kw: 10.0
+  exact_aliases:
+  - S5-GR3P10K-AU
+  - Solis S5-GR3P10K
+  - Solis S5-GR3P10K-AU
+  loose_aliases: []
+  source_examples:
+  - Solis 10 3P + smart meter
+  - Solis 10kw 3 phase + smart meter
+  - Solis 3P 10kw + meter
+  - Solis S5-GR3P10K + 1 x Alpha ESS 13.3P + Extension 13.3P + 3p meter
+  - Solis S5-GR3P10K/meter
+  - 10kw Solis 3P with meter
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: s5_gr3p5k_au
+  category: inverter
+  canonical_model: S5-GR3P5K-AU
+  manufacturer: Solis
+  phases: three_phase
+  nominal_kw: 5.0
+  exact_aliases:
+  - CHANGED TO SOLIS 5KW 3 PHASE
+  - S5-GR3P5K-AU
+  - Solis (S5-GR3P5K-AU)
+  - Solis S5-GR3P5K
+  - Solis S5-GR3P5K (change on agreement)
+  - Solis S5-GR3P5K-AU
+  loose_aliases:
+  - Solis 3 Phase 5kw
+  - Solis 5kw - 3 phase
+  - Solis 5kw 3 phase
+  source_examples:
+  - Solis S5-GR3P5K-AU + meter
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_h2_10k_s3
+  category: inverter
+  canonical_model: SAJ H2-10K-S3
+  manufacturer: SAJ
+  phases: unknown
+  nominal_kw: 10.0
+  exact_aliases:
+  - SAJ H2-10K-S3
+  loose_aliases: []
+  source_examples:
+  - 1 x SAJ H2-10K-S3 and 2 x SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3 + 1 x SAJ B2-20.0-HV1
+  - SAJ H2-10K-S3 + 1 × SAJ B2-15.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 1 × SAJ B2-20.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 10 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 2 x SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3 + 2 x SAJ B2-15.0-HV1 · 25kWh
+  - SAJ H2-10K-S3 + 2 x SAJ B2-15.0-HV1 · 25kWh - 3 AND 3
+  - SAJ H2-10K-S3 + 2 x SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-10K-S3 + 2 × SAJ B2 15.0-HV1
+  - SAJ H2-10K-S3 + 2 × SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3 + 2 × SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-S3 + 2 × SAJ B2-15.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 3 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 3 × SAJ B2-5.0-HV5 · 5kWh
+  - SAJ H2-10K-S3 + 4 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 6 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 8 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + SAJ 30kw hr Battery
+  - SAJ H2-10K-S3 + SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-S3 + SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-10K-S3 + SAJ B2-25.0-HV1 · 25kWh
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-15.0-HV1 · 15kWh + FoxESS EV Charger · 7.3kW
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs
+  - SAJ H2-10K-S3-A + SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-S3-A + SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-10K-S3-AU + 3 × SAJ B2-20.0-HV1 · 5kWh
+  - Sanjing - (H2-10K-S3-A) + 4 x SAJ B2-5.0-HV5 batteries
+  - SAJ H2-10K-S3 Inverter - SAJ B2-5.0-HV1 - 30kw hr Battery
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_h2_10k_s3_a
+  category: inverter
+  canonical_model: SAJ H2-10K-S3-A
+  manufacturer: SAJ
+  phases: three_phase
+  nominal_kw: 10.0
+  exact_aliases:
+  - SAJ H2-10K-S3-A
+  loose_aliases: []
+  source_examples:
+  - 1 x SAJ H2-10K-S3 and 2 x SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-15.0-HV1 · 15kWh + FoxESS EV Charger · 7.3kW
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs
+  - SAJ H2-10K-S3-A + SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-S3-A + SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-10K-S3-AU + 3 × SAJ B2-20.0-HV1 · 5kWh
+  - Sanjing - (H2-10K-S3-A) + 4 x SAJ B2-5.0-HV5 batteries
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_h2_10k_t3_au
+  category: inverter
+  canonical_model: SAJ H2-10K-T3-AU
+  manufacturer: SAJ
+  phases: three_phase
+  nominal_kw: 10.0
+  exact_aliases:
+  - SAJ H2-10K-T3-AU
+  loose_aliases: []
+  source_examples:
+  - SAJ H2-10K-T3 + 2 × SAJ B2-15.0-HV1 · 5kWh + 4 x Optimisers
+  - SAJ H2-10K-T3-AU + SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-10K-T3-AU + SAJ HS3-6K-S2-W-P5-IE · 25kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_h2_15k_t3
+  category: inverter
+  canonical_model: SAJ H2-15K-T3
+  manufacturer: SAJ
+  phases: unknown
+  nominal_kw: 15.0
+  exact_aliases:
+  - SAJ H2-15K-T3
+  - UPGRADE TO 15KW SAJ 3phase - H2-15K-T3
+  loose_aliases: []
+  source_examples:
+  - SAJ 15KW 3P INVERTER AND 25KW BATTERIES
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_h2_20k_t3_au
+  category: inverter
+  canonical_model: SAJ H2-20K-T3-AU
+  manufacturer: SAJ
+  phases: three_phase
+  nominal_kw: 20.0
+  exact_aliases:
+  - SAJ H2-20K-T3-AU
+  loose_aliases: []
+  source_examples:
+  - SAJ 20KW 3P and SAJ B2-5.0HV1 x 6 batteries
+  - SAJ H2-20K-T3-AU + 2 x SAJ B2-15.0-HV1
+  - SAJ H2-20K-T3-AU + 2 × SAJ B2-15.0-HV1
+  - SAJ H2-20K-T3-AU + 2 × SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-20K-T3-AU + 2 × SAJ B2-15.0-HV1 · 15kWh/change to solax
+  - SAJ H2-20K-T3-AU + 5 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-20K-T3-AU + 6 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-20K-T3-AU + 8 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-20K-T3-AU + SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-20K-T3-AU + SAJ B2-25.0-HV1 · 25kWh
+  - SAJ 20KW 3 PHASE INVERTER - 40KW BATTERY STORAGE - 3phase
+  - SAJ 20KW AND 30KW BATTERY
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_h2_25k_t3_au
+  category: inverter
+  canonical_model: SAJ H2-25K-T3-AU
+  manufacturer: SAJ
+  phases: three_phase
+  nominal_kw: 25.0
+  exact_aliases:
+  - SAJ H2-25K-T3-AU
+  loose_aliases: []
+  source_examples:
+  - 1 x SAJ H2-25K-T3-AU and 2 × SAJ B2-25.0-HV1 · 25kWh
+  - SAJ 25KW 3P INVERTER AND 50KW BATTERY AND CONTACTOR FOR UNDERFLOOR/ONE SECTION
+  - SAJ H2-25K-T3-AU + 10 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-25K-T3-AU + 2 × SAJ B2-15.0-HV1 · 5kWh
+  - SAJ H2-25K-T3-AU + 2 × SAJ B2-25.0-HV1 · 25kWh
+  - SAJ H2-25K-T3-AU + 6 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-25K-T3-AU + 8 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-25K-T3-BE + 6 × SAJ B2-5.0-HV5 · 5kWh
+  - SAJ 25KW INVERTER AND 30KW STORAGE
+  - SAJ 25KW INVERTER AND 40KW STORAGE
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_h2_30k_t3_au
+  category: inverter
+  canonical_model: SAJ H2-30K-T3-AU
+  manufacturer: SAJ
+  phases: three_phase
+  nominal_kw: 30.0
+  exact_aliases:
+  - SAJ H2-30K-T3-AU
+  loose_aliases: []
+  source_examples:
+  - SAJ H2-30K-T3-AU + 10 × SAJ B2-5.0-HV1 · 5kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg10_0rs
+  category: inverter
+  canonical_model: SG10.0RS
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SG10.0RS
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg10_0rs_ada
+  category: inverter
+  canonical_model: SG10.0RS-ADA
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SG10.0RS-ADA
+  - SG10RS-ADA
+  - Sungrow (SG10.0RS-ADA)
+  - Sungrow SG10.0RS-ADA
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg10rs
+  category: inverter
+  canonical_model: SG10RS
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SG10RS
+  - SG10RS Sungrow
+  - Sungrow SG10RS
+  loose_aliases: []
+  source_examples:
+  - 2 x SG10RS
+  - SG10RS + meter 5kw export
+  - SG10RS/smart meter
+  - Sungrow SG10RS + meter
+  - Sungrow SG10RS + smart meter
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg10rt
+  category: inverter
+  canonical_model: SG10RT
+  manufacturer: Sungrow
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - SG10RT
+  - Sungrow (SG10RT)
+  - Sungrow Power SG10RT
+  - Sungrow SG10RT
+  loose_aliases:
+  - Sungrow 10kw 3 phase
+  source_examples:
+  - 1 x SG10RT
+  - 1 x Sungrow 10kw 3 Phase
+  - SG10RT + Sungrow Wifi Stick
+  - SG10RT/3 phase meter
+  - Sungrow 10kw 3 phase + smart meter
+  - Sungrow 3P 10KW + smart meter
+  - Sungrow SG10RT + meter
+  - Sungrow SG10RT + smart meter
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg15rt
+  category: inverter
+  canonical_model: SG15RT
+  manufacturer: Sungrow
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - SG15RT
+  - Sungrow (SG15RT)
+  - Sungrow Power SG15RT
+  - Sungrow SG15RT
+  loose_aliases: []
+  source_examples:
+  - SG15RT + smart meter
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg20rt
+  category: inverter
+  canonical_model: SG20RT
+  manufacturer: Sungrow
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - SG20RT
+  - Sungrow Power SG20RT
+  - Sungrow SG20RT
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg3_0rs
+  category: inverter
+  canonical_model: SG3.0RS
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SG3.0RS
+  loose_aliases: []
+  source_examples:
+  - SG3.0RS x 2
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg5_0rs
+  category: inverter
+  canonical_model: SG5.0RS
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SG5.0RS
+  - Sungrow (SG5.0RS)
+  - Sungrow Power SG5.0RS
+  - Sungrow SG5.0RS
+  loose_aliases:
+  - Sungrow 5kw - 3 tracker
+  - Sungrow Hybrid 5kw
+  source_examples:
+  - 2 x Sungrow (SG5.0RS) + 2 x meters
+  - 2 x Sungrow 5kw + 1 SBR128 battery
+  - 2 x Sungrow Hybrid 5kw/12kw batt
+  - 2 x Sungrow Hybrid 5kw/16kw hrs battery
+  - 2x Sungrow Hybrid 5kw + 1 SBR128 battery
+  - Sungrow Hybrid 2 x 5kw + 12.8kw batt
+  - Sungrow Hybrid/Sungrow 5kw + 12kw battery
+  - Sungrow x 2 (SG5.0RS-ADA)
+  - Sungrow/Sungrow Hybrid 5kw + meter
+  - Sungrow 5kw
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg5_0rs_ada
+  category: inverter
+  canonical_model: SG5.0RS-ADA
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SG5.0RS-ADA
+  - Sungrow 5kw - SG5.0RS-ADA
+  loose_aliases: []
+  source_examples:
+  - Sungrow x 2 (SG5.0RS-ADA)
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg5_0rt
+  category: inverter
+  canonical_model: SG5.0RT
+  manufacturer: Sungrow
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - SG5.0RT
+  - Sungrow (SG5.0RT)
+  - Sungrow SG5.0RT
+  loose_aliases: []
+  source_examples:
+  - 2 × Sungrow SG5.0RT + Alpha ESS SMILE-G3-BAT-10.1P
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg50cx
+  category: inverter
+  canonical_model: SG50CX
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SG50CX
+  loose_aliases: []
+  source_examples:
+  - 2 × Sungrow SG50CX
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sg8rt
+  category: inverter
+  canonical_model: SG8RT
+  manufacturer: Sungrow
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - SG8RT
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sh10rs
+  category: inverter
+  canonical_model: SH10RS
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SH10RS
+  - Sungrow SH10RS
+  loose_aliases: []
+  source_examples:
+  - 2 x SH10RS + SBR128
+  - 2 x Sungrow 5kw Hybrid/12.8KW sungrow batt
+  - 2 × Sungrow SH10RS + 2 × Sungrow SBR256 - 4 x PARALELL 12.8KW'S
+  - SH10RS + SBR128
+  - SH10RS + SBR128 Battery
+  - Sungrow (SH10RS) + SBR128
+  - Sungrow 10kw Hybrid/12.8kw Batt
+  - Sungrow 5kw/5kw Hybrid 12.8 Batt
+  - Sungrow 5kw/5kw Hybrid 3P + 12.8 Batt
+  - Sungrow Hybrid 2 x 5kw + 12.8kw batt
+  - Sungrow Hybrid/Sungrow - 12.8 batt
+  - Sungrow SH10RS + SBR128
+  - Sungrow SH10RS + SBR128 Battery
+  - Sungrow SH10RS + SBR160
+  - Sungrow SH10RS + SBR160 Battery
+  - Sungrow SH10RS + Sungrow SBR128
+  - Sungrow SH10RS + x 8
+  - Sungrow Sungrow SH10RS + 12.8kw hrs Sungrow Battery
+  - SH10RS - 12.8KW BATTERY
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sh10rs_ada
+  category: inverter
+  canonical_model: SH10RS-ADA
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SH10RS-ADA
+  loose_aliases: []
+  source_examples:
+  - 2 × Sungrow SH10RS-ADA
+  - Sungrow SH10RS-ADA + SBR128
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sh10rt
+  category: inverter
+  canonical_model: SH10RT
+  manufacturer: Sungrow
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - SH10RT
+  - Sungrow (SH10RT)
+  loose_aliases:
+  - Sungrow 10kw 3 phase Hybrid
+  source_examples:
+  - 1 x SH10RT + SBR160
+  - SH10RT + SBR128
+  - SH10RT + SBR192
+  - Sungrow 10kW (SH10RT) + SBR128
+  - Sungrow 10kW SH10RT/SBR128 BATT
+  - Sungrow 10kw Hybrid/12.8kw Batt
+  - Sungrow 10kw Hybrid/16kw hr Batt
+  - Sungrow SH10RT + SBR128
+  - Sungrow SH10RT + SBR128 Battery
+  - Sungrow SH10RT + SBR256 Battery
+  - Sungrow SH10RT + Sungrow SBR160 · 16kWh
+  - Sungrow SH10RT + Sungrow SBR25.6
+  - Sungrow SH10RT + Sungrow SBR256 · 25.6kWh
+  - Sungrow SH10RT/+ smart meter
+  - Sungrow SBR224 · 22.4kWh - existing SH10RT
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sh10rt_ada
+  category: inverter
+  canonical_model: SH10RT-ADA
+  manufacturer: Sungrow
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - SH10RT-ADA
+  loose_aliases: []
+  source_examples:
+  - Sungrow SH10RT-ADA + Sungrow SBR160
+  - Sungrow SH10RT-ADA · 10000W + Sungrow SBR160 · 16kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sh20t
+  category: inverter
+  canonical_model: SH20T
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SH20T
+  - Sungrow Residential SH20T
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sh5_0rs
+  category: inverter
+  canonical_model: SH5.0RS
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - SH5.0RS
+  loose_aliases: []
+  source_examples:
+  - SH5.0RS + SG5.0RS
+  - Sungrow SH5.0RS-ADA · 5000W + Sungrow SBR192 · 19.2kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sh5_0rt
+  category: inverter
+  canonical_model: SH5.0RT
+  manufacturer: Sungrow
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - SH5.0RT
+  loose_aliases: []
+  source_examples:
+  - SH5.0RT + SBR128
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sma_10kw
+  category: inverter
+  canonical_model: SMA 10kW
+  manufacturer: SMA
+  phases: unknown
+  nominal_kw: 10.0
+  exact_aliases:
+  - SMA 10kW
+  loose_aliases:
+  - Self supplied SMA 10kW
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sigenergy_sigenstor_inverter
+  category: inverter
+  canonical_model: Sigenergy SigenStor inverter
+  manufacturer: Sigenergy
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - Sigenergy SigenStor inverter
+  loose_aliases: []
+  source_examples:
+  - 1 x Sigenergy SigenStor-12S-16 Bat/Inverter +1 x Sigenergy SigenStor-12S-24 Bat/Inverter
+  - Sigenergy SigenStor-8S-32 (AS4777-2 2020) · 32.24kWh + 6 optimisers
+  - Sigenergy SigenStor EC 30.0 TP +Sigenergy SigenStor-30T-48
+  - Sigenergy SigenStor-10S-24 -24.18KWh
+  - Sigenergy SigenStor-12S-48 (AS4777-2 2020) · 48.36kWh
+  - Sigenergy SigenStor-30T-48 · 48.36kWh
+  - Sigenergy SigenStor-30T-48 · 48.36kWh AND 10KW SINGLE PHASE - INCLUDING GATEWAYS
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sungrow_5kw_hybrid
+  category: inverter
+  canonical_model: Sungrow 5kW Hybrid
+  manufacturer: Sungrow
+  phases: unknown
+  nominal_kw: 5.0
+  exact_aliases:
+  - Sungrow 5kW Hybrid
+  loose_aliases: []
+  source_examples:
+  - 1 x Sungrow 5kw Hybrid/9.6kw batt
+  - 2 x Sungrow 5kw Hybrid/12.8KW sungrow batt
+  - Sungrow 5kw Hybrid + 1 SBR096 battery
+  - Sungrow 5kw Hybrid/9.6 battery
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: swatten_all_in_one_19_2kwh_inverter
+  category: inverter
+  canonical_model: Swatten All In One 19.2kWh inverter
+  manufacturer: Swatten
+  phases: three_phase
+  nominal_kw: 19.2
+  exact_aliases:
+  - Swatten All In One 19.2kWh inverter
+  loose_aliases: []
+  source_examples:
+  - 2 x Swatten 19.2 ALL IN ONE - 3 phase
+  - SolaX Power X1-BOOST-5K-G4 + Swatten 19.2 ALL IN ONE
+  - SolaX Power X3-Pro-10kw + Swatten 19.2kw Battery All In One
+  - Swatten All In One 19.2kw/5kw Inverter Swatten
+  - Swatten All in One 19.2kw Battery/INV
+  - Swatten All In One 19.2 with 5kw 3 phase Hybrid Inverter
+  - Swatten All In One 19.2 with 5kw Hybrid Inverter
+  - SWATTEN 19.2 ALL IN ONE 5KW
+  - Swatten 19.2 ALL IN ONE
+  - Swatten 19.2 ALL IN ONE - 3 phase
+  - Swatten 19.2kw All In One
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: technaus_7_5d
+  category: inverter
+  canonical_model: Technaus 7.5D
+  manufacturer: Unknown
+  phases: unknown
+  nominal_kw: null
+  exact_aliases:
+  - Technaus 7.5D
+  - USE THE TECHNAUS 7.5D INVERTER
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: tesla_powerwall_3_inverter
+  category: inverter
+  canonical_model: Tesla Powerwall 3 inverter
+  manufacturer: Unknown
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - Tesla Powerwall 3 inverter
+  loose_aliases: []
+  source_examples:
+  - TESLA POWERWALL 3
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_boost_2_5k_g4
+  category: inverter
+  canonical_model: X1-BOOST-2.5K-G4
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 2.5
+  exact_aliases:
+  - X1-BOOST-2.5K-G4
+  loose_aliases: []
+  source_examples:
+  - 2 x 2.5kW Solax
+  - 2 x Solax 2.5kW
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_boost_3k_g4
+  category: inverter
+  canonical_model: X1-BOOST-3K-G4
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 3.0
+  exact_aliases:
+  - X1-BOOST-3K-G4
+  loose_aliases: []
+  source_examples:
+  - 2 × SolaX Power X1-BOOST-3K-G4
+  - SolaX Power X1-BOOST-3K-G4
+  - SolaX Power X1-VAST-10K + SolaX Power X1-BOOST-3K-G4 + SolaX Power X1-SMT-10K-G2 + 2 × SolaX Power T-BAT HS25.2
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_boost_5k_g4
+  category: inverter
+  canonical_model: X1-BOOST-5K-G4
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 5.0
+  exact_aliases:
+  - X1-BOOST-5K-G4
+  loose_aliases:
+  - Solax 5kw 3 Phase
+  - Solax 5kw Inverter 1P
+  source_examples:
+  - 1 x Solax 5kW
+  - 1 x Solax 5kw + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - 1 x Solax 5kw and 1 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh + extension 13.3P
+  - 1 × SolaX Power X1-BOOST-5K-G4 +All In one Swatten 19.2 - 1 x 5kw 1P and 6 x 3.2 batt
+  - 2 x 2.5kW Solax
+  - 2 x 5kW Solax + 2 x meters
+  - 2 x SolaX Power X1-BOOST-5K-G4
+  - 2 x Solax 5kW
+  - 2 x X1-BOOST-5K-G4
+  - 2 × SolaX Power X1-BOOST-5K-G4
+  - 5kw Solax inverter + Alpha ESS SMILE-M-BAT-5P III · 15kWh
+  - 5kw solax + NEOVOLT 5KW AC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1
+  - SolaX Power X1-BOOST-5K-G4
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-BAT-10.1P
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-G3-S5-INV + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-M-BAT-13.9P · 13.99kWh
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-M5-S-INV + 1 × Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-BOOST-5K-G4 + Neovolt BW-BAT-9.6P
+  - SolaX Power X1-BOOST-5K-G4 + Neovolt BW-BAT-9.6P · 9.6kWh
+  - SolaX Power X1-BOOST-5K-G4 + Swatten 19.2 ALL IN ONE
+  - SolaX Power X1-BOOST-5K-G4 - 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - SolaX Power X1-Boost-5kw
+  - SolaX X1-BOOST-5K-G4
+  - Solax 5kw + 1 × Alpha ESS SMILE-BAT-13.3P + extension 13.3p
+  - Solax 5kw + 1 × Alpha ESS SMILE-BAT-13.3P + extension 13.3p + 3p meter
+  - Solax 5kw Hybrid/5kw normal + 25kw batt
+  - Solax 5kw/5kw Hybrid + 25.2kw battery
+  - X1-BOOST-5K-G4+ x Alpha 10.1 batt
+  - X3-PRO-25K-G2/5KW SOLAX
+  - Solax 5kw - Alpha ESS SMILE-M-BAT-5P IV · 20kWh - all black rail
+  - SolaX 5kW
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_boost_6k_g4
+  category: inverter
+  canonical_model: X1-BOOST-6K-G4
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 6.0
+  exact_aliases:
+  - SolaX PowerX1-BOOST-6K-G4
+  - X1-BOOST-6K-G4
+  loose_aliases:
+  - SolaX 6kW
+  source_examples:
+  - 1 × SolaX Power X1-BOOST-6K-G4
+  - SolaX (X1-BOOST-6K-G4)
+  - SolaX (X1-BOOST-6K-G4) + Alpha 10kW
+  - SolaX Power X1-BOOST-6K-G4
+  - SolaX Power X1-BOOST-6K-G4 + 1 × Neovolt BW-BAT-9.6P · 9.6kWh to - 1 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - SolaX Power X1-BOOST-6K-G4 + Alpha ESS SMILE-BAT-13.3P
+  - SolaX Power X1-BOOST-6K-G4 + Neovolt BW-BAT-10.1
+  - SolaX Power X1-BOOST-6K-G4 + Neovolt BW-BAT-10.1P · 10.1kWh
+  - SolaX Power X1-BOOST-6K-G4 + Neovolt BW-BAT-10.1P · 10.1kWh - USE THE 5KW AC COUPLE INVERTER ONLY
+  - SolaX Power X1-BOOST-6K-G4 + Neovolt BW-BAT-9.6P · 9.6kWh
+  - SolaX Power X1-BOOST-6K-G4 +Neovolt BW-BAT-9.6P
+  - SolaX Power X1-BOOST-6K-G4/backstop meter
+  - Solax X1-Boost-6K-G4
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_boost_7k_g4
+  category: inverter
+  canonical_model: X1-BOOST-7K-G4
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 7.0
+  exact_aliases:
+  - X1-BOOST-7K-G4
+  loose_aliases: []
+  source_examples:
+  - 1 × SolaX Power X1-BOOST-7K-G4 + 1 × Alpha ESS SMILE-BAT-13.3P
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_hybrid_5_0_d
+  category: inverter
+  canonical_model: X1-HYBRID-5.0-D
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: null
+  exact_aliases:
+  - X1-HYBRID-5.0-D
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-Hybrid-5.0-D + SolaX Power T-BAT HS14.4 · 14.75kWh
+  - Solax Hybrid 5kw - 4 x 3.6kw batteries
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_smt_10k_g2
+  category: inverter
+  canonical_model: X1-SMT-10K-G2
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 10.0
+  exact_aliases:
+  - X1-SMT-10K-G2
+  loose_aliases:
+  - Solax 1 Phase 10kw
+  - Used 10kw Solax
+  source_examples:
+  - 1 x Solax 10kw 1 Phase inverter - 1 × Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - 1 x Solax 10kw 1 Phase inverter -1 × Alpha ESS SMILE-BAT-13.3P + extension battery
+  - 1 x Solax 10kw 3 Phase inverter - 1 × Alpha ESS SMILE-M-BAT-5P V · 25kWh
+  - 1 x Solax 10kw 3phase
+  - 1 x Solax 10kw 3phase inverter and 28.8kw hr T-Bat battery - 8 x batteries of 3.6kw hrs
+  - 1 × SolaX Power X1-SMT-10K-G2 + SolaX Power X1-SMT-5K-G2
+  - 1 × SolaX Power X1-SMT-10K-G2, 1 × Alpha ESS SMILE-G3-BAT-10.1P
+  - SolaX (X1-SMT-10K-G2)
+  - SolaX Power X1-SMT -10K
+  - SolaX Power X1-SMT-10K + 1 × Alpha ESS SMILE-BAT-13.3P + 2 x extension 13.3p
+  - SolaX Power X1-SMT-10K-G2
+  - SolaX Power X1-SMT-10K-G2 + 1 × Neovolt BW-BAT-10.1P · 10.1kWh + extension 10.1
+  - SolaX Power X1-SMT-10K-G2 + 2 × Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - SolaX Power X1-SMT-10K-G2 + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh - full + expansion 13
+  - SolaX Power X1-SMT-10K-G2 + 2x Alpha ESS SMILE-BAT-13.3P
+  - SolaX Power X1-SMT-10K-G2 + 3 × Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE M5 20KW BATTERY
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-BAT-13.3P
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-BAT-13.3P + extension 13.3P
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-G3-10.1
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-M-BAT-5P III · 15kWh
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-M-BAT-5P VI · 30kWh
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-SMT-10K-G2 + NEOVOLT BW-BAT-9.6P II · 19.2kWh
+  - SolaX Power X1-SMT-10K-G2 + Neovolt BW-BAT-9.6P
+  - SolaX Power X1-SMT-10K-G2 + Neovolt BW-BAT-9.6P · 9.6kWh
+  - SolaX Power X1-SMT-10K-G2 + SWATTEN ALL IN 19.2KW BATT
+  - SolaX Power X1-SMT-10K-G2 + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X1-SMT-10K-G2 +1 x Alpha ESS 13.3P + Extension 13.3P
+  - SolaX Power X1-SMT-10K-G2 +1 x Alpha ESS SMILE-BAT-13.3P + exten battery
+  - SolaX Power X1-SMT-10K-G2 +Alpha ESS SMILE-BAT-13.3P
+  - SolaX Power X1-SMT-10K-G2 +Neovolt BW-BAT-9.6P
+  - SolaX Power X1-SMT-10K-G2 +Neovolt BW-INV-SPH5K +2 × Neovolt BW-BAT-9.6P
+  - SolaX Power X1-SMT-10K-G2 - TO 3PHASE
+  - SolaX Power X1-SMT-10K-G2 - now solax 8kw 3phase
+  - SolaX Power X1-SMT-10K-G2/13.3 ALPHA BATT
+  - SolaX Power X1-VAST-10K + SolaX Power X1-BOOST-3K-G4 + SolaX Power X1-SMT-10K-G2 + 2 × SolaX Power T-BAT HS25.2
+  - SolaX X1-SMT-10K-G2
+  - Solax 10kw Hybrid 3 phase and Solax 21.6kw hrs - 6 x 3.6kw and BMS
+  - Solax X1-SMT-10K-G2/Alpha 10.1 Batt
+  - Solax 10kw Hybrid and 21.6kwhr battery Solax
+  - SolaX 10kW
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_smt_5k_g2
+  category: inverter
+  canonical_model: X1-SMT-5K-G2
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 5.0
+  exact_aliases:
+  - X1-SMT-5K-G2
+  loose_aliases: []
+  source_examples:
+  - 1 × SolaX Power X1-SMT-10K-G2 + SolaX Power X1-SMT-5K-G2
+  - SolaX Power X1-SMT-5K-G2
+  - SolaX Power X1-SMT-5K-G2 - 4 optimisers
+  - SolaX Power X1-SMT-5K-G2+ Alpha ESS SMILE-M5-S-INV+ Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-SMT-5K-G2+ NEOVOLT 5KW DC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_smt_6k_g2
+  category: inverter
+  canonical_model: X1-SMT-6K-G2
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 6.0
+  exact_aliases:
+  - X1-SMT-6K-G2
+  loose_aliases: []
+  source_examples:
+  - SolaX (X1-SMT-6K-G2)
+  - SolaX Power X1-SMT-6K-G2
+  - SolaX X1-SMT-6K-G2
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_smt_7k_g2
+  category: inverter
+  canonical_model: X1-SMT-7K-G2
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 7.0
+  exact_aliases:
+  - X1-SMT-7K-G2
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-SMT-7K-G2
+  - SolaX Power X1-SMT-7K-G2 + Neovolt BW-BAT-9.6P · 9.6kWh
+  - Solax X1-SMT-7K-G2
+  - Solax X1-SMT-7K-G2/Alpha ESS 13.3
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_smt_7k_g4
+  category: inverter
+  canonical_model: X1-SMT-7K-G4
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 7.0
+  exact_aliases:
+  - X1-SMT-7K-G4
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-SMT-7K-G4
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_smt_8k_g2
+  category: inverter
+  canonical_model: X1-SMT-8K-G2
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 8.0
+  exact_aliases:
+  - X1-SMT-8K-G2
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-SMT-8K-G2
+  - X1-SMT-8K
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_vast_10k
+  category: inverter
+  canonical_model: X1-VAST-10K
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 10.0
+  exact_aliases:
+  - X1-VAST-10K
+  loose_aliases: []
+  source_examples:
+  - 2 x vast 10kw and 43.2kw batts 2 x BMS
+  - SolaX Power X1-VAST-10K
+  - SolaX Power X1-VAST-10K + 5 × SolaX Power T-BAT H 3.0 V2 · 3.1kWh
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS25.2 · 25.08kWh
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS32.4 - stack 5 and 4
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS32.4 · 33.1kWh
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS36
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X1-VAST-10K + SolaX Power X1-BOOST-3K-G4 + SolaX Power X1-SMT-10K-G2 + 2 × SolaX Power T-BAT HS25.2
+  - Solax Vast 10kw + T-BAT HS21.6 Battery
+  - Vast 10kw + 28.8kw Battery
+  - 10KW VAST SOLAX AND 28.8KW BATTERY
+  - Solax Vast 10kw and 28.8kw battery Solax
+  - Solis 5kw and Vast 10kw and 21.6kw - install Vast and batteries only - Solis 5kw was installed
+  - Vast 10kw and t-bat21.6 with base
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_vast_6k
+  category: inverter
+  canonical_model: X1-VAST-6K
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: 6.0
+  exact_aliases:
+  - X1-VAST-6K
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-VAST-6K - CHANGE INVERTER 10K SOLIS?
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_boost_8k_g2
+  category: inverter
+  canonical_model: X3-BOOST-8K-G2
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 8.0
+  exact_aliases:
+  - X3-BOOST-8K-G2
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-BOOST-8K-G2
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_evc_22k
+  category: inverter
+  canonical_model: X3-EVC-22K
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 22.0
+  exact_aliases:
+  - X3-EVC-22K
+  loose_aliases:
+  - SolaX Smart EV Charger · 22kW
+  source_examples:
+  - Alpha ESS SMILE-BAT-10.1P +SolaX X3-EVC-22K
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_hybrid_10_0_d
+  category: inverter
+  canonical_model: X3-HYBRID-10.0-D
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - X3-HYBRID-10.0-D
+  loose_aliases: []
+  source_examples:
+  - 1 x Solax X3-Hybrid 10kw-G2 + 7 x 3.6kw batteries/base
+  - SolaX Power X3-Hybrid-10.0-D + SolaX Power T-BAT HS32.4 · 33.1kWh - do 36kw hrs - 2 stacks
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_hybrid_15_0_d
+  category: inverter
+  canonical_model: X3-HYBRID-15.0-D
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - X3-HYBRID-15.0-D
+  loose_aliases: []
+  source_examples:
+  - X3-Hybrid-15.0D and T-Bat HS5.0 x 8 for 40kw hrs
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_hybrid_20k
+  category: inverter
+  canonical_model: X3-HYBRID-20K
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 20.0
+  exact_aliases:
+  - X3-HYBRID-20K
+  loose_aliases: []
+  source_examples:
+  - X3-Hybrid 20k - 25.6kw batteries Solax
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_hybrid_5_0_d
+  category: inverter
+  canonical_model: X3-HYBRID-5.0-D
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - X3-HYBRID-5.0-D
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-Hybrid-5.0-D + SolaX Power T-BAT HS14.4 · 14.75kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_mic_5k_g2
+  category: inverter
+  canonical_model: X3-MIC-5K-G2
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 5.0
+  exact_aliases:
+  - X3-MIC-5K-G2
+  loose_aliases: []
+  source_examples:
+  - Alpha ESS SMILE-G3-T20-INV + SolaX Power X3-MIC-5K-G2 + Alpha ESS SMILE-G3-BAT-9.3S IV · 37.2kWh
+  - SolaX (X3-MIC-5K-G2)
+  - SolaX Power X3-MIC-5K-G2
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_pro_10k_g2
+  category: inverter
+  canonical_model: X3-PRO-10K-G2
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 10.0
+  exact_aliases:
+  - X3-PRO-10K-G2
+  loose_aliases: []
+  source_examples:
+  - 1 × SolaX Power X3-PRO-10K-G2 + 1 × Alpha ESS SMILE-BAT-13.3P + extenson 13.3P
+  - SolaX (X3-PRO-10K-G2)
+  - SolaX Power X3-PRO-10K-G2
+  - SolaX Power X3-PRO-10K-G2 + 1 × Alpha ESS SMILE-BAT-13.3P + 1 x Ext 13.3P + meter
+  - SolaX Power X3-PRO-10K-G2 + Alpha ESS SMILE-BAT-13.3P
+  - SolaX Power X3-PRO-10K-G2 + Alpha ESS SMILE-BAT-13.3P · 13.3kWh + meter
+  - SolaX Power X3-PRO-10K-G2 + Ultra 15kw and TBAT-HS28.8
+  - SolaX Power X3-PRO-10K-G2 + meter 5kw export
+  - SolaX Power X3-PRO-10K-G2 + smart meter
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_pro_15k_g2
+  category: inverter
+  canonical_model: X3-PRO-15K-G2
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 15.0
+  exact_aliases:
+  - X3-PRO-15K-G2
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-PRO-15K-G2
+  - SolaX Power X3-PRO-15K-G2 + Alpha ESS SMILE-BAT-13.3P · 13.34kWh + extension 13.3p and meter
+  - SolaX Power X3-PRO-15K-G2 + Alpha ESS SMILE-M-BAT-5P IV x 20kw hrs batt
+  - SolaX Power X3-PRO-15K-G2 - + smart meter
+  - SolaX Power X3-Pro-15kw - NOW M5 20KW
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_pro_25k_g2
+  category: inverter
+  canonical_model: X3-PRO-25K-G2
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 25.0
+  exact_aliases:
+  - X3-PRO-25K-G2
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-PRO-25K-G2
+  - Solax X3Pro-25K-G2
+  - X3-PRO-25K-G2/5KW SOLAX
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_pro_30k_g2
+  category: inverter
+  canonical_model: X3-PRO-30K-G2
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 30.0
+  exact_aliases:
+  - X3-PRO-30K-G2
+  loose_aliases: []
+  source_examples:
+  - 2 × SolaX Power X3-PRO-30K-G2
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_pro_8k_g2
+  category: inverter
+  canonical_model: X3-PRO-8K-G2
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 8.0
+  exact_aliases:
+  - X3-PRO-8K-G2
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-PRO-8K-G2
+  - SolaX Power X3-PRO-8K-G2 · 8000W + Alpha ESS SMILE-M-BAT-5P III · 15kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_ult_20k
+  category: inverter
+  canonical_model: X3-ULT-20K
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 20.0
+  exact_aliases:
+  - X3-ULT-20K
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-ULT-20K
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS18 · 18.4kWh
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS25.2
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS43.2
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULT-20KP + 2 × SolaX Power T-BAT HS25.2 · 25.08kWh
+  - SolaX Power X3-ULT-20KP + SolaX Power T-BAT HS32.4
+  - SolaX Power X3-ULT-20KP + SolaX Power T-BAT HS43.2 · 44.2kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_ult_25k
+  category: inverter
+  canonical_model: X3-ULT-25K
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 25.0
+  exact_aliases:
+  - X3-ULT-25K
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-ULT-25K
+  - SolaX Power X3-ULT-25K + 2 × SAJ B2-25.0-HV1 · 25kWh
+  - SolaX Power X3-ULT-25K + 2 × SolaX Power T-BAT HS25.2
+  - SolaX Power X3-ULT-25K + 2 × SolaX Power T-BAT HS25.2 · 25.08kWh
+  - SolaX Power X3-ULT-25K + SolaX Power T-BAT HS28.8 · 29.4kWh
+  - SolaX Power X3-ULT-25K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULT-25K + SolaX Power T-BAT HS46.8 · 47.9kWh
+  - SolaX Power X3-ULT-25K + SolaX Power T-BAT HS50.4
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_ultra_15kp
+  category: inverter
+  canonical_model: X3-ULTRA-15KP
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - X3-ULTRA-15KP
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-ULT-15KP + SolaX Power T-BAT HS32.4 · 33.1kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_ultra_20k
+  category: inverter
+  canonical_model: X3-ULTRA-20K
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 20.0
+  exact_aliases:
+  - X3-ULTRA-20K
+  loose_aliases: []
+  source_examples:
+  - SOLAX ULTRA 20KW INVERTER WITH 25.2KW STORAGE - 7 X BATTERY STACK
+  - SOLAX Ultra 20KW - 9 X 3.6KW HR SOLAX BATTERIES
+  - SOLAX X3-Ultra-20kw 3phase + Solax T-BAT HS32.4 Battery - 9 batt stack
+  - SolaX Power 20kw Ultra + SolaX Power T-BAT HS32.4 · 33.1kWh
+  - SolaX Power X3-ULT-20K
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS18 · 18.4kWh
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS25.2
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS43.2
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULT-20KP + 2 × SolaX Power T-BAT HS25.2 · 25.08kWh
+  - SolaX Power X3-ULT-20KP + SolaX Power T-BAT HS32.4
+  - SolaX Power X3-ULT-20KP + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULTRA 20K + SolaX Power T-BAT HS46.8 · 47.9kWh
+  - SolaX Power X3-Ultra 20kw + SolaX Power T-BAT HS18 · 18.4kWh
+  - SolaX Power X3-Ultra-20-D + 43.2kw hr solax battery (2 stacks of 6 - 2 bases)
+  - SolaX Power X3-Ultra-20KP + SolaX Power T-BAT HS25.2 · 25.08kWh
+  - from alpha to - Upgrade to 20kw Solax/and 9 x 3.6kw hr
+  - Solax Ultra 20kw and Solax 28.8kw Battery
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_ultra_30k
+  category: inverter
+  canonical_model: X3-ULTRA-30K
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 30.0
+  exact_aliases:
+  - X3-ULTRA-30K
+  loose_aliases: []
+  source_examples:
+  - SOLAX ULTRA 30KW INVERTER WITH 43.2KW STORAGE - 12 X BATTERY STACK= 2 STACKS OF 6
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: dyness_powerbox_pro_10_24kwh
+  category: battery
+  canonical_model: Dyness Powerbox Pro 10.24kWh
+  manufacturer: Dyness
+  exact_aliases:
+  - Dyness Powerbox Pro 10.24kWh
+  loose_aliases: []
+  source_examples:
+  - Solis S5-EH1P5K-L + Dyness Powerbox Pro · 10.24kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: ecactus_10kwh_battery
+  category: battery
+  canonical_model: Ecactus 10kWh Battery
+  manufacturer: Ecactus
+  exact_aliases:
+  - Ecactus 10.24
+  - Ecactus 10kWh Battery
+  loose_aliases: []
+  source_examples:
+  - ECACTUS 10KW BATTERY
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: lg_resu_10kwh_low_voltage
+  category: battery
+  canonical_model: LG RESU 10kWh Low Voltage
+  manufacturer: LG
+  exact_aliases:
+  - LG RESU 10kWh Low Voltage
+  loose_aliases: []
+  source_examples:
+  - LGRESU Low voltage 10kw hr
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: neovolt_bw_bat_10_1p
+  category: battery
+  canonical_model: Neovolt BW-BAT-10.1P
+  manufacturer: Neovolt
+  exact_aliases:
+  - NEOVOLT BW-BAT 10.1
+  - NEOVOLT BW-BAT-10.1 AC
+  - Neo Volt 10.1kw 3 phase
+  - Neovolt 10.1
+  - Neovolt BW-BAT-10.1P
+  loose_aliases: []
+  source_examples:
+  - 1 × Neovolt BW-BAT-10.1P · 10.1kWh
+  - 2 x Neovolt 10.1 - full with inv and extension 10.1 - CHANGE
+  - 2 x Neovolt 5kw AC Inverters/6 x 10.1 Neovolt Batteries
+  - 5kw solax + NEOVOLT 5KW AC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1
+  - NEOVOLT 10.1 + EXT 10.1 BATT - NEOVOLT AC INVERTER
+  - NEOVOLT 5KW AC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1
+  - NEOVOLT 5KW DC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1
+  - NEOVOLT 5KW DC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1 + meter 2 phase
+  - Neovolt BW-BAT-10.1P + 3 phase meter
+  - Neovolt BW-BAT-10.1kWh + meter for 2 phase
+  - Neovolt BW-INV-SPB5K + 2 × Neovolt BW-BAT-10.1P · 10.1kWh to 1 × Alpha ESS SMILE-BAT-13.3P + extension 13.3p
+  - Neovolt BW-INV-SPB5K + NEOVOLT BW-BAT-10.1
+  - Neovolt BW-INV-SPB5K + Neovolt BW-BAT-10.1 P
+  - Neovolt BW-INV-SPH5K + NEOVOLT BW-BAT-10.1
+  - SolaX Power X1-BOOST-6K-G4 + Neovolt BW-BAT-10.1
+  - SolaX Power X1-BOOST-6K-G4 + Neovolt BW-BAT-10.1P · 10.1kWh
+  - SolaX Power X1-BOOST-6K-G4 + Neovolt BW-BAT-10.1P · 10.1kWh - USE THE 5KW AC COUPLE INVERTER ONLY
+  - SolaX Power X1-SMT-10K-G2 + 1 × Neovolt BW-BAT-10.1P · 10.1kWh + extension 10.1
+  - SolaX Power X1-SMT-5K-G2+ NEOVOLT 5KW DC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1
+  - BW 5SPBK Inverter Neovolt - Neovolt BW-BAT-9.6P · 9.6kWh - now a 10.1 BATTERY
+  - Neovolt BW-BAT - 10.1kw hr
+  - Neovolt BW-BAT-10.1/AC COUPLE 5KW HYBRID NEOVOLT
+  - Neovolt BW-BAT-10.1P · 10.1kWh
+  - Neovolt BW-BAT-10.1P · 10.1kWh - USE THE 5KW DC HYBRID INVERTER ONLY
+  - Neovolt BW-BAT-10.1kWh
+  - Neovolt BW-BAT-10.1kw hr
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: neovolt_bw_bat_4_8s
+  category: battery
+  canonical_model: Neovolt BW-BAT-4.8S
+  manufacturer: Neovolt
+  exact_aliases:
+  - Neovolt BW-BAT-4.8S
+  loose_aliases: []
+  source_examples:
+  - 1 x Neovolt 10kw 3phase and 6 x 4.8kw hr neovolt batteries
+  - 2 × Neovolt BW-INV-TPH10K + 10 × Neovolt BW-BAT-4.8S · 4.8kWh
+  - Neovolt BW-INV-TPH10K · 10000W + 6 × Neovolt BW-BAT-4.8S · 4.8kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: neovolt_bw_bat_9_6p
+  category: battery
+  canonical_model: Neovolt BW-BAT-9.6P
+  manufacturer: Neovolt
+  exact_aliases:
+  - Neovolt BW-BAT-9.6P
+  loose_aliases: []
+  source_examples:
+  - 1 x Neovolt Hybrid 5kw inverter - Neovolt BW-BAT-9.6P · 9.6kWh
+  - 2 × NEOVOLT BW-BAT-9.6P I · 9.6kWh
+  - 2 × Neovolt BW-BAT-9.6P · 9.6kWh
+  - 2 × Neovolt BW-BAT-9.6P · 9.6kWh + meter 3p
+  - 2 × Neovolt BW-BAT-9.6P · 9.6kWh - AC 5kw inverter with meter
+  - 3 × Neovolt BW-BAT-9.6P - 1 x 5kw ac inverter + neo 3p meter
+  - 6kw 3p with meter Neovolt inverter Hybrid + Neovolt BW-BAT-9.6P · 9.6kWh
+  - BW-INV-SPH5K + 2 x BW-BAT-9.6P
+  - Neovolt BW-INV-SPH5K + NEOVOLT BW-BAT-9.6P I · 9.6kWh
+  - Neovolt Hybrid 5kw + Neovolt BW-BAT-9.6P · 9.6kWh + EV-FOX-A7300P1-E-B-Black
+  - Nevolt 2 x 9.6kw Batteries
+  - SolaX Power X1-BOOST-5K-G4 + Neovolt BW-BAT-9.6P
+  - SolaX Power X1-BOOST-5K-G4 + Neovolt BW-BAT-9.6P · 9.6kWh
+  - SolaX Power X1-BOOST-6K-G4 + 1 × Neovolt BW-BAT-9.6P · 9.6kWh to - 1 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - SolaX Power X1-BOOST-6K-G4 + Neovolt BW-BAT-9.6P · 9.6kWh
+  - SolaX Power X1-BOOST-6K-G4 +Neovolt BW-BAT-9.6P
+  - SolaX Power X1-SMT-10K-G2 + NEOVOLT BW-BAT-9.6P II · 19.2kWh
+  - SolaX Power X1-SMT-10K-G2 + Neovolt BW-BAT-9.6P
+  - SolaX Power X1-SMT-10K-G2 + Neovolt BW-BAT-9.6P · 9.6kWh
+  - SolaX Power X1-SMT-10K-G2 +Neovolt BW-BAT-9.6P
+  - SolaX Power X1-SMT-10K-G2 +Neovolt BW-INV-SPH5K +2 × Neovolt BW-BAT-9.6P
+  - SolaX Power X1-SMT-7K-G2 + Neovolt BW-BAT-9.6P · 9.6kWh
+  - Solis S5-GR1P5K + Neovolt BW-BAT-9.6P Battery
+  - 5KW Hybrid Neovolt and 9.6kw Battery Neovolt
+  - 5kw Hybrid Neovolt - Neovolt BW-BAT-9.6P · 9.6kWh
+  - BW 5SPBK Inverter Neovolt - Neovolt BW-BAT-9.6P · 9.6kWh - now a 10.1 BATTERY
+  - NEOVOLT BW-BAT-9.6P II · 19.2kWh
+  - Neovolt BW-BAT-9.6P · 9.6kWh
+  - Neovolt BW-BAT-9.6P · 9.6kWh - ALREADY HAVE
+  - Neovolt BW-BAT-9.6P/ac couple
+  - Neovolt BW-INV-SPH5K +Neovolt BW-BAT-9.6P
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: neovolt_bw_bat_9_6p_ii
+  category: battery
+  canonical_model: Neovolt BW-BAT-9.6P II
+  manufacturer: Neovolt
+  exact_aliases:
+  - Neovolt BW-BAT-9.6P II
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-SMT-10K-G2 + NEOVOLT BW-BAT-9.6P II · 19.2kWh
+  - NEOVOLT BW-BAT-9.6P II · 19.2kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_b2_15_0_hv1
+  category: battery
+  canonical_model: SAJ B2-15.0-HV1
+  manufacturer: SAJ
+  exact_aliases:
+  - SAJ B2-15.0-HV1
+  loose_aliases: []
+  source_examples:
+  - 1 x SAJ H2-10K-S3 and 2 x SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3 + 1 × SAJ B2-15.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 2 x SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3 + 2 x SAJ B2-15.0-HV1 · 25kWh
+  - SAJ H2-10K-S3 + 2 x SAJ B2-15.0-HV1 · 25kWh - 3 AND 3
+  - SAJ H2-10K-S3 + 2 × SAJ B2 15.0-HV1
+  - SAJ H2-10K-S3 + 2 × SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3 + 2 × SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-S3 + 2 × SAJ B2-15.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-15.0-HV1
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-15.0-HV1 · 15kWh + FoxESS EV Charger · 7.3kW
+  - SAJ H2-10K-S3-A + SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-10K-T3 + 2 × SAJ B2-15.0-HV1 · 5kWh + 4 x Optimisers
+  - SAJ H2-20K-T3-AU + 2 x SAJ B2-15.0-HV1
+  - SAJ H2-20K-T3-AU + 2 × SAJ B2-15.0-HV1
+  - SAJ H2-20K-T3-AU + 2 × SAJ B2-15.0-HV1 · 15kWh
+  - SAJ H2-20K-T3-AU + 2 × SAJ B2-15.0-HV1 · 15kWh/change to solax
+  - SAJ H2-25K-T3-AU + 2 × SAJ B2-15.0-HV1 · 5kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_b2_20_0_hv1
+  category: battery
+  canonical_model: SAJ B2-20.0-HV1
+  manufacturer: SAJ
+  exact_aliases:
+  - SAJ B2-20.0-HV1
+  loose_aliases: []
+  source_examples:
+  - SAJ H2-10K-S3 + 1 x SAJ B2-20.0-HV1
+  - SAJ H2-10K-S3 + 1 × SAJ B2-20.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 2 x SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-10K-S3 + SAJ 30kw hr Battery
+  - SAJ H2-10K-S3 + SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs
+  - SAJ H2-10K-S3-A + SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-10K-S3-AU + 3 × SAJ B2-20.0-HV1 · 5kWh
+  - SAJ H2-10K-T3-AU + SAJ B2-20.0-HV1 · 20kWh
+  - SAJ H2-10S-T3 + 1 × SAJ B2-20.0-HV1 · 5kWh
+  - SAJ H2-20K-T3-AU + SAJ B2-20.0-HV1 · 20kWh
+  - SAJ B2-20.0-HV1 · 20kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_b2_25_0_hv1
+  category: battery
+  canonical_model: SAJ B2-25.0-HV1
+  manufacturer: SAJ
+  exact_aliases:
+  - SAJ B2-25.0-HV1
+  loose_aliases: []
+  source_examples:
+  - 1 x SAJ H2-25K-T3-AU and 2 × SAJ B2-25.0-HV1 · 25kWh
+  - SAJ H2-10K-S3 + SAJ B2-25.0-HV1 · 25kWh
+  - SAJ H2-20K-T3-AU + SAJ B2-25.0-HV1 · 25kWh
+  - SAJ H2-25K-T3-AU + 2 × SAJ B2-25.0-HV1 · 25kWh
+  - SolaX Power X3-ULT-25K + 2 × SAJ B2-25.0-HV1 · 25kWh
+  - SAJ 15KW 3P INVERTER AND 25KW BATTERIES
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_b2_5_0_hv1
+  category: battery
+  canonical_model: SAJ B2-5.0-HV1
+  manufacturer: SAJ
+  exact_aliases:
+  - SAJ B2-5.0-HV1
+  loose_aliases: []
+  source_examples:
+  - SAJ 20KW 3P and SAJ B2-5.0HV1 x 6 batteries
+  - SAJ H2-10K-S3 + 10 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 3 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 4 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 6 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 + 8 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-20K-T3-AU + 5 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-20K-T3-AU + 6 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-20K-T3-AU + 8 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-25K-T3-AU + 10 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-25K-T3-AU + 6 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-25K-T3-AU + 8 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-30K-T3-AU + 10 × SAJ B2-5.0-HV1 · 5kWh
+  - SAJ H2-10K-S3 Inverter - SAJ B2-5.0-HV1 - 30kw hr Battery
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_b2_5_0_hv5
+  category: battery
+  canonical_model: SAJ B2-5.0-HV5
+  manufacturer: SAJ
+  exact_aliases:
+  - SAJ B2-5.0-HV5
+  loose_aliases: []
+  source_examples:
+  - SAJ H2-10K-S3 + 3 × SAJ B2-5.0-HV5 · 5kWh
+  - SAJ H2-25K-T3-BE + 6 × SAJ B2-5.0-HV5 · 5kWh
+  - Sanjing - (H2-10K-S3-A) + 4 x SAJ B2-5.0-HV5 batteries
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: saj_hs3_6k_s2_w_p5_ie
+  category: battery
+  canonical_model: SAJ HS3-6K-S2-W-P5-IE
+  manufacturer: SAJ
+  exact_aliases:
+  - SAJ HS3-6K-S2-W-P5-IE
+  loose_aliases: []
+  source_examples:
+  - SAJ H2-10K-T3-AU + SAJ HS3-6K-S2-W-P5-IE · 25kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sbh050
+  category: battery
+  canonical_model: SBH050
+  manufacturer: Sungrow
+  exact_aliases:
+  - SBH050
+  loose_aliases: []
+  source_examples:
+  - 10 × Sungrow SBH050
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sbr096
+  category: battery
+  canonical_model: SBR096
+  manufacturer: Sungrow
+  exact_aliases:
+  - SBR096
+  loose_aliases: []
+  source_examples:
+  - Sungrow 5 Hybrid/9.6kw battery
+  - Sungrow 5kw Hybrid + 1 SBR096 battery
+  - Sungrow 5kw Hybrid/9.6 battery
+  - 5KW Hybrid Neovolt and 9.6kw Battery Neovolt
+  - BW 5SPBK Inverter Neovolt - Neovolt BW-BAT-9.6P · 9.6kWh - now a 10.1 BATTERY
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sbr128
+  category: battery
+  canonical_model: SBR128
+  manufacturer: Sungrow
+  exact_aliases:
+  - SBR128
+  loose_aliases: []
+  source_examples:
+  - 1 x Sun Hy/1 x Sungrow-12.8kw batt
+  - 1 × Sungrow SBR128 · 12.8kWh
+  - 2 x SH10RS + SBR128
+  - 2 x Sungrow 5kw + 1 SBR128 battery
+  - 2 x Sungrow 5kw Hybrid/12.8KW sungrow batt
+  - 2 x Sungrow Hybrid 5kw/12kw batt
+  - 2 × Sungrow SH10RS + 2 × Sungrow SBR256 - 4 x PARALELL 12.8KW'S
+  - 2x Sungrow Hybrid 5kw + 1 SBR128 battery
+  - SH10.0RS + SBR128
+  - SH10RS + SBR128
+  - SH10RS + SBR128 Battery
+  - SH10RT + SBR128
+  - SH5.0RT + SBR128
+  - Sungrow (SH10RS) + SBR128
+  - Sungrow 10kW (SH10RT) + SBR128
+  - Sungrow 10kW SH10RT/SBR128 BATT
+  - Sungrow 10kw Hybrid/12.8kw Batt
+  - Sungrow 5kw/5kw Hybrid 12.8 Batt
+  - Sungrow 5kw/5kw Hybrid 3P + 12.8 Batt
+  - Sungrow Hybrid 2 x 5kw + 12.8kw batt
+  - Sungrow Hybrid/Sungrow - 12.8 batt
+  - Sungrow Hybrid/Sungrow 5kw + 12kw battery
+  - Sungrow SH10RS + SBR128
+  - Sungrow SH10RS + SBR128 Battery
+  - Sungrow SH10RS + Sungrow SBR128
+  - Sungrow SH10RS-ADA + SBR128
+  - Sungrow SH10RT + SBR128
+  - Sungrow SH10RT + SBR128 Battery
+  - Sungrow Sungrow SH10RS + 12.8kw hrs Sungrow Battery
+  - Sungrow/Sungrow Hybrid/12kw batt
+  - SH10RS - 12.8KW BATTERY
+  - Sungrow SBR128 · 12.8kWh
+  - Sungrow SBR128 · 12.8kWh - second stack
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sbr160
+  category: battery
+  canonical_model: SBR160
+  manufacturer: Sungrow
+  exact_aliases:
+  - SBR160
+  loose_aliases: []
+  source_examples:
+  - 1 x SH10RT + SBR160
+  - 2 x Sungrow Hybrid 5kw/16kw hrs battery
+  - Sungrow 10kw Hybrid/16kw hr Batt
+  - Sungrow SH10RS + SBR160
+  - Sungrow SH10RS + SBR160 Battery
+  - Sungrow SH10RT + Sungrow SBR160 · 16kWh
+  - Sungrow SH10RT-ADA + Sungrow SBR160
+  - Sungrow SH10RT-ADA · 10000W + Sungrow SBR160 · 16kWh
+  - Sungrow SBR160 · 16kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sbr192
+  category: battery
+  canonical_model: SBR192
+  manufacturer: Sungrow
+  exact_aliases:
+  - SBR192
+  loose_aliases: []
+  source_examples:
+  - SH10RT + SBR192
+  - SolaX Power X1-SMT-10K-G2 + NEOVOLT BW-BAT-9.6P II · 19.2kWh
+  - Sungrow SH5.0RS-ADA · 5000W + Sungrow SBR192 · 19.2kWh
+  - NEOVOLT BW-BAT-9.6P II · 19.2kWh
+  - Sungrow SBR192 · 19.2kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sbr256
+  category: battery
+  canonical_model: SBR256
+  manufacturer: Sungrow
+  exact_aliases:
+  - SBR256
+  loose_aliases: []
+  source_examples:
+  - 2 × Sungrow SH10RS + 2 × Sungrow SBR256 - 4 x PARALELL 12.8KW'S
+  - Sungrow SH10RT + SBR256 Battery
+  - Sungrow SH10RT + Sungrow SBR256 · 25.6kWh
+  - Sungrow SH10T (AS4777-2 2020) · 10000W + Sungrow SBR256 · 25.6kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sbr960
+  category: battery
+  canonical_model: SBR960
+  manufacturer: Sungrow
+  exact_aliases:
+  - SBR960
+  loose_aliases: []
+  source_examples:
+  - SBR960 Battery and Base
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_bat_10_1p
+  category: battery
+  canonical_model: SMILE-BAT-10.1P
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - SMILE-BAT-10.1P
+  loose_aliases: []
+  source_examples:
+  - 1 x Alpha-ESS Smile5 Battery
+  - 1 × Alpha ESS SMILE-BAT-10.1P
+  - 2 x Alpha 10.1kWh batteries
+  - Alpha ESS 10.1 G3 Battery/Inverter
+  - Alpha ESS SMILE-BAT-10.1P +SolaX X3-EVC-22K
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-G3-BAT-10.1P · 10.1kWh - M5
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-BAT-10.1P
+  - Solax X1-SMT-10K-G2/Alpha 10.1 Batt
+  - X1-BOOST-5K-G4+ x Alpha 10.1 batt
+  - 10.1kWh Alpha-ESS (Smile5 10.1kWh)
+  - ALPHA ESS 10KW BATTERY
+  - Alpha ESS SMILE-BAT-10.1P · 10.08kWh
+  - Alpha ESS SMILE-G3-BAT-10.1P · 10.1kWh extension batt
+  - Alpha-ESS (Smile5 10.1kWh) battery
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_bat_13_3p
+  category: battery
+  canonical_model: SMILE-BAT-13.3P
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - 26.6 Alpha ESS
+  - Alpha ESS SMILE-BAT-13.3P
+  - Alpha-ESS Smile-BAT-13.3P
+  - BATTERY - ALPHA ESS 13.3P
+  - SMILE-BAT-13.3P
+  loose_aliases: []
+  source_examples:
+  - 1 X 13.3P ALPHA Smile 5 inv + Extension 13.3P
+  - 1 X 13.3P ALPHA Smile 5 inv + Extension 13.3P + 3p meter
+  - 1 x 13.34kWh Alpha ESS Smile-BAT-13.3P
+  - 1 x 13.3P Alpha and Extension 13.3P
+  - 1 x Alpha ESS 13.3P + Extension 13.3P
+  - 1 x Alpha ESS 13.3P + Extension 13.3P + 3p meter
+  - 1 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - 1 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh + ext 13.3P
+  - 1 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh + exten 13.3P
+  - 1 x Alpha Smile 5 and 2 × Alpha ESS SMILE-BAT-13.3P · 13.34kWh - with 1 expansion kits
+  - 1 x Alpha ess 13.3p/smile 5 and 1 x extension 13.3 battery
+  - 1 x Alpha ess 13.3p/smile 5 and 2 x extension 13.3's alpha
+  - 1 x Solax 10kw 1 Phase inverter - 1 × Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - 1 x Solax 10kw 1 Phase inverter -1 × Alpha ESS SMILE-BAT-13.3P + extension battery
+  - 1 x Solax 5kw and 1 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh + extension 13.3P
+  - 1 × Alpha ESS SMILE-BAT-13.3P
+  - 1 × Alpha ESS SMILE-BAT-13.3P + ext 13.3P Alpha
+  - 1 × Alpha ESS SMILE-BAT-13.3P + extens 13.3P battery
+  - 1 × Alpha ESS SMILE-BAT-13.3P + extension 13.3P + 1 Alpha meter
+  - 1 × Alpha ESS SMILE-BAT-13.3P + extension 13.3p
+  - 1 × Alpha ESS SMILE-BAT-13.3P + extension 13.3p + 3p meter
+  - 1 × Alpha ESS SMILE-BAT-13.3P + extenston 13.3P
+  - 1 × Alpha ESS SMILE-BAT-13.3P and extension battery 13.3P
+  - 1 × Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - 1 × Alpha ESS SMILE-BAT-13.3P/1 x expansion 13.3p kw hr
+  - 1 × Alpha ESS SMILE-S5 III + 1 × Alpha ESS SMILE-BAT-13.3P
+  - 1 × Alpha ESS SMILE-S5 V + 1 × Alpha ESS SMILE-BAT-13.3P + ext 13.3P
+  - 1 × SolaX Power X1-BOOST-7K-G4 + 1 × Alpha ESS SMILE-BAT-13.3P
+  - 1 × SolaX Power X3-PRO-10K-G2 + 1 × Alpha ESS SMILE-BAT-13.3P + extenson 13.3P
+  - 2 x 13.3P Alpha ESS Batteries
+  - 2 x Alpha ESS 13.3P + Extension 13.3P
+  - 2 x Alpha ESS SMILE-13.3P
+  - 2 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - 2 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh + meter for 2 phase operations
+  - 2 x Smile 5 inverters and 2 x Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - 2 × Alpha ESS SMILE-BAT-13.3P + 3phase meter alpha
+  - 2 × Alpha ESS SMILE-BAT-13.3P + extension 13.3P
+  - 2 × Alpha ESS SMILE-BAT-13.3P + meter
+  - 2 × Alpha ESS SMILE-BAT-13.3P batteries/Smile5 Inverters
+  - 2 × Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - 2 × Alpha ESS SMILE-BAT-13.3P · 13.34kWh + 3p meter
+  - 2 × Alpha ESS SMILE-BAT-13.3P · 13.34kWh + meter 3p
+  - 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh + 3p meter
+  - 2 × Alpha ESS SMILE-M5-S-INV + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - 2X Alpha ESS SMILE-BAT-13.3P · 13.34kWh - 1 X 13.3 + EXPANSION 13
+  - 2x Alpha ESS SMILE-BAT-13.3P
+  - 2× Alpha ESS SMILE-BAT-13.3P + 1 x Exten 13.3P + 2 x Alpha meters
+  - Alpha ESS 13.3P Battery
+  - Alpha ESS SMILE-BAT-13.3P - 13.34KWh
+  - Alpha ESS SMILE-BAT-13.3P - 13.34KWh - send meter 3 phase
+  - Alpha ESS SMILE-BAT-13.3P 13.34kWh
+  - Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  - Alpha ESS SMILE-BAT-13.3P · 13.34kWh - take meter
+  - Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+  - Alpha ESS SMILE-S5/SMILE-BAT-13.3P
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_bat_13_9p
+  category: battery
+  canonical_model: SMILE-BAT-13.9P
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - Alpha ESS SMILE-BAT-13.9
+  - Alpha ESS SMILE-BAT-13.9P
+  - SMILE-BAT-13.9P
+  loose_aliases: []
+  source_examples:
+  - 2 x 13.9kw Alpha ESS
+  - 2 × Alpha ESS SMILE-BAT-13.9
+  - 2 × Alpha ESS SMILE-BAT-13.9/M5 -5KW INVERTER
+  - 2 × Alpha ESS SMILE-BAT-13.9/M5 5KW INVERTER
+  - 2 × Alpha ESS SMILE-BAT-13.99P
+  - 2 × Alpha ESS SMILE-BAT-13.9P
+  - 2 × Alpha ESS SMILE-BAT-13.9P · 13.99kWh + 3p meter
+  - 2 × Alpha ESS SMILE-M-BAT-13.9P + meter 3phase
+  - ALPHA ESS 13.9KW/INVERTER - M5 + meter 3phase
+  - Alpha ESS M5 5kw inverter/Alpha ESS M5 13.9kw hr battery
+  - Alpha ESS SMILE-BAT-13.9 + 3p meter
+  - Alpha ESS SMILE-BAT-13.9P + 3P METER
+  - Alpha ESS SMILE-G3-B5-INV + Alpha ESS SMILE-M-BAT-13.9P · 13.99kWh
+  - Alpha ESS SMILE-G3-S5-INV + Alpha ESS SMILE-M-BAT-13.9P · 13.99kWh
+  - Alpha ESS SMILE-M-BAT-13.9P/M5 INVERTER
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-13.9P · 13.99kWh
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-M-BAT-13.9P · 13.99kWh
+  - Alpha 13.9 and 5kw M5
+  - Alpha ESS SMILE-BAT-13.9P · 13.3kWh
+  - Alpha ESS SMILE-M-BAT-13.9P · 13.99kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_g3_bat_10_1p
+  category: battery
+  canonical_model: SMILE-G3-BAT-10.1P
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - Alpha ESS SMILE-G3-BAT-10.1P
+  - SMILE-G3-BAT-10.1P
+  loose_aliases: []
+  source_examples:
+  - 1 x Alpha ESS SMILE-G3-BAT-10.1P/1 x expanion 10kw hr
+  - 1 × SolaX Power X1-SMT-10K-G2, 1 × Alpha ESS SMILE-G3-BAT-10.1P
+  - 2 X 10.1 G3 ALPHA BATTERIES
+  - 2 x Alpha ESS 10.1 Batteries extensions - used existing Smile5 for panels
+  - 2 x Alpha ESS 10.1 Batteries with extension cables
+  - 2 x Alpha ESS 10.1 G3 - going on to an existing G3 10.1 with 5kw inverter setup
+  - 2 x Alpha ESS SMILE-G3-BAT-10.1P
+  - 2 × Sungrow SG5.0RT + Alpha ESS SMILE-G3-BAT-10.1P
+  - Alpha ESS 10.1 G3 Battery/Inverter
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-G3-BAT-10.1P · 10.1kWh - M5
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-G3-10.1
+  - Alpha ESS SMILE-G3-BAT-10.1P - chint meter
+  - Alpha ESS SMILE-G3-BAT-10.1P · 10.1kWh extension batt
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_g3_bat_9_3p
+  category: battery
+  canonical_model: SMILE-G3-BAT-9.3P
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - SMILE-G3-BAT-9.3P
+  loose_aliases: []
+  source_examples:
+  - Alpha G3 20kw 3phase 3 x 9.3kw hr batteries - 27.9kw hrs
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_m_bat_5p
+  category: battery
+  canonical_model: SMILE-M-BAT-5P
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - SMILE-M-BAT-5P
+  loose_aliases: []
+  source_examples:
+  - 1 x Alpha ESS Smile-M-BAT5P - 30kw hr Battery/Inverter
+  - 1 × Alpha ESS SMILE-M5 -INVERTER + 6 x SMILE M-BAT 5P BATTERIES - 30KW TOTAL
+  - ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY and 5kw inverter - use 3 tracker one there - let andrew have the X1-Boost
+  - ANYONE WITH 13.3 X 2 GETTING 30KW M5
+  - ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_m_bat_5p_iii
+  category: battery
+  canonical_model: SMILE-M-BAT-5P III
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - SMILE-M-BAT-5P III
+  loose_aliases: []
+  source_examples:
+  - 5kw Solax inverter + Alpha ESS SMILE-M-BAT-5P III · 15kWh
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P III · 15kWh
+  - Alpha ESS Smile M5 inverter/Alpha ESS SMILE-M-BAT-5PIII - 15kw batt
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-M-BAT-5P III · 15kWh
+  - SolaX Power X3-PRO-8K-G2 · 8000W + Alpha ESS SMILE-M-BAT-5P III · 15kWh
+  - Alpha ESS SMILE-M-BAT-5P III - 15KW BATTERY
+  - Alpha ESS SMILE-M-BAT-5P III · 15kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_m_bat_5p_iv
+  category: battery
+  canonical_model: SMILE-M-BAT-5P IV
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - SMILE-M-BAT-5P IV
+  loose_aliases: []
+  source_examples:
+  - 1 x 10kw Solax - Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - 1 x Solax 5kw + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - 1 × Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - 2 × Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - Alpha ESS SMILE-M-BAT-5P IV · 20kWh + 3 phase meter
+  - Alpha ESS SMILE-M-BAT-5P IV · 20kWh + 3p meter
+  - Alpha ESS SMILE-M-BAT-5P IV · 20kWh + 3phase meter
+  - Alpha ESS SMILE-M-BAT-5P IV · 20kWh TO 1 x Alpha ESS SMILE-BAT-13.3P · 13.34kWh + extension 13.3P
+  - Alpha ESS SMILE-M-BAT-5P IV · 20kWh to 1 × Alpha ESS SMILE-BAT-13.3P + extension 13.3p
+  - Alpha ESS SMILE-M-BAT-5P VI · 30kWh + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh + 3p meter
+  - SolaX Power X1-BOOST - 5K-G2 + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-M5-S-INV + 1 × Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-BOOST-5K-G4 + Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE M5 20KW BATTERY
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X1-SMT-5K-G2+ Alpha ESS SMILE-M5-S-INV+ Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - SolaX Power X3-PRO-15K-G2 + Alpha ESS SMILE-M-BAT-5P IV x 20kw hrs batt
+  - Alpha ESS SMILE-M-BAT-5P IV - 20KW BATTERY
+  - Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - Solax 5kw - Alpha ESS SMILE-M-BAT-5P IV · 20kWh - all black rail
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_m_bat_5p_v
+  category: battery
+  canonical_model: SMILE-M-BAT-5P V
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - SMILE-M-BAT-5P V
+  loose_aliases: []
+  source_examples:
+  - 1 x Solax 10kw 3 Phase inverter - 1 × Alpha ESS SMILE-M-BAT-5P V · 25kWh
+  - Alpha ESS SMILE-M-BAT-5P VI · 30kWh + 3p meter
+  - Alpha ESS SMILE-M-BAT-5P VI · 30kWh + Alpha ESS SMILE-M-BAT-5P IV · 20kWh
+  - Alpha ESS SMILE-M-BAT-5P VI · 30kWh + meters
+  - SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE-M-BAT-5P VI · 30kWh
+  - Alpha ESS SMILE-M-BAT-5P VI - 30KW BATTERY
+  - Alpha ESS SMILE-M-BAT-5P V · 25kWh
+  - Alpha ESS SMILE-M-BAT-5P VI · 30kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: sigenergy_sigenstor_battery
+  category: battery
+  canonical_model: Sigenergy SigenStor battery
+  manufacturer: Sigenergy
+  exact_aliases:
+  - Sigenergy SigenStor battery
+  loose_aliases: []
+  source_examples:
+  - 1 x Sigenergy SigenStor-12S-16 Bat/Inverter +1 x Sigenergy SigenStor-12S-24 Bat/Inverter
+  - 2 × Sigenergy SigenStor BAT 8.0 · 8.06kWh
+  - Sigenergy SigenStor EC 15.0 TP AU + Sigenergy SigenStor-15T-24 · 24.18kWh
+  - Sigenergy SigenStor-25T-5 + Sigenergy SigenStor-5T-48 (AS4777-2 2020) · 48.36kWh
+  - Sigenergy SigenStor-8S-32 (AS4777-2 2020) · 32.24kWh + 6 optimisers
+  - Sigenergy SigenStor EC 30.0 TP +Sigenergy SigenStor-30T-48
+  - Sigenergy SigenStor-10S-24 -24.18KWh
+  - Sigenergy SigenStor-12S-48 (AS4777-2 2020) · 48.36kWh
+  - Sigenergy SigenStor-25T-48 · 48.36kWh/Gateway
+  - Sigenergy SigenStor-30T-48 · 48.36kWh
+  - Sigenergy SigenStor-30T-48 · 48.36kWh AND 10KW SINGLE PHASE - INCLUDING GATEWAYS
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_h_3_0_v2
+  category: battery
+  canonical_model: SolaX T-BAT H 3.0 V2
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT H 3.0 V2
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-VAST-10K + 5 × SolaX Power T-BAT H 3.0 V2 · 3.1kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs14_4
+  category: battery
+  canonical_model: SolaX T-BAT HS14.4
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS14.4
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-Hybrid-5.0-D + SolaX Power T-BAT HS14.4 · 14.75kWh
+  - SolaX Power X3-Hybrid-5.0-D + SolaX Power T-BAT HS14.4 · 14.75kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs18
+  category: battery
+  canonical_model: SolaX T-BAT HS18
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS18
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS18 · 18.4kWh
+  - SolaX Power X3-Ultra 20kw + SolaX Power T-BAT HS18 · 18.4kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs21_6
+  category: battery
+  canonical_model: SolaX T-BAT HS21.6
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS21.6
+  loose_aliases: []
+  source_examples:
+  - Solax Vast 10kw + T-BAT HS21.6 Battery
+  - Vast 10kw and t-bat21.6 with base
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs25_2
+  category: battery
+  canonical_model: SolaX T-BAT HS25.2
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS25.2
+  loose_aliases: []
+  source_examples:
+  - SOLAX ULTRA 20KW INVERTER WITH 25.2KW STORAGE - 7 X BATTERY STACK
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS25.2 · 25.08kWh
+  - SolaX Power X1-VAST-10K + SolaX Power X1-BOOST-3K-G4 + SolaX Power X1-SMT-10K-G2 + 2 × SolaX Power T-BAT HS25.2
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS25.2
+  - SolaX Power X3-ULT-20KP + 2 × SolaX Power T-BAT HS25.2 · 25.08kWh
+  - SolaX Power X3-ULT-25K + 2 × SolaX Power T-BAT HS25.2
+  - SolaX Power X3-ULT-25K + 2 × SolaX Power T-BAT HS25.2 · 25.08kWh
+  - SolaX Power X3-Ultra-20KP + SolaX Power T-BAT HS25.2 · 25.08kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs28_8
+  category: battery
+  canonical_model: SolaX T-BAT HS28.8
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS28.8
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-ULT-25K + SolaX Power T-BAT HS28.8 · 29.4kWh
+  - Vast 10kw + 28.8kw Battery
+  - 10KW VAST SOLAX AND 28.8KW BATTERY
+  - SolaX Power VAST 10k+ SolaX Power T-BAT HS28.8 · 29.4kWh
+  - Solax Ultra 20kw and Solax 28.8kw Battery
+  - Solax Vast 10kw and 28.8kw battery Solax
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs32_4
+  category: battery
+  canonical_model: SolaX T-BAT HS32.4
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS32.4
+  loose_aliases: []
+  source_examples:
+  - SOLAX X3-Ultra-20kw 3phase + Solax T-BAT HS32.4 Battery - 9 batt stack
+  - SolaX Power 20kw Ultra + SolaX Power T-BAT HS32.4 · 33.1kWh
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS32.4 - stack 5 and 4
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS32.4 · 33.1kWh
+  - SolaX Power X3-Hybrid-10.0-D + SolaX Power T-BAT HS32.4 · 33.1kWh - do 36kw hrs - 2 stacks
+  - SolaX Power X3-ULT-15KP + SolaX Power T-BAT HS32.4 · 33.1kWh
+  - SolaX Power X3-ULT-20KP + SolaX Power T-BAT HS32.4
+  - UPGRADE TO SOLAX 20 AND 32KW HRS
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs36
+  category: battery
+  canonical_model: SolaX T-BAT HS36
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS36
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS36
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs43_2
+  category: battery
+  canonical_model: SolaX T-BAT HS43.2
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS43.2
+  loose_aliases: []
+  source_examples:
+  - 2 x vast 10kw and 43.2kw batts 2 x BMS
+  - SOLAX ULTRA 30KW INVERTER WITH 43.2KW STORAGE - 12 X BATTERY STACK= 2 STACKS OF 6
+  - SolaX Power X1-SMT-10K-G2 + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS43.2
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULT-20KP + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULT-25K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-Ultra-20-D + 43.2kw hr solax battery (2 stacks of 6 - 2 bases)
+  - 30kw Ultra Solax and T-BAT HS43.2kw battery
+  - Solax 20kw Inverter and 43.2kw Solax Battery
+  - VAST 10K INVERTER AND T-BAT HS43.2 BATTERY - 12 batteries of 3.6kw hr
+  - VAST 10K INVERTER AND T-BAT HS43.2 BATTERY - 12 batteries of 3.6kw hrs
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs46_8
+  category: battery
+  canonical_model: SolaX T-BAT HS46.8
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS46.8
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X3-ULT-25K + SolaX Power T-BAT HS46.8 · 47.9kWh
+  - SolaX Power X3-ULTRA 20K + SolaX Power T-BAT HS46.8 · 47.9kWh
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: solax_t_bat_hs5_0
+  category: battery
+  canonical_model: SolaX T-BAT HS5.0
+  manufacturer: SolaX
+  exact_aliases:
+  - SolaX T-BAT HS5.0
+  loose_aliases: []
+  source_examples:
+  - X3-Hybrid-15.0D and T-Bat HS5.0 x 8 for 40kw hrs
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: swatten_all_in_one_19_2kwh_battery
+  category: battery
+  canonical_model: Swatten All In One 19.2kWh battery
+  manufacturer: Swatten
+  exact_aliases:
+  - SWATTEN 19.2 ALL IN 1
+  - Swatten All In One 19.2kWh battery
+  loose_aliases: []
+  source_examples:
+  - 1 × SolaX Power X1-BOOST-5K-G4 +All In one Swatten 19.2 - 1 x 5kw 1P and 6 x 3.2 batt
+  - 2 x Swatten 19.2 ALL IN ONE - 3 phase
+  - All In one Swatten 19.2 - 1 x 5kw 1P and 6 x 3.2 batt
+  - All In one Swatten 19.2 - 1 x 5kw 3P and 6 x 3.2 batt
+  - All in One 19.2kw Swatten Battery System/6kw Hybrid inverter
+  - SolaX Power X1-BOOST-5K + SWATTEN ALL IN 1 19.2
+  - SolaX Power X1-BOOST-5K-G4 + Swatten 19.2 ALL IN ONE
+  - SolaX Power X1-SMT-10K-G2 + SWATTEN ALL IN 19.2KW BATT
+  - SolaX Power X3-Pro-10kw + Swatten 19.2kw Battery All In One
+  - Swatten 19.2kw + ALPHA ESS 13.3P
+  - Swatten All In One 19.2kw/5kw Inverter Swatten
+  - Swatten All in One 19.2kw Battery/INV
+  - SWATTEN 19.2WKW BATTERY
+  - Swatten All In One 19.2 with 5kw 3 phase Hybrid Inverter
+  - Swatten All In One 19.2 with 5kw Hybrid Inverter
+  - Swatten All in One 19.2kw batt
+  - SWATTEN 19.2 ALL IN ONE 5KW
+  - Swatten 19.2 ALL IN ONE
+  - Swatten 19.2 ALL IN ONE - 3 phase
+  - Swatten 19.2kw All In One
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: swatten_all_in_one_25_6kwh_battery
+  category: battery
+  canonical_model: Swatten All In One 25.6kWh battery
+  manufacturer: Swatten
+  exact_aliases:
+  - Swatten All In One 25.6kWh battery
+  loose_aliases: []
+  source_examples:
+  - All In one Swatten 25.6 - 1 x 5kw 3P and 6 x 3.2 batt
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: t_bat_hs43_2
+  category: battery
+  canonical_model: T-BAT HS43.2
+  manufacturer: Unknown
+  exact_aliases:
+  - T-BAT HS43.2
+  loose_aliases: []
+  source_examples:
+  - SolaX Power X1-SMT-10K-G2 + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X1-VAST-10K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS43.2
+  - SolaX Power X3-ULT-20K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULT-20KP + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - SolaX Power X3-ULT-25K + SolaX Power T-BAT HS43.2 · 44.2kWh
+  - 30kw Ultra Solax and T-BAT HS43.2kw battery
+  - VAST 10K INVERTER AND T-BAT HS43.2 BATTERY - 12 batteries of 3.6kw hr
+  - VAST 10K INVERTER AND T-BAT HS43.2 BATTERY - 12 batteries of 3.6kw hrs
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: tesla_powerwall_3_battery
+  category: battery
+  canonical_model: Tesla Powerwall 3 battery
+  manufacturer: Unknown
+  exact_aliases:
+  - Tesla Powerwall 3 battery
+  loose_aliases: []
+  source_examples:
+  - TESLA POWERWALL 3
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: stp10_0_3av_40
+  category: inverter
+  canonical_model: STP10.0-3AV-40
+  manufacturer: SMA
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - STP10.0-3AV-40
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x1_hybrid_5_0_d_g4
+  category: inverter
+  canonical_model: X1-HYBRID-5.0-D-G4
+  manufacturer: SolaX
+  phases: single_phase
+  nominal_kw: null
+  exact_aliases:
+  - X1-HYBRID-5.0-D-G4
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: symo_6_0_3_m
+  category: inverter
+  canonical_model: SYMO-6.0-3-M
+  manufacturer: Fronius
+  phases: three_phase
+  nominal_kw: null
+  exact_aliases:
+  - SYMO-6.0-3-M
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: x3_pro_20k_g2
+  category: inverter
+  canonical_model: X3-PRO-20K-G2
+  manufacturer: SolaX
+  phases: three_phase
+  nominal_kw: 20.0
+  exact_aliases:
+  - X3-PRO-20K-G2
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+metering_catalog:
+- id: meter_generic
+  category: metering
+  canonical_model: Meter
+  exact_aliases:
+  - meter
+  - + meter
+  - with meter
+  - 1 meter
+  - 1 x meter
+  - 2 x meters
+  notes: Generic meter mention; do not infer phase.
+  source_examples: []
+- id: meter_smart
+  category: metering
+  canonical_model: Smart Meter
+  exact_aliases:
+  - smart meter
+  - + smart meter
+  - /SMART METER
+  notes: Smart meter mention; export text remains internal notes fragment if present.
+  source_examples: []
+- id: meter_3p
+  category: metering
+  canonical_model: 3P Meter
+  exact_aliases:
+  - 3 phase meter
+  - 3phase meter
+  - meter 3 phase
+  - meter 3p
+  - 3p meter
+  notes: Three-phase meter.
+  source_examples: []
+- id: meter_2p
+  category: metering
+  canonical_model: 2P Meter
+  exact_aliases:
+  - meter for 2 phase
+  - meter 2 phase
+  - 2 phase meter
+  notes: Two-phase meter.
+  source_examples: []
+- id: meter_alpha
+  category: metering
+  canonical_model: ALPHA Meter
+  exact_aliases:
+  - Alpha Meter
+  - 1 Alpha meter
+  - 2 x Alpha meters
+  notes: Alpha meter.
+  source_examples: []
+- id: meter_chint
+  category: metering
+  canonical_model: Chint Meter
+  exact_aliases:
+  - chint meter
+  notes: Chint meter.
+  source_examples: []
+- id: meter_backstop
+  category: metering
+  canonical_model: Backstop Meter
+  exact_aliases:
+  - backstop meter
+  notes: Backstop meter.
+  source_examples: []
+internal_note_fragments:
+  ct:
+  - CT
+  - + CT
+  - ct meter
+  - 3 phase CT
+  export_limit:
+  - 5kw export
+  - 5kW export
+  - 3kw export
+  - 3kW export
+  - 2kw export
+  - 2kW export
+  underground:
+  - underground
+  wifi_comms:
+  - wifi
+  - WiFi
+  - Wifi Stick
+  - Sungrow Wifi Stick
+ignore_rules:
+- id: ignore_used_solax_10kw
+  match: Used 10kw Solax
+  action: ignore
+  reason: Existing/used equipment, not newly installed hardware.
+specific_corrections:
+- id: corr_solis_gr3p5k_au
+  match: S5-GR3P5K
+  output:
+  - S5-GR3P5K-AU
+  reason: Non-AU and AU text are same actual hardware in this source context.
+- id: corr_sma_10kw
+  match: SMA 10kW
+  output:
+  - STP10.0-3AV-40
+  reason: Manual source file lookup confirmed actual SMA model.
+- id: corr_solax_hybrid_normal
+  match: Solax 5kw Hybrid/5kw normal
+  output:
+  - X1-HYBRID-5.0-D-G4
+  - X1-BOOST-5K-G4
+  reason: Bundle contains one hybrid and one normal SolaX inverter.
+- id: corr_fronius_reuse
+  match: Reusing Fronius Inverter
+  output:
+  - SYMO-6.0-3-M
+  reason: Manual source file lookup confirmed reused Fronius model.
+- id: corr_customer_supplied
+  match: Customer supplied/install only
+  output:
+  - SH10RT
+  reason: Manual source file lookup confirmed actual model.
+- id: corr_solax_15_20
+  match: 1 x 15kw 3p/1 x 20kw 3p
+  output:
+  - X3-PRO-15K-G2
+  - X3-PRO-20K-G2
+  reason: Bundle contains two SolaX three-phase inverters.
+schema_version: hardware_parser_runtime_schema_v8
+rule_intent: Implementation-ready runtime rules. Markdown is readable spec only; this YAML is the runtime source for v1.
+source_examples_policy: source_examples are evidence and fixture material only. They must not be loaded into exact, loose,
+  or fuzzy alias matchers unless manually promoted into exact_aliases or loose_aliases.
+required_parsed_item_fields:
+- model
+- quantity
+- confidence
+- parser_owned
+- source_fragment
+global_guard_phrases:
+  phrases:
+  - used
+  - reusing
+  - old
+  - existing
+  - going back on
+  - customer supplied
+  - install only
+  default_action: do_not_infer_model_from_guarded_text
+  allow_if_specific_correction: true
+  specific_corrections_override_guard_phrases: true
+workflow_boundary:
+  hardware_parser_extracts_hardware_only: true
+  do_not_infer_approval_status: true
+  do_not_create_tasks: true
+  do_not_apply_workflow_labels: true
+  workflow_rules_may_use_parsed_hardware_later_but_are_separate: true
+acceptance_gates:
+  runtime_yaml_parses: true
+  schema_validates: true
+  catalogue_ids_unique: true
+  aliases_collision_checked: true
+  source_examples_ignored_by_alias_matcher: true
+  every_fixture_passes: true
+  unknown_hardware_preserved_not_guessed: true
+  manual_edits_not_overwritten: true
+  parser_version_stored: true
+  source_fragments_preserved: true
+  full_backend_suite_green: true
+source_metadata:
+  required_fields_on_parse:
+  - source_type
+  - source_field
+  - source_fragment
+  source_type_allowed:
+  - workbook
+  - nas_file
+  - manual
+  - document_name
+  - ocr_text
+  - unknown
+  source_field_allowed:
+  - inverter
+  - hardware
+  - notes
+  - document_name
+  - ocr_text
+  - unknown
+  purpose: Allows future workbook/NAS/manual sources to be debugged without changing parsed hardware semantics.
+fixture_expected_output_defaults:
+  inverters: []
+  batteries: []
+  metering: []
+  site_notes:
+    ct: []
+    export_limit: []
+    underground: []
+    comms: []
+    raw_misc: []
+  job_internal_notes_display: []
+  ignored: false
+  warnings: []
+alias_collision_validation:
+  required: true
+  blocking_conditions:
+  - same exact_alias maps to more than one catalog item
+  - same loose_alias maps to more than one catalog item unless represented only as an ambiguous_raw_text_example
+  - same normalized alias exists in both exact_aliases and loose_aliases
+  - source_examples loaded into alias matcher
+  - specific_corrections.output references missing canonical models
+  required_result_before_implementation: zero_blocking_collisions
+aggregation_rules:
+  same_model_same_confidence_same_source_class: aggregate_quantity_into_one_item
+  preserve_source_fragments: store all contributing fragments as source_fragments if aggregation occurs
+  do_not_aggregate: Different models, different confidence levels, or materially different source fragments remain separate
+    items.
+ordering_rules:
+  inverters: source_order
+  batteries: source_order
+  metering: source_order
+  site_notes: source_order_within_each_note_bucket
+  reason: Stable output order prevents flaky tests and unstable UI diffs.
+hardware_database_scope_v1: v1 loads parser runtime rules from YAML. Do not build the full editable hardware catalogue UI/database
+  unless explicitly scoped separately.
+nas_boundary_future:
+  workbook_parser: extracts claimed hardware
+  nas_parser: extracts evidence/document categories later
+  nas_evidence_may_confirm_or_challenge_hardware: true
+  nas_must_not_silently_overwrite_workbook_or_manual_hardware: true
+review_required_handling:
+  unknown_inverter_fragment: place raw fragment into inverters[].model with confidence unconfirmed_raw_text/manual_review
+    as appropriate
+  unknown_battery_fragment: place raw fragment into batteries[].model with confidence unconfirmed_raw_text/manual_review as
+    appropriate
+  non_hardware_misc: place relevant fragment in site_notes.raw_misc
+  warnings_required: true
+  never_guess_closest_model: true
+ambiguous_raw_text_examples:
+- Solax 5kw
+- Solax 10kw
+- Goodwe 10kw
+- Sungrow 5kw
+- Solis 5kw

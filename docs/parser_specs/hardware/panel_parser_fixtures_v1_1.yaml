@@ -1,0 +1,242 @@
+version: panel_fixtures_v1_1
+parser_rule_version: panel_rules_v1_1
+
+fixtures:
+  - id: panel_fixture_longi_440_exact
+    source_fragment: "Longi 440"
+    existing_quantity_value: 30
+    expected:
+      panel:
+        quantity: 30
+        brand: "LONGi Solar"
+        display_name: "440W LONGi Solar"
+        model: "LR5-54HTH-440M"
+        canonical_id: "panel_longi_lr5_54hth_440m"
+        wattage_w: 440
+        panel_array_kw: 13.2
+        confidence: alias
+        parser_owned: true
+        source_fragment: "Longi 440"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: null
+      warnings: []
+      ignored: false
+
+  - id: panel_fixture_longi_brand_only_no_derivation
+    source_fragment: "Longi"
+    existing_quantity_value: 30
+    expected:
+      panel:
+        quantity: 30
+        brand: "LONGi Solar"
+        display_name: "Longi"
+        model: null
+        canonical_id: null
+        wattage_w: null
+        panel_array_kw: null
+        confidence: unconfirmed_raw_text
+        parser_owned: true
+        source_fragment: "Longi"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: null
+      warnings:
+        - "Brand-only panel source could not be resolved without wattage or system-size evidence."
+      ignored: false
+
+  - id: panel_fixture_longi_brand_only_derives_440
+    source_fragment: "Longi"
+    existing_quantity_value: 30
+    proposal_system_size_kw: 13.20
+    expected:
+      panel:
+        quantity: 30
+        brand: "LONGi Solar"
+        display_name: "440W LONGi Solar"
+        model: "LR5-54HTH-440M"
+        canonical_id: "panel_longi_lr5_54hth_440m"
+        wattage_w: 440
+        panel_array_kw: 13.2
+        confidence: derived_from_system_size
+        parser_owned: true
+        source_fragment: "Longi"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: null
+      warnings: []
+      ignored: false
+
+  - id: panel_fixture_jinko_case_standard
+    source_fragment: "Jinko 440"
+    expected:
+      panel:
+        quantity: null
+        brand: "Jinko Solar"
+        display_name: "440W Jinko Solar"
+        model: "JKM440N-54HL4"
+        canonical_id: "panel_jinko_jkm440n_54hl4"
+        wattage_w: 440
+        panel_array_kw: null
+        confidence: alias
+        parser_owned: true
+        source_fragment: "Jinko 440"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: null
+      warnings: []
+      ignored: false
+
+  - id: panel_fixture_jinko_case_black
+    source_fragment: "JINKO 440"
+    expected:
+      panel:
+        quantity: null
+        brand: "Jinko Solar"
+        display_name: "440W Jinko Solar"
+        model: "JKM440N-54HL4R-B"
+        canonical_id: "panel_jinko_jkm440n_54hl4r_b"
+        wattage_w: 440
+        panel_array_kw: null
+        confidence: alias
+        parser_owned: true
+        source_fragment: "JINKO 440"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: null
+      warnings: []
+      ignored: false
+
+  - id: panel_fixture_suntech_415_manual_review
+    source_fragment: "Suntech 415"
+    expected:
+      panel:
+        quantity: null
+        brand: "Suntech Power"
+        display_name: "415W Suntech Power"
+        model: null
+        model_options:
+          - "STP415S-78H/Vfh"
+          - "Ultra V mini STP415S-C54/Umhm"
+        canonical_id: "panel_suntech_415_ambiguous"
+        wattage_w: 415
+        panel_array_kw: null
+        confidence: manual_review
+        parser_owned: true
+        source_fragment: "Suntech 415"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: review_evidence
+      warnings:
+        - "Suntech 415 has multiple known source model possibilities."
+      ignored: false
+
+  - id: panel_fixture_strict_ignore_dash
+    source_fragment: "-"
+    expected:
+      panel: null
+      routed_destination: null
+      warnings: []
+      ignored: true
+
+  - id: panel_fixture_ae_440_or_tw_preserve
+    source_fragment: "AE 440 or TW"
+    expected:
+      panel: null
+      routed_destination: review_evidence
+      confidence: manual_review
+      review_reason: multiple_possible_panel_brands
+      preserved_source_fragment: "AE 440 or TW"
+      warnings:
+        - "Ambiguous panel choice preserved for review; not parsed as panel hardware."
+      ignored: false
+
+  - id: panel_fixture_tigo_optimisers_preserve
+    source_fragment: "3 x tigo Optimisers"
+    expected:
+      panel: null
+      routed_destination: optimiser_candidate
+      confidence: manual_review
+      preserved_source_fragment: "3 x tigo Optimisers"
+      warnings: []
+      ignored: false
+
+  - id: panel_fixture_conflict_proposal_overrides_sheet
+    source_fragment: "Longi 440"
+    proposal_fragment: "475W LONGi Solar"
+    existing_quantity_value: 20
+    expected:
+      panel:
+        quantity: 20
+        brand: "LONGi Solar"
+        display_name: "475W LONGi Solar"
+        model: "LR7-54HTH-475M"
+        canonical_id: "panel_longi_lr7_54hth_475m"
+        wattage_w: 475
+        panel_array_kw: 9.5
+        confidence: proposal_overrode_sheet
+        parser_owned: true
+        source_fragment: "Longi 440"
+        proposal_fragment: "475W LONGi Solar"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: review_evidence
+      warnings:
+        - "Panel value from proposal/NAS overrode sheet value."
+      ignored: false
+
+
+  - id: panel_fixture_derivation_outside_tolerance
+    source_fragment: "Longi"
+    existing_quantity_value: 30
+    proposal_system_size_kw: 13.05
+    expected:
+      panel:
+        quantity: 30
+        brand: "LONGi Solar"
+        display_name: "Longi"
+        model: null
+        canonical_id: null
+        wattage_w: null
+        panel_array_kw: null
+        confidence: manual_review
+        parser_owned: true
+        source_fragment: "Longi"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: review_evidence
+      warnings:
+        - "Derived wattage did not match a catalogue wattage within +/- 2W tolerance."
+      ignored: false
+
+  - id: panel_fixture_wattage_only_440
+    source_fragment: "440W panels"
+    expected:
+      panel:
+        quantity: null
+        brand: null
+        display_name: "440W panels"
+        model: null
+        canonical_id: null
+        wattage_w: 440
+        panel_array_kw: null
+        confidence: unconfirmed_raw_text
+        parser_owned: true
+        source_fragment: "440W panels"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: null
+      warnings:
+        - "Wattage-only panel source preserved without brand/model inference."
+      ignored: false
+
+  - id: panel_fixture_tw_brand_only_no_derivation
+    source_fragment: "TW"
+    expected:
+      panel:
+        quantity: null
+        brand: "Tongwei Solar"
+        display_name: "TW"
+        model: null
+        canonical_id: null
+        wattage_w: null
+        panel_array_kw: null
+        confidence: manual_review
+        parser_owned: true
+        source_fragment: "TW"
+        parser_rule_version: panel_rules_v1_1
+      routed_destination: review_evidence
+      warnings:
+        - "Standalone TW is too vague to resolve without wattage or system-size evidence."
+      ignored: false

@@ -1,0 +1,302 @@
+version: panel_rules_v1_1
+hardware_type: panel
+
+policy:
+  source_data_trust:
+    sheet_data: imported_evidence_not_truth
+    proposal_nas_data: more_authoritative_when_available
+  model_field_rule: "model must be null unless an actual catalogue model is confidently identified"
+  brand_optional: true
+  quantity_already_parsed: true
+  parser_must_not_extract_quantity_in_this_pass: true
+  panel_fields_are_editable_textboxes: true
+  manual_edits_must_not_be_overwritten_without_confirmation: true
+  source_fragment_required: true
+  parser_owned_required: true
+  parser_rule_version_required: true
+  wattage_derivation_tolerance_w: 2
+  panel_array_kw_formula: "panel_quantity * wattage_w / 1000"
+  conflict_rule: "proposal/NAS wins over sheet, but sheet source_fragment must be preserved"
+  strict_ignore_values:
+    - "-"
+    - "/"
+    - "N/A"
+    - "na"
+  routed_destinations:
+    - internal_note
+    - review_evidence
+    - accessory_hardware_candidate
+    - battery_hardware_candidate
+    - optimiser_candidate
+    - manual_review
+  non_panel_ambiguous_values:
+    - value: "AE 440 or TW"
+      action: preserve_not_panel
+      routed_destination: review_evidence
+      reason: multiple_possible_panel_brands
+    - value: "TO AE PANELS"
+      action: preserve_not_panel
+      routed_destination: internal_note
+      reason: admin_or_procurement_note
+    - value: "3 x tigo Optimisers"
+      action: preserve_not_panel
+      routed_destination: optimiser_candidate
+      reason: optimiser_accessory_not_panel
+    - value: "Ben installed"
+      action: preserve_not_panel
+      routed_destination: internal_note
+      reason: installation_note_not_panel
+    - value: "2 x batteries"
+      action: preserve_not_panel
+      routed_destination: battery_hardware_candidate
+      reason: battery_note_not_panel
+    - value: "ALPHA ESS 10KW"
+      action: preserve_not_panel
+      routed_destination: battery_hardware_candidate
+      reason: battery_or_inverter_hardware_not_panel
+    - value: "Alpha ESS SMILE-BAT-13.3P"
+      action: preserve_not_panel
+      routed_destination: battery_hardware_candidate
+      reason: battery_hardware_not_panel
+
+confidence_levels:
+  - exact
+  - alias
+  - derived_from_system_size
+  - proposal_overrode_sheet
+  - unconfirmed_raw_text
+  - manual_review
+
+confidence_policy:
+  confidence_describes_certainty_not_category: true
+  invalid_confidence_examples:
+    - accessory_hardware
+  use_routed_destination_for_category: true
+
+canonical_panels:
+  - canonical_id: panel_longi_lr5_54hph_415m
+    brand: "LONGi Solar"
+    display_name: "415W LONGi Solar"
+    model: "LR5-54HPH-415M"
+    wattage_w: 415
+    exact_aliases:
+      - value: "Longi 415"
+      - value: "Longi 415W"
+      - value: "Longi 415 "
+      - value: "LONGI 415"
+
+  - canonical_id: panel_longi_lr5_54hth_440m
+    brand: "LONGi Solar"
+    display_name: "440W LONGi Solar"
+    model: "LR5-54HTH-440M"
+    wattage_w: 440
+    exact_aliases:
+      - value: "Longi 440"
+      - value: "Longi 440 "
+      - value: "Longi  440"
+      - value: "Longi 440/TW"
+        decision_log_id: panel_decision_longi_440_tw_user_approved
+
+  - canonical_id: panel_longi_lr7_54hth_475m
+    brand: "LONGi Solar"
+    display_name: "475W LONGi Solar"
+    model: "LR7-54HTH-475M"
+    wattage_w: 475
+    exact_aliases:
+      - value: "Longi 475"
+      - value: "LONGI 475"
+
+  - canonical_id: panel_ae_ae415md_108bd
+    brand: "AE Solar"
+    display_name: "415W AE Solar"
+    model: "AE415MD-108BD"
+    wattage_w: 415
+    exact_aliases:
+      - value: "AE 415W"
+      - value: "AE panels 415"
+
+  - canonical_id: panel_ae_ae440cmd_108bde_all_black
+    brand: "AE Solar"
+    display_name: "440W AE Solar METEOR (All Black)"
+    model: "AE440CMD-108BDE"
+    wattage_w: 440
+    exact_aliases:
+      - value: "AE Solar 440 Full Black"
+      - value: "AE Black"
+
+  - canonical_id: panel_ae_ae440cmd_108bde_meteor
+    brand: "AE Solar"
+    display_name: "440W AE Solar METEOR"
+    model: "AE440CMD-108BDE"
+    wattage_w: 440
+    exact_aliases:
+      - value: "AE Solar Meteor 440"
+
+  - canonical_id: panel_trina_vertex_s_tsm_415de09r_08
+    brand: "Trina Solar"
+    display_name: "415W Trina Solar"
+    model: "VERTEX S TSM-415DE09R.08"
+    wattage_w: 415
+    exact_aliases:
+      - value: "TRINA 415WATTS"
+      - value: "Trina 415Watt - DE09R.08"
+      - value: "Trina 415"
+
+  - canonical_id: panel_trina_tsm_400de09_08
+    brand: "Trina Solar"
+    display_name: "400W Trina Solar"
+    model: "TSM-400DE09.08"
+    wattage_w: 400
+    exact_aliases:
+      - value: "Trina 400"
+
+  - canonical_id: panel_jinko_jkm440n_54hl4
+    brand: "Jinko Solar"
+    display_name: "440W Jinko Solar"
+    model: "JKM440N-54HL4"
+    wattage_w: 440
+    exact_aliases:
+      - value: "Jinko 440"
+        case_sensitive: true
+        decision_log_id: panel_decision_case_sensitive_jinko_440
+
+  - canonical_id: panel_jinko_jkm440n_54hl4r_b
+    brand: "Jinko Solar"
+    display_name: "440W Jinko Solar"
+    model: "JKM440N-54HL4R-B"
+    wattage_w: 440
+    exact_aliases:
+      - value: "JINKO 440"
+        case_sensitive: true
+        decision_log_id: panel_decision_case_sensitive_jinko_440
+
+  - canonical_id: panel_jinko_jkm415n_6rl3
+    brand: "Jinko Solar"
+    display_name: "415W Jinko Solar"
+    model: "JKM415N-6RL3"
+    wattage_w: 415
+    exact_aliases:
+      - value: "Jinko 415"
+
+  - canonical_id: panel_suntech_415_ambiguous
+    brand: "Suntech Power"
+    display_name: "415W Suntech Power"
+    model: null
+    model_options:
+      - "STP415S-78H/Vfh"
+      - "Ultra V mini STP415S-C54/Umhm"
+    wattage_w: 415
+    requires_model_precision_review: true
+    exact_aliases:
+      - value: "Suntech 415"
+        confidence_override: manual_review
+        decision_log_id: panel_decision_suntech_415_two_models
+
+  - canonical_id: panel_ja_jam54d41_440_lb_1500v
+    brand: "JA Solar"
+    display_name: "440W JA Solar (All Black)"
+    model: "JAM54D41-440/LB/1500V"
+    wattage_w: 440
+    exact_aliases:
+      - value: "JA All Black"
+      - value: "JA BLACK 440"
+      - value: "JA Solar 440"
+
+  - canonical_id: panel_risen_rsm108_9_440n
+    brand: "Risen Energy"
+    display_name: "440W Risen Energy"
+    model: "RSM108-9-440N"
+    wattage_w: 440
+    exact_aliases: []
+    notes: "No clear sheet aliases confirmed. Do not map random 440W unknowns to Risen."
+
+  - canonical_id: panel_seraphim_srp_440_btd_bg
+    brand: "Jiangsu Seraphim Solar"
+    display_name: "440W Jiangsu Seraphim Solar"
+    model: "SRP-440-BTD-BG"
+    wattage_w: 440
+    exact_aliases:
+      - value: "Seraphim 440"
+      - value: "Seraphim 440 "
+      - value: "SERAPHIM 440 BIFACIAL"
+
+  - canonical_id: panel_seraphim_srp_475_btd_bg
+    brand: "Jiangsu Seraphim Solar"
+    display_name: "475W Jiangsu Seraphim Solar"
+    model: "SRP-475-BTD-BG"
+    wattage_w: 475
+    exact_aliases:
+      - value: "Seraphim 475"
+
+  - canonical_id: panel_rec_460_ambiguous
+    brand: "REC Solar"
+    display_name: "460W REC Solar"
+    model: null
+    model_options:
+      - "REC460AA Pure-RX"
+      - "REC440AA 72"
+    wattage_w: 460
+    requires_model_precision_review: true
+    exact_aliases:
+      - value: "REC 460's"
+        confidence_override: manual_review
+        decision_log_id: panel_decision_rec_460_two_models
+
+  - canonical_id: panel_tongwei_twmnh_48hd465_display_440
+    brand: "Tongwei Solar"
+    display_name: "440W Tongwei Solar"
+    model: "TWMNH-48HD465"
+    wattage_w: 440
+    exact_aliases:
+      - value: "TW 440"
+      - value: "TW SOLAR"
+    notes: "User supplied 465 model reference for 440W display group. Preserve as supplied."
+
+  - canonical_id: panel_tongwei_twmnh_48hd465
+    brand: "Tongwei Solar"
+    display_name: "465W Tongwei Solar"
+    model: "TWMNH-48HD465"
+    wattage_w: 465
+    exact_aliases:
+      - value: "TW 465"
+      - value: "TW 465 WATT"
+      - value: "TW Solar 465"
+
+  - canonical_id: panel_canadian_cs6_2_48td_440_all_black
+    brand: "Canadian Solar"
+    display_name: "440W Canadian Solar (All Black)"
+    model: "CS6.2-48TD-440"
+    wattage_w: 440
+    exact_aliases:
+      - value: "Canadian 440 All Black"
+
+brand_only_aliases:
+  - source: "Longi"
+    brand: "LONGi Solar"
+    action: preserve_brand_only_model_null_unless_derivable
+  - source: "AE Solar"
+    brand: "AE Solar"
+    action: preserve_brand_only_model_null_unless_derivable
+  - source: "AE panels"
+    brand: "AE Solar"
+    action: preserve_brand_only_model_null_unless_derivable
+  - source: "AE"
+    brand: "AE Solar"
+    action: preserve_brand_only_model_null_unless_derivable
+  - source: "TW"
+    brand: "Tongwei Solar"
+    action: preserve_brand_only_model_null_unless_derivable
+    confidence: manual_review
+    reason: "Short brand-only shorthand is risky without wattage/system-size evidence."
+
+
+wattage_only_policy:
+  preserve_wattage_without_brand: true
+  do_not_guess_brand_from_wattage_only: true
+  examples:
+    - source: "440W panels"
+      display_name: "440W panels"
+      brand: null
+      model: null
+      wattage_w: 440
+      confidence: unconfirmed_raw_text

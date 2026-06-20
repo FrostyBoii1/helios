@@ -56,6 +56,11 @@ services:
     volumes:
       # Live code mount for development hot-reload.
       - ./backend:/app
+      # Read-only mount of the curated parser spec/fixtures (docs/parser_specs) so backend
+      # validator tests can read the hardware-parser "law" without it living in the app
+      # package. The spec stays documentation/law; runtime code will load seeded DB data
+      # later, not these files directly.
+      - ./docs/parser_specs:/app/parser_specs:ro
       # NAS share + app storage. In production, point the host paths at the NAS.
       - ${NAS_HOST_PATH}:${NAS_ROOT}
       - ${STORAGE_HOST_PATH}:${STORAGE_ROOT}

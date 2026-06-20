@@ -241,6 +241,22 @@ These are stubbed/absent and represent the next phases:
   `source_import_row_id` from live variants before deleting import rows (FK-gap fix). **Promote-to-
   primary remains deferred** (an edit never touches the primary Customer), as do backfill and
   document/NAS capture. **(B4 — proposed)** auto-link/merge for identical names.
+- **Hardware Parser / Hardware Database** lane: **(Stage 0 built)** the curated parser package
+  (v9.1 hardware + v1.1 panel) is vendored as LAW under **`docs/parser_specs/hardware/`** (see its
+  `README.md`) and gated by `backend/tests/test_hardware_parser_spec_validation.py` (unique
+  catalogue/fixture IDs, no alias collisions, `source_examples`≠aliases, confidence vocabularies,
+  panel `model: null` rules, version-drift pin). The backend reads the spec via a read-only mount
+  (`./docs/parser_specs:/app/parser_specs:ro`). **Not yet built (planned stages):** DB-backed
+  `hardware_catalogue` + `hardware_alias` (admin-editable; ignore/correction/guard rules stay
+  versioned config for now); a seed from the YAML; **Settings > Hardware** admin UI (search +
+  multi-filter by phase/size/brand/type; soft-delete + **restore** + DELETED section; aliases
+  admin-only to view); **`Job.details.hardware`** editable per-job SNAPSHOTS (inverters/batteries/
+  metering lists + a panel object + site_notes) that NEVER depend on the live catalogue; the parser
+  runtime (proven by the fixtures); current-sheet import integration; panel integration; clean
+  wipe + reimport; NAS/proposal later. **Keystone law:** Job hardware is a stored editable snapshot
+  — catalogue renames/alias edits/deletes/restores must NOT change already-parsed Job hardware (see
+  `docs/business_rules.md`). The existing `HARDWARE_UNCERTAIN` auto-label is legacy/temporary,
+  to be reconciled once the parser lands (the parser itself must not create workflow labels).
 - **NAS file** integration: browse/link a job/customer's NAS folder, uploads,
   in-browser PDF/image preview, permission-gated serving (the `documents` table
   exists; no service/endpoints/UI). Job detail shows a Documents placeholder.

@@ -1,0 +1,742 @@
+version: hardware_parser_test_fixtures_v9_validation_clean
+notes: All fixtures use full expected output shape. Omitted runtime fields are not allowed in fixture assertions.
+fixtures:
+- id: bundle_two_inverters_battery_3p_meter
+  raw: 1 x Solax 10kw 3 Phase inverter - 1 × Alpha ESS SMILE-M-BAT-5P V · 25kWh + meter 3p
+  expected:
+    inverters:
+    - model: X1-SMT-10K-G2
+      quantity: 1
+      confidence: manual_correction
+      parser_owned: true
+      source_fragment: 1 x Solax 10kw 3 Phase inverter
+      source_type: workbook
+      source_field: hardware
+    batteries:
+    - model: SMILE-M-BAT-5P V
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: 1 × Alpha ESS SMILE-M-BAT-5P V · 25kWh
+      source_type: workbook
+      source_field: hardware
+    metering:
+    - model: 3P Meter
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: meter 3p
+      source_type: workbook
+      source_field: hardware
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: solax_hybrid_and_normal_bundle_unknown_capacity
+  raw: Solax 5kw Hybrid/5kw normal + 25kw batt
+  expected:
+    inverters:
+    - model: X1-HYBRID-5.0-D-G4
+      quantity: 1
+      confidence: manual_correction
+      parser_owned: true
+      source_fragment: Solax 5kw Hybrid
+      source_type: workbook
+      source_field: hardware
+    - model: X1-BOOST-5K-G4
+      quantity: 1
+      confidence: manual_correction
+      parser_owned: true
+      source_fragment: 5kw normal
+      source_type: workbook
+      source_field: hardware
+    batteries:
+    - model: 25kw batt
+      quantity: 1
+      confidence: unconfirmed_raw_text
+      parser_owned: true
+      source_fragment: 25kw batt
+      source_type: workbook
+      source_field: hardware
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: unknown_inverter_known_battery
+  raw: Unknown SolarThing 7kw + Alpha ESS SMILE-BAT-13.3P
+  expected:
+    inverters:
+    - model: Unknown SolarThing 7kw
+      quantity: 1
+      confidence: unconfirmed_raw_text
+      parser_owned: true
+      source_fragment: Unknown SolarThing 7kw
+      source_type: workbook
+      source_field: hardware
+    batteries:
+    - model: SMILE-BAT-13.3P
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: Alpha ESS SMILE-BAT-13.3P
+      source_type: workbook
+      source_field: hardware
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: known_inverter_unknown_battery_capacity
+  raw: SolaX Power X1-SMT-10K-G2 + 25kw batt
+  expected:
+    inverters:
+    - model: X1-SMT-10K-G2
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: SolaX Power X1-SMT-10K-G2
+      source_type: workbook
+      source_field: hardware
+    batteries:
+    - model: 25kw batt
+      quantity: 1
+      confidence: unconfirmed_raw_text
+      parser_owned: true
+      source_fragment: 25kw batt
+      source_type: workbook
+      source_field: hardware
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: ct_and_meter_together
+  raw: Solis 5kw x 2 + ct meter + 1 export meter
+  expected:
+    inverters:
+    - model: S5-GR1P5K
+      quantity: 2
+      confidence: alias
+      parser_owned: true
+      source_fragment: Solis 5kw x 2
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering:
+    - model: Meter
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: 1 export meter
+      source_type: workbook
+      source_field: hardware
+    site_notes:
+      ct:
+      - ct meter
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: export_only_no_meter
+  raw: Solis S5-GR1P6K - 3kw export
+  expected:
+    inverters:
+    - model: S5-GR1P6K
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: Solis S5-GR1P6K
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit:
+      - 3kw export
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: meter_plus_export
+  raw: SG10RS + meter 5kw export
+  expected:
+    inverters:
+    - model: SG10RS
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: SG10RS
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering:
+    - model: Meter
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: meter
+      source_type: workbook
+      source_field: hardware
+    site_notes:
+      ct: []
+      export_limit:
+      - 5kw export
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: smart_meter_plus_export_note_fragment
+  raw: Goodwe 8kw + smart meter 5kw export
+  expected:
+    inverters:
+    - model: Goodwe 8kw
+      quantity: 1
+      confidence: unconfirmed_raw_text
+      parser_owned: true
+      source_fragment: Goodwe 8kw
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering:
+    - model: Smart Meter
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: smart meter
+      source_type: workbook
+      source_field: hardware
+    site_notes:
+      ct: []
+      export_limit:
+      - 5kw export
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display:
+    - smart meter 5kw export
+    ignored: false
+    warnings: []
+- id: ct_not_meter
+  raw: Solis 10kw + CT and Wifi
+  expected:
+    inverters:
+    - model: S5-GR1P10K
+      quantity: 1
+      confidence: alias
+      parser_owned: true
+      source_fragment: Solis 10kw
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct:
+      - CT
+      export_limit: []
+      underground: []
+      comms:
+      - Wifi
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: underground_note
+  raw: Solis 10kw + CT - underground
+  expected:
+    inverters:
+    - model: S5-GR1P10K
+      quantity: 1
+      confidence: alias
+      parser_owned: true
+      source_fragment: Solis 10kw
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct:
+      - CT
+      export_limit: []
+      underground:
+      - underground
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: wifi_stick_to_notes
+  raw: SG10RT + Sungrow Wifi Stick
+  expected:
+    inverters:
+    - model: SG10RT
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: SG10RT
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms:
+      - Sungrow Wifi Stick
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: mojibake_quantity_and_dot
+  raw: SolaX Power X1-SMT-10K-G2 + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh + meter 3p
+  expected:
+    inverters:
+    - model: X1-SMT-10K-G2
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: SolaX Power X1-SMT-10K-G2
+      source_type: workbook
+      source_field: hardware
+    batteries:
+    - model: SMILE-BAT-13.3P
+      quantity: 2
+      confidence: exact
+      parser_owned: true
+      source_fragment: 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+      source_type: workbook
+      source_field: hardware
+    metering:
+    - model: 3P Meter
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: meter 3p
+      source_type: workbook
+      source_field: hardware
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: manual_correction_customer_supplied
+  raw: Customer supplied/install only
+  expected:
+    inverters:
+    - model: SH10RT
+      quantity: 1
+      confidence: manual_correction
+      parser_owned: true
+      source_fragment: Customer supplied/install only
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: manual_correction_reusing_fronius
+  raw: Reusing Fronius Inverter
+  expected:
+    inverters:
+    - model: SYMO-6.0-3-M
+      quantity: 1
+      confidence: manual_correction
+      parser_owned: true
+      source_fragment: Reusing Fronius Inverter
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: ignore_used_solax
+  raw: Used 10kw Solax
+  expected:
+    inverters: []
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: true
+    warnings: []
+- id: manual_bundle_15kw_20kw
+  raw: 1 x 15kw 3p/1 x 20kw 3p
+  expected:
+    inverters:
+    - model: X3-PRO-15K-G2
+      quantity: 1
+      confidence: manual_correction
+      parser_owned: true
+      source_fragment: 1 x 15kw 3p
+      source_type: workbook
+      source_field: hardware
+    - model: X3-PRO-20K-G2
+      quantity: 1
+      confidence: manual_correction
+      parser_owned: true
+      source_fragment: 1 x 20kw 3p
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: sma_manual_model
+  raw: Self supplied SMA 10kW
+  expected:
+    inverters:
+    - model: STP10.0-3AV-40
+      quantity: 1
+      confidence: manual_correction
+      parser_owned: true
+      source_fragment: Self supplied SMA 10kW
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: solis_gr3p5k_au_equivalence
+  raw: Solis S5-GR3P5K
+  expected:
+    inverters:
+    - model: S5-GR3P5K-AU
+      quantity: 1
+      confidence: manual_correction
+      parser_owned: true
+      source_fragment: Solis S5-GR3P5K
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: two_phase_meter
+  raw: Neovolt BW-BAT-10.1kWh + meter for 2 phase
+  expected:
+    inverters: []
+    batteries:
+    - model: BW-BAT-10.1
+      quantity: 1
+      confidence: alias
+      parser_owned: true
+      source_fragment: Neovolt BW-BAT-10.1kWh
+      source_type: workbook
+      source_field: hardware
+    metering:
+    - model: 2P Meter
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: meter for 2 phase
+      source_type: workbook
+      source_field: hardware
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: alpha_meter_quantity
+  raw: 2× Alpha ESS SMILE-BAT-13.3P + 1 x Exten 13.3P + 2 x Alpha meters
+  expected:
+    inverters: []
+    batteries:
+    - model: SMILE-BAT-13.3P
+      quantity: 3
+      confidence: alias
+      parser_owned: true
+      source_fragment: 2× Alpha ESS SMILE-BAT-13.3P + 1 x Exten 13.3P
+      source_type: workbook
+      source_field: hardware
+    metering:
+    - model: ALPHA Meter
+      quantity: 2
+      confidence: exact
+      parser_owned: true
+      source_fragment: 2 x Alpha meters
+      source_type: workbook
+      source_field: hardware
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: review_required_raw_preserved
+  raw: Same inverter going back on
+  expected:
+    inverters:
+    - model: Same inverter going back on
+      quantity: 1
+      confidence: unconfirmed_raw_text
+      parser_owned: true
+      source_fragment: Same inverter going back on
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: source_examples_are_not_aliases
+  raw: Alpha ESS SMILE-G3-S5-INV + Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+  expected:
+    inverters:
+    - model: Alpha ESS SMILE-G3-S5-INV
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: Alpha ESS SMILE-G3-S5-INV
+      source_type: workbook
+      source_field: hardware
+    batteries:
+    - model: SMILE-BAT-13.3P
+      quantity: 1
+      confidence: exact
+      parser_owned: true
+      source_fragment: Alpha ESS SMILE-BAT-13.3P · 13.34kWh
+      source_type: workbook
+      source_field: hardware
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: ambiguous_solax_5kw_preserved_raw
+  raw: Solax 5kw
+  expected:
+    inverters:
+    - model: Solax 5kw
+      quantity: 1
+      confidence: unconfirmed_raw_text
+      parser_owned: true
+      source_fragment: Solax 5kw
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings:
+    - Ambiguous inverter text preserved as raw hardware label; do not guess X1-BOOST-5K-G4, X1-SMT-5K-G2, or X1-HYBRID-5.0-D-G4.
+- id: known_battery_unknown_inverter_with_meter
+  raw: Unknown Brand 9kw + Alpha ESS SMILE-BAT-13.3P + meter
+  expected:
+    inverters:
+    - model: Unknown Brand 9kw
+      confidence: unconfirmed_raw_text
+      source_fragment: Unknown Brand 9kw
+      quantity: 1
+      parser_owned: true
+      source_type: workbook
+      source_field: hardware
+    batteries:
+    - model: SMILE-BAT-13.3P
+      confidence: exact
+      source_fragment: Alpha ESS SMILE-BAT-13.3P
+      quantity: 1
+      parser_owned: true
+      source_type: workbook
+      source_field: hardware
+    metering:
+    - model: Meter
+      confidence: exact
+      source_fragment: meter
+      quantity: 1
+      parser_owned: true
+      source_type: workbook
+      source_field: hardware
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display: []
+    ignored: false
+    warnings: []
+- id: ct_meter_and_export_fragment
+  raw: Solis 10kw + CT and meter 5kw export
+  expected:
+    inverters:
+    - model: Solis 10kw
+      confidence: unconfirmed_raw_text
+      source_fragment: Solis 10kw
+      quantity: 1
+      parser_owned: true
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering:
+    - model: Meter
+      confidence: exact
+      source_fragment: meter
+      quantity: 1
+      parser_owned: true
+      source_type: workbook
+      source_field: hardware
+    site_notes:
+      ct:
+      - CT
+      export_limit:
+      - 5kw export
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display:
+    - CT
+    - 5kw export
+    ignored: false
+    warnings: []
+- id: export_only_no_meter_2
+  raw: Solis S5-GR1P6K - 3kw export
+  expected:
+    inverters:
+    - model: S5-GR1P6K
+      confidence: exact
+      source_fragment: Solis S5-GR1P6K
+      quantity: 1
+      parser_owned: true
+      source_type: workbook
+      source_field: hardware
+    batteries: []
+    metering: []
+    site_notes:
+      ct: []
+      export_limit:
+      - 3kw export
+      underground: []
+      comms: []
+      raw_misc: []
+    job_internal_notes_display:
+    - 3kw export
+    ignored: false
+    warnings: []
+- id: source_examples_not_match_alias_bundle
+  raw: Alpha ESS SMILE-G3-S5-INV + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh - 13.3p + ext
+  expected:
+    inverters:
+    - model: Alpha ESS SMILE-G3-S5-INV
+      confidence: exact
+      source_fragment: Alpha ESS SMILE-G3-S5-INV
+      quantity: 1
+      parser_owned: true
+      source_type: workbook
+      source_field: hardware
+    batteries:
+    - model: SMILE-BAT-13.3P
+      quantity: 2
+      confidence: exact
+      source_fragment: 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
+      parser_owned: true
+      source_type: workbook
+      source_field: hardware
+    metering: []
+    site_notes:
+      ct: []
+      export_limit: []
+      underground: []
+      comms: []
+      raw_misc:
+      - 13.3p + ext
+    job_internal_notes_display: []
+    ignored: false
+    warnings:
+    - This full source string must not be treated as a single inverter alias.

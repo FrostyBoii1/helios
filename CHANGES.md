@@ -9,6 +9,45 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-20 — Hardware Parser lane, Stage 0: vendor curated parser spec as law + validation gates
+
+- **Why:** the Hardware Parser / Hardware Database lane needs a stable, version-controlled
+  contract BEFORE any catalogue table, seed, parser runtime, Settings UI, or import wiring is
+  built. The curated parser package (the `v9.1` hardware + `v1.1` panel packages) was authored
+  offline; Stage 0 turns it into tracked project law with automated validation, with **zero
+  runtime/DB/parser behavior change**.
+- **What:** vendored the 10 curated files verbatim into **`docs/parser_specs/hardware/`** (spec,
+  runtime rules, fixtures, decision logs, validation notes — hardware + panel) plus an index
+  `README.md`. Added `backend/tests/test_hardware_parser_spec_validation.py` (10 pure file/YAML
+  gates, no app import, no DB): files load; unique catalogue IDs (140 hardware + 7 metering + 20
+  panel); unique fixture IDs (27 hardware + 13 panel); `source_examples` are never aliases (880
+  checked); exact/loose alias collisions detected (237 aliases; panel case-sensitive pairs like
+  Jinko/JINKO allowed); confidence values from the approved vocabularies; the panel `model: null`
+  rules (brand/wattage-only/ambiguous); and the known `parser_rule_version` drift
+  (runtime says `v8`, package is `v9.1`) pinned/reported. The spec files are **documentation/law
+  only** — runtime code will later read a DB-seeded catalogue, not these files directly.
+- **Test infra:** the backend container only mounts `./backend`, so it can't see `docs/`. Added a
+  read-only mount **`./docs/parser_specs:/app/parser_specs:ro`** to the backend service in
+  `docker-compose.yml` so the validator can read the vendored spec; the test resolves either the
+  container mount or a repo-relative path.
+- **No DB/no migration/no runtime change:** no tables, no seed, no parser, no Settings UI, no
+  import wiring; no data mutated; alembic head unchanged (`b2c3d4e5f6a7`). Full backend suite
+  **528 passed** (518 + 10 new).
+- **Dependencies:** `PyYAML==6.0.3` is now pinned explicitly in `backend/requirements.txt` so the
+  spec-validation test declares its own dependency rather than relying on it being pulled in
+  transitively (it was previously only incidentally present). The backend image was rebuilt so
+  the declared deps are baked in (this also restored `openpyxl==3.1.5`, which had been
+  live-installed in the old container but not baked into the image — a pre-existing drift the
+  mount-recreate exposed).
+- **Files:** new `docs/parser_specs/hardware/*` (10 curated + README), `docker-compose.yml`
+  (read-only spec mount), `backend/requirements.txt` (explicit `PyYAML` pin),
+  `backend/tests/test_hardware_parser_spec_validation.py`; docs (CHANGES, DEVELOPER_HANDOFF,
+  business_rules). Permanent. **Deferred (later stages):** catalogue
+  DB + seed, Settings > Hardware admin UI, Job `details.hardware` snapshot read/edit, parser
+  runtime, import integration, panel integration, clean-wipe reimport, NAS/proposal.
+
+---
+
 ## 2026-06-19 — Job-list source name also covers IMPORTED (attach/grouped) jobs
 
 - **Why:** the previous slice only surfaced `source_customer_name` from B4 customer-merge metadata.

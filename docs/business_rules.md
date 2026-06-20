@@ -89,6 +89,20 @@ explains intent; protect important explicit decisions with tests, not docs alone
   visible and filterable.
 - **Changing the install date** updates the job (and, in the UI, its calendar
   placement) and is recorded on the timeline.
+- **Parsed Job hardware is a stored, editable SNAPSHOT — never a live catalogue reference**
+  (Hardware Parser lane; Stage 0 records the law, runtime is later stages). Each job's parsed
+  hardware (inverters/batteries/metering/panel) is stored on the job (`Job.details.hardware`) as
+  editable text-style items — `model_text, quantity, confidence, parser_owned, source_fragment`,
+  optional `canonical_hardware_id_at_parse_time` for debugging only. The displayed hardware uses
+  the snapshot's own `model_text`, **never** the canonical id. The admin **Settings > Hardware**
+  catalogue (canonical hardware + aliases) may evolve — renames, alias add/remove, soft-delete,
+  restore — but **none of that changes a Job that already has parsed hardware**: catalogue/alias
+  edits affect only FUTURE parser matching, and deleted hardware is soft-deleted/restorable with
+  aliases intact. The parser preserves unknown/ambiguous hardware as raw text (never guesses the
+  closest model), seeds blank fields and refreshes only parser-owned values, and **never
+  overwrites manual staff edits without explicit confirmation**. The hardware parser extracts
+  hardware only and **does not create workflow labels or tasks**. The curated rules
+  (`docs/parser_specs/hardware/`) are the version-controlled contract.
 
 ## Labels & approval (workflow signals)
 
