@@ -246,9 +246,14 @@ These are stubbed/absent and represent the next phases:
   `README.md`) and gated by `backend/tests/test_hardware_parser_spec_validation.py` (unique
   catalogue/fixture IDs, no alias collisions, `source_examples`≠aliases, confidence vocabularies,
   panel `model: null` rules, version-drift pin). The backend reads the spec via a read-only mount
-  (`./docs/parser_specs:/app/parser_specs:ro`). **Not yet built (planned stages):** DB-backed
-  `hardware_catalogue` + `hardware_alias` (admin-editable; ignore/correction/guard rules stay
-  versioned config for now); a seed from the YAML; **Settings > Hardware** admin UI (search +
+  (`./docs/parser_specs:/app/parser_specs:ro`). **(Stage 1 built, migration `c3d4e5f6a7b8`)**
+  DB-backed `hardware_catalogue` + `hardware_aliases` (soft-deletable) now exist, seeded
+  idempotently from the YAML by `app.hardware.seed.seed_hardware_catalogue` (wired into
+  `python -m app.seed`): **167 catalogue rows** (95 inverter + 45 battery + 20 panel + 7 metering)
+  + **274 matchable aliases** (exact/loose/case-sensitive). `source_examples` are NOT seeded
+  (evidence only, never matchable); ignore/correction/guard/normalization rules stay versioned
+  config. The catalogue is reference data with no FK to/from Jobs, so `dev_reset` is unchanged.
+  **Not yet built (planned stages):** **Settings > Hardware** admin UI (search +
   multi-filter by phase/size/brand/type; soft-delete + **restore** + DELETED section; aliases
   admin-only to view); **`Job.details.hardware`** editable per-job SNAPSHOTS (inverters/batteries/
   metering lists + a panel object + site_notes) that NEVER depend on the live catalogue; the parser

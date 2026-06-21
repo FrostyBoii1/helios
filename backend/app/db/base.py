@@ -11,6 +11,7 @@ from app.models.activity import Activity
 from app.models.customer import Customer
 from app.models.customer_contact_variant import CustomerContactVariant
 from app.models.document import Document
+from app.models.hardware import HardwareAlias, HardwareCatalogue
 from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.models.job import Job
 from app.models.job_label import JobLabelAssignment, JobLabelDefinition
@@ -24,6 +25,8 @@ __all__ = [
     "Customer",
     "CustomerContactVariant",
     "Document",
+    "HardwareAlias",
+    "HardwareCatalogue",
     "ImportBatch",
     "ImportIssue",
     "ImportRow",

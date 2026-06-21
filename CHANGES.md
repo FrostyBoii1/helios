@@ -9,6 +9,47 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-20 — Hardware Parser lane, Stage 1: DB hardware catalogue + aliases + seed
+
+- **Why:** the lane needs a DB-backed canonical hardware catalogue (the long-term source of
+  truth admins will edit) before any parser runtime, Settings UI, or Job snapshot work. Stage 1
+  creates the storage + seeds it from the Stage-0 spec — **storage + seed only**; nothing reads
+  the catalogue yet, so Jobs/imports are unaffected.
+- **What:** two soft-deletable tables (migration **`c3d4e5f6a7b8`**): `hardware_catalogue`
+  (inverter/battery/panel/metering — `spec_id` stable key, `canonical_model`, `display_name`,
+  `brand`, type-specific `phases`/`nominal_kw`/`capacity_kwh`/`wattage_w`, ambiguous-panel
+  `model_options`, `attributes` JSON, `spec_source`, `is_active`) and `hardware_aliases`
+  (matchable `exact`/`loose`/`case_sensitive` aliases, unique per (hardware_id, alias, alias_type),
+  with `confidence_override`/`decision_log_id`). New enums `HardwareCategory`/`HardwareAliasType`.
+  An **idempotent** seed (`app.hardware.seed.seed_hardware_catalogue`, wired into
+  `python -m app.seed`) reads the tracked YAML and loads **167 catalogue rows** (95 inverter + 45
+  battery + 20 panel + 7 metering) and **274 matchable aliases** (255 exact + 17 loose + 2
+  case-sensitive). Re-running creates 0 (insert-if-missing — never duplicates, never clobbers
+  later admin edits).
+- **`source_examples` decision (the safer option):** they are **NOT inserted as aliases at all**
+  — they are evidence/fixture strings, so leaving them out means a future matcher can never treat
+  one as an alias. They remain in the spec YAML. Parser policy (ignore rules / specific corrections
+  / guard phrases / normalization / brand-only & wattage-only panel routing) stays versioned
+  config — **not** seeded into the DB.
+- **Snapshot-stability preserved:** the catalogue holds NO reference to Jobs; Jobs hold no FK to
+  it. It is reference/config data (like `job_label_definitions`/`roles`) — `dev_reset` was
+  reviewed and needs **no change** (clearing live CRM/imports neither FK-violates nor should wipe
+  the catalogue). A future Job snapshot may store `canonical_hardware_id_at_parse_time`
+  (this table's `spec_id`/id) for DEBUGGING only, never as a live reference.
+- **No Job/import/parser/UI behaviour change:** no `Job.details`, no import parser/commit/preview/
+  reverse, no Settings UI, no parser runtime, no `HARDWARE_UNCERTAIN` change. The only DB writes
+  are the additive migration + the (reference-data) seed. Migration round-trip verified;
+  `alembic check` clean; head **`c3d4e5f6a7b8`**. Full backend suite **536 passed** (528 + 8 new).
+- **Files:** backend `models/hardware.py` (new), `models/enums.py` (2 enums), `db/base.py`
+  (registration), `alembic/versions/c3d4e5f6a7b8_*` (new), `app/hardware/__init__.py` +
+  `app/hardware/seed.py` (new), `app/seed.py` (wire-in), `tests/test_hardware_catalogue_seed.py`
+  (new); docs (CHANGES, DEVELOPER_HANDOFF, database_schema, business_rules). Permanent.
+  **Deferred (later stages):** Settings > Hardware admin UI (CRUD + restore + search/filter),
+  Job `details.hardware` snapshot read/edit, parser runtime, import integration, panel
+  integration, clean-wipe reimport, NAS/proposal.
+
+---
+
 ## 2026-06-20 — Hardware Parser lane, Stage 0: vendor curated parser spec as law + validation gates
 
 - **Why:** the Hardware Parser / Hardware Database lane needs a stable, version-controlled

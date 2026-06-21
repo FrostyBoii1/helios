@@ -71,11 +71,25 @@ def seed_first_admin(db: Session) -> None:
     log.info("first_admin_created", email=settings.FIRST_ADMIN_EMAIL)
 
 
+def seed_hardware(db: Session) -> None:
+    """Seed the DB hardware catalogue from the curated spec YAML (idempotent). If the spec
+    files are unavailable in this environment, log and skip — never block role/admin seeding."""
+    log = get_logger("seed")
+    try:
+        from app.hardware.seed import seed_hardware_catalogue
+
+        counts = seed_hardware_catalogue(db)
+        log.info("hardware_catalogue_seed_done", **counts)
+    except FileNotFoundError as exc:
+        log.warning("hardware_catalogue_spec_unavailable_skip", error=str(exc))
+
+
 def main() -> None:
     configure_logging()
     with SessionLocal() as db:
         seed_roles(db)
         seed_first_admin(db)
+        seed_hardware(db)
 
 
 if __name__ == "__main__":

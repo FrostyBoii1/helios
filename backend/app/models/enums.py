@@ -180,3 +180,26 @@ class CustomerContactVariantSource(str, enum.Enum):
     IMPORT_ROW = "import_row"
     MANUAL = "manual"
     DOCUMENT = "document"
+
+
+class HardwareCategory(str, enum.Enum):
+    """Hardware-catalogue category (Hardware Parser lane). Stored as a string. Each is a
+    first-class hardware type in the catalogue — metering included (per owner decision)."""
+
+    INVERTER = "inverter"
+    BATTERY = "battery"
+    PANEL = "panel"
+    METERING = "metering"
+
+
+class HardwareAliasType(str, enum.Enum):
+    """How a parser alias matches its canonical hardware. Stored as a string. ONLY matchable
+    types exist: ``exact`` / ``loose`` are case-insensitive matches; ``case_sensitive`` is an
+    exact match that must preserve case (e.g. ``Jinko 440`` vs ``JINKO 440`` resolve to different
+    panels). ``source_examples`` are evidence/fixtures, NEVER aliases — they are not stored in
+    the alias table at all (they stay in the spec YAML), so there is deliberately no
+    ``source_example`` alias type here and the matcher can never treat one as an alias."""
+
+    EXACT = "exact"
+    LOOSE = "loose"
+    CASE_SENSITIVE = "case_sensitive"

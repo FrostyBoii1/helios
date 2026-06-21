@@ -102,7 +102,12 @@ explains intent; protect important explicit decisions with tests, not docs alone
   closest model), seeds blank fields and refreshes only parser-owned values, and **never
   overwrites manual staff edits without explicit confirmation**. The hardware parser extracts
   hardware only and **does not create workflow labels or tasks**. The curated rules
-  (`docs/parser_specs/hardware/`) are the version-controlled contract.
+  (`docs/parser_specs/hardware/`) are the version-controlled contract. **(Stage 1)** the canonical
+  catalogue now exists as DB-backed **reference data** (`hardware_catalogue` + `hardware_aliases`,
+  seeded from the spec) — it has no link to/from Jobs and is NOT cleared by the dev reset tools, so
+  it can evolve independently while Job snapshots stay stable. Ignore rules, specific corrections,
+  guard phrases, and normalization remain versioned config (not DB-editable yet); `source_examples`
+  are evidence only and are never stored as matchable aliases.
 
 ## Labels & approval (workflow signals)
 

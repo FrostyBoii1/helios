@@ -155,6 +155,53 @@ detail survives). Promote-to-primary, backfill, and document/NAS capture are lat
 | edited_by_id | int FK → users.id null | who last edited (audit) |
 | timestamps + deleted_at | | soft-delete = archive |
 
+### hardware_catalogue + hardware_aliases  (Hardware Parser lane, Stage 1 — storage + seed)
+
+DB-backed canonical hardware catalogue (inverter / battery / panel / metering) and its parser
+aliases, seeded idempotently from `docs/parser_specs/hardware/` by
+`app.hardware.seed.seed_hardware_catalogue` (wired into `python -m app.seed`): 167 catalogue rows
++ 274 matchable aliases. This is **reference/config data** (like `job_label_definitions`/`roles`)
+— it has NO FK to/from Jobs or Customers, and `dev_reset` does NOT clear it. **Snapshot-stability
+law:** a future Job hardware snapshot (`Job.details.hardware` JSONB, later stage) is editable and
+NEVER depends on this catalogue; it may record `canonical_hardware_id_at_parse_time` (= a
+catalogue `spec_id`/id) for DEBUG only. `source_examples` are NOT stored as aliases (evidence
+only); ignore/correction/guard/normalization rules stay versioned config (not seeded). Nothing
+reads the catalogue yet (no parser runtime / Settings UI / import wiring in Stage 1).
+
+`hardware_catalogue`
+
+| column | type | notes |
+|--------|------|-------|
+| id | int PK | |
+| spec_id | varchar(120) unique | stable spec id (e.g. `panel_longi_lr5_54hth_440m`); seed idempotency key |
+| category | varchar(20) indexed | `HardwareCategory`: inverter / battery / panel / metering |
+| canonical_model | varchar(255) null | canonical model text; NULL for an ambiguous panel |
+| display_name | varchar(255) null | job-facing name (panels) |
+| brand | varchar(160) indexed null | manufacturer/brand |
+| phases | varchar(30) null | inverter (single_phase / three_phase) |
+| nominal_kw / capacity_kwh | numeric(8,2) null | inverter kW / battery kWh |
+| wattage_w | int null | panel wattage |
+| model_options | jsonb null | ambiguous-panel candidate models (model is NULL when set) |
+| attributes | jsonb null | extra spec metadata (notes, flags, confidence rules, negative_patterns) |
+| spec_source | varchar(80) | curated rule file/version provenance |
+| is_active | bool default true | catalogue active flag (distinct from soft-delete) |
+| created_by_id | int FK → users.id null | admin author of a non-seed entry (seed leaves NULL) |
+| timestamps + deleted_at | | soft-delete = archive (restore-ready) |
+
+`hardware_aliases`
+
+| column | type | notes |
+|--------|------|-------|
+| id | int PK | |
+| hardware_id | int FK → hardware_catalogue.id, indexed | the catalogue entry this alias matches |
+| alias | varchar(255) indexed | raw alias text (matcher normalises at match time) |
+| alias_type | varchar(20) indexed | `HardwareAliasType`: exact / loose / case_sensitive (source_examples are evidence only — NEVER stored as aliases) |
+| confidence_override | varchar(40) null | per-alias confidence override from the spec |
+| decision_log_id | varchar(120) null | spec decision-log reference |
+| is_active | bool default true | |
+| unique (hardware_id, alias, alias_type) | | idempotent seed; no duplicate alias rows |
+| timestamps + deleted_at | | soft-delete = archive (restore-ready) |
+
 ### import staging (parse → review → commit pipeline)
 
 Staging tables hold the legacy-workbook import. They are **separate** from the
@@ -288,7 +335,10 @@ customer_id/job_id`. Add composite/full-text indexes as query patterns emerge.
   — additive, creates the table + its FKs/indexes only, no backfill, reversible) →
   **`b2c3d4e5f6a7`** (editable Known Customer Details: adds nullable `edited_at` +
   `edited_by_id` FK to `customer_contact_variants` — additive, no backfill, round-trip
-  reversible). The current Alembic **head is `b2c3d4e5f6a7`**. The commit-to-live,
+  reversible) → **`c3d4e5f6a7b8`** (Hardware Parser Stage 1: the new `hardware_catalogue` +
+  `hardware_aliases` tables — additive, creates the two tables + their FKs/indexes only, no
+  backfill, round-trip reversible; seeded separately by `app.hardware.seed`). The current Alembic
+  **head is `c3d4e5f6a7b8`**. The commit-to-live,
   reverse, and case-year-guard work (and the later B2-2/B2-3, B3-3/B3-4 wiring) added **no**
   further migrations — they read the existing columns at commit/preview/reverse and in the UI
   (string-enum values only). **B4-2/B4-3/B4-4 (customer-merge execution, UI, merged-loser URL
