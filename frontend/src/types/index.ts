@@ -420,3 +420,34 @@ export interface HardwareCreateInput {
 // Partial update (mirrors HardwareCatalogueUpdate). spec_id is immutable, so it is not
 // part of the update shape.
 export type HardwareUpdateInput = Partial<Omit<HardwareCreateInput, 'spec_id'>>
+
+// ---- Hardware aliases (Settings > Hardware; admin-only) ----
+// Mirrors backend/app/schemas/hardware.py (HardwareAliasRead). alias_type vocabulary is
+// exactly exact / loose / case_sensitive (HardwareAliasType) — source_examples are NEVER
+// aliases. Aliases are admin-only and never exposed to normal users.
+export interface HardwareAlias {
+  id: number
+  hardware_id: number
+  alias: string
+  alias_type: HardwareAliasType
+  confidence_override: string | null
+  decision_log_id: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+export interface HardwareAliasListResponse {
+  items: HardwareAlias[]
+  total: number
+}
+
+export interface HardwareAliasCreateInput {
+  alias: string
+  alias_type: HardwareAliasType
+  confidence_override?: string | null
+  decision_log_id?: string | null
+}
+
+export type HardwareAliasUpdateInput = Partial<HardwareAliasCreateInput>

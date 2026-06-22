@@ -9,6 +9,45 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-22 — Hardware Parser lane, Stage 2B-3: Settings > Hardware alias management UI
+
+- **Why:** completes the Settings > Hardware admin surface. 2B-1 read the catalogue, 2B-2 added
+  catalogue write actions; 2B-3 adds **alias management** for a selected hardware item so admins can
+  curate the matchable aliases that drive FUTURE parser matching — without code changes.
+- **What:** a per-row **Aliases** action (active hardware rows) opens a new `HardwareAliasModal` for
+  that item. The modal clearly names the item (display/canonical name + `spec_id`), shows its
+  aliases in a table (alias value, type, confidence override, decision_log_id, Active/Deleted
+  state), with a **Show: All / Active / Deleted** filter, an inline **Add / Edit** form, per-alias
+  **Delete** (recoverable soft-delete, `window.confirm`) and **Restore**. Alias type vocabulary is
+  exactly **exact / loose / case_sensitive** — `source_examples` are never aliases and never appear.
+- **Data layer:** `lib/hardware.ts` gains `listAliases` / `createAlias` / `updateAlias` /
+  `deleteAlias` (soft) / `restoreAlias`; `hooks/useHardware.ts` gains `useHardwareAliases` +
+  `useCreate/Update/Delete/RestoreAlias`. Every alias mutation invalidates the whole `['hardware']`
+  key, which prefix-matches the catalogue list, the facet dropdowns AND each item's alias list — so
+  `alias_count` on the list and the open alias panel both refetch. New `HardwareAlias` /
+  `HardwareAliasListResponse` / `HardwareAliasCreateInput` / `HardwareAliasUpdateInput` types mirror
+  the backend alias schemas.
+- **Errors:** 409 → "An alias with that value and type already exists for this hardware" (the unique
+  (hardware_id, alias, alias_type)); 400 → alias required; 403/404/422 handled inline.
+- **Permissions:** unchanged — the gear + `/settings` route group are admin-only and the backend
+  enforces `require_admin` on every alias route. Normal users have no UI path to aliases (the alias
+  surface is only reachable from the admin-gated Settings > Hardware screen).
+- **Snapshot stability:** the modal note and the delete confirm both state that removing an alias
+  affects future parser matching only — existing Job hardware snapshots are unchanged (the catalogue
+  has no link to/from Jobs). Soft-deleted aliases are restorable and travel with their hardware item
+  (hardware restore keeps aliases, from Stage 2A).
+- **Scope:** frontend only — **no backend change**, **no migration**, no parser runtime, no
+  Job.details / Job hardware snapshot UI, no import wiring, no completed-sheet/panel runtime, no
+  NAS/proposal, no `HARDWARE_UNCERTAIN`, no `source_example` alias type. This **completes Stage 2B**
+  (the Settings > Hardware admin-management surface).
+- **Verification:** frontend `typecheck` + `lint` (`--max-warnings 0`) + `build` all clean (162
+  modules). Backend untouched, so backend tests were not re-run.
+- **Files:** frontend `components/HardwareAliasModal.tsx` (new), `pages/SettingsHardwarePage.tsx`
+  (Aliases action + modal), `lib/hardware.ts` (alias helpers), `hooks/useHardware.ts` (alias hooks),
+  `types/index.ts` (alias types); docs (CHANGES, DEVELOPER_HANDOFF). Permanent.
+
+---
+
 ## 2026-06-22 — Hardware Parser lane, Stage 2B-2: Settings > Hardware catalogue write UI (create/edit/delete/restore)
 
 - **Why:** Stage 2B-1 made the catalogue *visible* (read-only). 2B-2 adds the catalogue **write**

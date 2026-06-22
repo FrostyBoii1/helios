@@ -2,12 +2,16 @@
 // is admin-only — the backend enforces `require_admin` on every hardware route, so a
 // non-admin request here returns 403 (surfaced as an ApiError).
 //
-// Stage 2B-1 shipped the READ path (list + search/filter/deleted view). Stage 2B-2 adds
-// the catalogue WRITE path (create / edit / soft-delete / restore). Alias management is
-// still Stage 2B-3, so no alias calls live here yet.
+// Stage 2B-1 shipped the READ path (list + search/filter/deleted view). Stage 2B-2 added
+// the catalogue WRITE path (create / edit / soft-delete / restore). Stage 2B-3 adds the
+// nested ALIAS admin path (list/create/edit/soft-delete/restore) — all admin-only.
 
 import { apiFetch } from '@/lib/api'
 import type {
+  HardwareAlias,
+  HardwareAliasCreateInput,
+  HardwareAliasListResponse,
+  HardwareAliasUpdateInput,
   HardwareCatalogueEntry,
   HardwareCatalogueListResponse,
   HardwareCategory,
@@ -67,4 +71,49 @@ export function deleteHardware(id: number): Promise<HardwareCatalogueEntry> {
 
 export function restoreHardware(id: number): Promise<HardwareCatalogueEntry> {
   return apiFetch<HardwareCatalogueEntry>(`/hardware/${id}/restore`, { method: 'POST' })
+}
+
+// --- Aliases (nested under a hardware item; admin-only) --------------------------- //
+
+export function listAliases(
+  hardwareId: number,
+  deleted?: HardwareDeletedMode,
+): Promise<HardwareAliasListResponse> {
+  const qs = deleted ? `?deleted=${deleted}` : ''
+  return apiFetch<HardwareAliasListResponse>(`/hardware/${hardwareId}/aliases${qs}`)
+}
+
+export function createAlias(
+  hardwareId: number,
+  input: HardwareAliasCreateInput,
+): Promise<HardwareAlias> {
+  return apiFetch<HardwareAlias>(`/hardware/${hardwareId}/aliases`, {
+    method: 'POST',
+    body: input,
+  })
+}
+
+export function updateAlias(
+  hardwareId: number,
+  aliasId: number,
+  input: HardwareAliasUpdateInput,
+): Promise<HardwareAlias> {
+  return apiFetch<HardwareAlias>(`/hardware/${hardwareId}/aliases/${aliasId}`, {
+    method: 'PATCH',
+    body: input,
+  })
+}
+
+// Soft-delete an alias (never hard-deletes). Removing an alias affects FUTURE parser
+// matching only — it never touches existing Job hardware snapshots.
+export function deleteAlias(hardwareId: number, aliasId: number): Promise<HardwareAlias> {
+  return apiFetch<HardwareAlias>(`/hardware/${hardwareId}/aliases/${aliasId}`, {
+    method: 'DELETE',
+  })
+}
+
+export function restoreAlias(hardwareId: number, aliasId: number): Promise<HardwareAlias> {
+  return apiFetch<HardwareAlias>(`/hardware/${hardwareId}/aliases/${aliasId}/restore`, {
+    method: 'POST',
+  })
 }

@@ -4,14 +4,15 @@
 // category-aware size, an Active / Deleted / All view, a scannable table, pagination).
 // 2B-2 adds the catalogue WRITE actions: a New hardware button, per-row Edit + Delete
 // (active rows) / Restore (deleted rows), and the shared HardwareFormModal. Delete is a
-// recoverable soft-delete (window.confirm); restore is explicit. Alias management is still
-// Stage 2B-3 (no alias controls here). Every hardware route is admin-only server-side; the
-// route is also admin-gated.
+// recoverable soft-delete (window.confirm); restore is explicit. 2B-3 adds a per-row
+// Aliases action (active rows) opening HardwareAliasModal for that item. Every hardware
+// route is admin-only server-side; the route is also admin-gated.
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ApiError } from '@/lib/api'
 import { HardwareFormModal } from '@/components/HardwareFormModal'
+import { HardwareAliasModal } from '@/components/HardwareAliasModal'
 import {
   useDeleteHardware,
   useHardwareList,
@@ -71,6 +72,8 @@ export function SettingsHardwarePage() {
   // Create/edit modal: open with a null entry to create, or an entry to edit.
   const [formOpen, setFormOpen] = useState(false)
   const [formEntry, setFormEntry] = useState<HardwareCatalogueEntry | null>(null)
+  // Alias-management modal: the hardware item whose aliases are open (null = closed).
+  const [aliasHardware, setAliasHardware] = useState<HardwareCatalogueEntry | null>(null)
   // Inline banner for row-action (delete/restore) failures.
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -345,6 +348,15 @@ export function SettingsHardwarePage() {
                             Edit
                           </button>
                           <button
+                            onClick={() => {
+                              setActionError(null)
+                              setAliasHardware(h)
+                            }}
+                            className="text-xs font-medium text-muted hover:text-fg"
+                          >
+                            Aliases
+                          </button>
+                          <button
                             onClick={() => handleDelete(h)}
                             disabled={actionPending}
                             className="text-xs font-medium text-red-300 hover:text-red-200 disabled:opacity-50"
@@ -398,6 +410,13 @@ export function SettingsHardwarePage() {
           entry={formEntry}
           onClose={() => setFormOpen(false)}
           onSaved={() => setFormOpen(false)}
+        />
+      )}
+
+      {aliasHardware && (
+        <HardwareAliasModal
+          hardware={aliasHardware}
+          onClose={() => setAliasHardware(null)}
         />
       )}
     </div>

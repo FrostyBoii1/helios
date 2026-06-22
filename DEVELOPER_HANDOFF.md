@@ -274,10 +274,20 @@ These are stubbed/absent and represent the next phases:
   `lib/hardware.ts` + `hooks/useHardware.ts` WRITE layer (`create`/`update`/`delete`(soft)/`restore`
   + `useCreate/Update/Delete/RestoreHardware`) invalidates the whole `['hardware']` key so the list
   + facet dropdowns refetch; delete is a `window.confirm` soft-delete, restore is explicit; 409 →
-  duplicate-spec_id copy, 403/404/422 handled. Still **no backend change** and **no alias UI**.
-  **Stage 2B-3 (next)** = alias view/add/edit/soft-delete/restore (admin-only). These remaining
-  sub-stages still consume this API: aliases
-  admin-only to view); **`Job.details.hardware`** editable per-job SNAPSHOTS (inverters/batteries/
+  duplicate-spec_id copy, 403/404/422 handled. Edit sends a **true partial PATCH** (only changed
+  fields) so it never wipes untouched columns. **(Stage 2B-3 built — alias management UI, COMPLETES
+  Stage 2B)** a per-row **Aliases** action (active rows) opens `components/HardwareAliasModal.tsx`
+  for that item: it names the item (`spec_id`), lists its aliases (value, type
+  exact/loose/case_sensitive, confidence override, decision_log_id, Active/Deleted state) with a
+  Show All/Active/Deleted filter, an inline Add/Edit form, soft-delete (`window.confirm`) + restore;
+  409 → duplicate (hardware_id, alias, alias_type) copy. The `lib/hardware.ts` + `hooks/useHardware.ts`
+  alias layer (`listAliases`/`create`/`update`/`delete`(soft)/`restore` +
+  `useHardwareAliases`/`useCreate/Update/Delete/RestoreAlias`) invalidates `['hardware']` so the alias
+  list AND the catalogue `alias_count` refetch. Aliases are never exposed to non-admins.
+  Still **no backend change**, no parser runtime, and no Job/import wiring. **Stage 2B is now
+  complete** — the whole admin Settings > Hardware management surface (catalogue + aliases) exists;
+  nothing yet *consumes* the catalogue. Next lane stages still consume this API:
+  **`Job.details.hardware`** editable per-job SNAPSHOTS (inverters/batteries/
   metering lists + a panel object + site_notes) that NEVER depend on the live catalogue; the parser
   runtime (proven by the fixtures); current-sheet import integration; panel integration; clean
   wipe + reimport; NAS/proposal later. **Keystone law:** Job hardware is a stored editable snapshot
