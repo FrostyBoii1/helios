@@ -9,6 +9,46 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-22 — Hardware Parser lane, Stage 3B: Job Detail hardware snapshot UI (frontend)
+
+- **Why:** Stage 3A added backend storage + the safe `hardware` patch path; 3B makes the Job-owned
+  hardware snapshot visible and editable on the Job Detail page. Completes Stage 3 (the place
+  hardware lives on a Job). No parser runtime, import wiring, or catalogue dropdowns.
+- **What:** a new compact **Hardware** section on Job Detail (`components/JobHardwareSection.tsx`),
+  rendered as a full-width card below Details (the top "other jobs" panel + all existing sections
+  are untouched). Read view lists inverters / batteries / metering (model text × qty + subtle,
+  non-noisy provenance), the panel (display name / model / brand / wattage / array kW / options),
+  site notes, and warning chips. Edit (Edit / Cancel / Save, gated by `canEditJobDetails`) gives
+  textbox/number fields with **add / edit / remove rows** for each line-item list, panel fields, site
+  notes, and warnings (textarea). A standing note reads "Editable job snapshot — does not update
+  from Settings > Hardware."
+- **Save:** the whole hardware object is sent through the **existing** Job details PATCH
+  (`useUpdateJob` → `{ details: { hardware: ... } }`) — no new API/hook. Each sub-section is sent so
+  the saved snapshot matches the editor (empty list / null panel clears it); unedited provenance
+  fields (`confidence`, `source_fragment`, `parser_owned`, `source_type`,
+  `canonical_hardware_id_at_parse_time`, …) are carried untouched, so they round-trip. Non-hardware
+  Job details are preserved by the backend partial-merge. Frontend snapshot types
+  (`JobHardwareSnapshot`/item/panel/site_notes, added to `types/imports.ts` + a typed `hardware?` on
+  `ParsedDetails`) match the backend exactly, so a loaded snapshot re-saves without an
+  `extra='forbid'` rejection.
+- **details=null:** the backend rejects structured edits on a null-details job, so the section shows
+  a clear read-only note — "Hardware editing is available once structured job details exist." — and
+  does NOT attempt to initialise details (no backend support for that; left as a deferred decision).
+- **Hard snapshot rule:** the section reads only `job.details.hardware`; it never reads
+  `hardware_catalogue`, uses no catalogue dropdowns, and does not live-update from Settings > Hardware.
+  `canonical_hardware_id_at_parse_time` is carried as data but never displayed as truth (display uses
+  `model_text` / `display_name`). 403/404/422 are handled with clear copy.
+- **Scope:** frontend only — **no backend change**, no migration, no parser runtime, no import/
+  commit/preview/reverse wiring, no Settings > Hardware change, no NAS/proposal, no
+  `HARDWARE_UNCERTAIN`, no catalogue dropdown / live lookup.
+- **Verification:** frontend `typecheck` + `lint` (`--max-warnings 0`) + `build` all clean (163
+  modules). No frontend unit-test runner in the project.
+- **Files:** frontend `components/JobHardwareSection.tsx` (new), `pages/JobDetailPage.tsx` (render
+  the section), `types/imports.ts` (snapshot types + `ParsedDetails.hardware`); docs (CHANGES,
+  DEVELOPER_HANDOFF, business_rules). Permanent.
+
+---
+
 ## 2026-06-22 — Hardware Parser lane, Stage 3A: Job.details.hardware editable snapshot (backend)
 
 - **Why:** Stage 2B made the catalogue manageable; nothing yet *consumes* it. Stage 3 creates the

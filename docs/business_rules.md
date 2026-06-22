@@ -124,7 +124,15 @@ explains intent; protect important explicit decisions with tests, not docs alone
   provenance/debug only, never display truth; (7) display depends on the stored snapshot text, not
   current catalogue state; (8) parser/reparse refresh is NOT part of this stage. No catalogue read
   populates the snapshot yet, and no migration was needed (JSONB). Jobs without `details.hardware`
-  (or with `details=null`) read/render safely and are unaffected.
+  (or with `details=null`) read/render safely and are unaffected. **(Stage 3B)** the snapshot is
+  shown + edited on the Job Detail **Hardware** section (`components/JobHardwareSection.tsx`):
+  staff add/edit/remove inverter/battery/metering rows, edit the panel and site notes, all saved
+  through the existing Job-details PATCH (`{ details: { hardware } }`). The section reads ONLY the
+  stored snapshot (no catalogue read, no dropdowns, no live update from Settings > Hardware), shows
+  a "does not update from Settings > Hardware" note, and on a `details=null` job is read-only with
+  "Hardware editing is available once structured job details exist" (it never silently initialises
+  details). Provenance (`confidence`/`source_fragment`/`parser_owned`) is shown subtly, never as
+  display truth.
 
 ## Labels & approval (workflow signals)
 

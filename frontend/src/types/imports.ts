@@ -113,6 +113,55 @@ export interface SiteAddress {
   structured?: boolean
   raw?: string | null
 }
+// ---- Job hardware snapshot (Job.details.hardware; Hardware Parser lane, Stage 3) ----
+// Mirrors backend/app/schemas/job_hardware.py. A Job-owned, editable SNAPSHOT — NOT a live
+// reference to the hardware catalogue. Field sets must match the backend exactly (the backend
+// rejects unknown fields), so a loaded item can be re-sent on save without an "extra field".
+export interface JobHardwareItem {
+  model_text?: string | null
+  quantity?: number | null
+  confidence?: string | null
+  parser_owned?: boolean | null
+  source_fragment?: string | null
+  source_type?: string | null
+  source_field?: string | null
+  // Provenance/debug only — NEVER display truth.
+  canonical_hardware_id_at_parse_time?: number | null
+  parser_rule_version?: string | null
+}
+
+export interface JobHardwarePanel {
+  quantity?: number | null
+  brand?: string | null
+  display_name?: string | null
+  model?: string | null
+  model_options?: string[] | null
+  canonical_hardware_id_at_parse_time?: number | null
+  wattage_w?: number | null
+  panel_array_kw?: number | null
+  confidence?: string | null
+  parser_owned?: boolean | null
+  source_fragment?: string | null
+  parser_rule_version?: string | null
+}
+
+export interface JobHardwareSiteNotes {
+  ct?: string | null
+  export_limit?: string | null
+  underground?: string | null
+  comms?: string | null
+  raw_misc?: string[] | null
+}
+
+export interface JobHardwareSnapshot {
+  inverters?: JobHardwareItem[] | null
+  batteries?: JobHardwareItem[] | null
+  metering?: JobHardwareItem[] | null
+  panel?: JobHardwarePanel | null
+  site_notes?: JobHardwareSiteNotes | null
+  warnings?: string[] | null
+}
+
 export interface ParsedDetails {
   _v?: number
   notes?: {
@@ -124,6 +173,8 @@ export interface ParsedDetails {
   approval?: { pending_date?: string | null } & Record<string, unknown>
   // G (Stage 1): per-job site address (display-only).
   site?: SiteAddress | null
+  // Stage 3: Job-owned editable hardware snapshot (does NOT live-update from the catalogue).
+  hardware?: JobHardwareSnapshot | null
   [section: string]: unknown
 }
 

@@ -296,8 +296,18 @@ These are stubbed/absent and represent the next phases:
   snapshot rule enforced + tested** (`tests/test_jobs_hardware_snapshot.py`, 8): catalogue/alias
   edits + soft-delete/restore never mutate a Job snapshot; a hardware edit never touches the
   catalogue; `canonical_hardware_id_at_parse_time` is debug-only; the NULL-details guard still holds;
-  jobs without `details.hardware` read safely. **Stage 3B (next)** = the Job Detail editable hardware
-  UI (textbox/list editor consuming this PATCH). Then the remaining lane stages still consume this
+  jobs without `details.hardware` read safely. **(Stage 3B built — Job Detail hardware UI, frontend)**
+  a compact **Hardware** section on Job Detail (`components/JobHardwareSection.tsx`, rendered below
+  Details; top "other jobs" panel + existing sections untouched) reads + edits the snapshot:
+  add/edit/remove inverter/battery/metering rows, edit the panel + site notes + warnings, Edit/Cancel/
+  Save (gated by `canEditJobDetails`) saving the whole hardware object through the existing
+  `useUpdateJob` PATCH (`{ details: { hardware } }`) — NO new API/hook, NO backend change. It reads
+  ONLY `job.details.hardware` (no catalogue read/dropdown, no live update from Settings > Hardware;
+  shows a snapshot note), renders safely when details/hardware are absent, and on a `details=null`
+  job is read-only ("available once structured job details exist" — never auto-initialises details).
+  Provenance shown subtly; `canonical_hardware_id_at_parse_time` carried but never display truth.
+  Frontend snapshot types live in `types/imports.ts` (+ `ParsedDetails.hardware`) and match the
+  backend exactly. **Stage 3 is now complete.** Then the remaining lane stages still consume this
   API: the parser
   runtime (proven by the fixtures); current-sheet import integration; panel integration; clean
   wipe + reimport; NAS/proposal later. **Keystone law:** Job hardware is a stored editable snapshot

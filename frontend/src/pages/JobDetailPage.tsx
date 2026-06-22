@@ -10,6 +10,7 @@ import {
 import { CustomerOtherJobsPanel } from '@/components/CustomerOtherJobsPanel'
 import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
+import { JobHardwareSection } from '@/components/JobHardwareSection'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
 import { ImportedJobDetails } from '@/components/ImportedJobDetails'
 import { JobApprovalControl } from '@/components/JobApprovalControl'
@@ -530,6 +531,12 @@ export function JobDetailPage() {
             }
           />
         </aside>
+      </div>
+
+      {/* Hardware snapshot (Stage 3B): Job-owned, editable; never live-updates from the
+          Settings > Hardware catalogue. Renders safely when details / hardware are absent. */}
+      <div className="mt-6">
+        <JobHardwareSection job={job} />
       </div>
 
       {/* Tasks + timeline are live; Documents remains a later phase. */}
