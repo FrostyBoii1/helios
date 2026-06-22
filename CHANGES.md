@@ -9,6 +9,55 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Hardware Parser lane, UX correction: parsed hardware shown + edited as normal System fields (frontend)
+
+- **Why (owner correction):** parsed hardware must appear as **normal Job Detail System fields**
+  (Panel type / Inverter / Battery / Metering·CT — alongside Number of panels / Storey / Phase / Roof
+  type), with the key ones **editable as textboxes**, NOT a separate hardware box. The visible
+  value shows **regardless of confidence** (low confidence does not hide it); only supplemental flags
+  go to "Hardware notes". Raw workbook text is provenance (import-review Raw cells), not the
+  job-facing value. Presentation/data-shape only — the Stage 3A/4A/4B backend is unchanged
+  (Job.details.hardware is the durable snapshot; Settings > Hardware never live-updates Jobs).
+- **What:** a shared `lib/hardwareDisplay.ts` derives from the snapshot: `deriveSystemHardware` →
+  the System hardware fields (**Panel type, Inverter, Battery, Metering**, plus a read-only **CT /
+  electrical** row from site-notes) showing ALL parsed values; `deriveHardwareNotes` →
+  **supplemental** flags only (low-confidence/`manual_review` items, ambiguous `model_options`,
+  `warnings`, `raw_misc`) — never the only place inverter/battery values appear;
+  `applyHardwareSystemEdits` → maps an edited textbox back into a partial `details.hardware` patch.
+- **Editable in System:** `StructuredDetailsView` gains opt-in `hideKeys` + `systemExtras` +
+  `extraEdits`/`onExtraChange`. In Job Detail edit mode the System hardware fields render as
+  **textboxes** (Panel type / Inverter / Battery / Metering) whose edits fold into the SAME job
+  PATCH as `details.hardware` (alongside the registry field edits) — updating the Job snapshot only,
+  never Settings > Hardware or the catalogue. The raw `panel`/`inverter` registry fields are hidden
+  when a snapshot exists; Number-of-panels / Storey / Phase / Roof type stay registry fields.
+- **Item quantity shown + round-tripped:** an item with `quantity > 1` renders inline as
+  **"N × MODEL"** (e.g. `2 × SAJ B2-20.0-HV1`), and editing round-trips — a saved "N × MODEL" splits
+  back into `quantity: N` + clean `model_text` (the prefix is never baked into the model text, so it
+  is never doubled). Absent prefix on a single-item edit means quantity 1. So an explicit hardware
+  quantity is **never lost in the UI** (paired with the parser-side fix; see the entry below).
+- **No separate hardware box:** `JobHardwareSection.tsx` is **deleted**; the only separate area is a
+  small read-only `HardwareNotes` (supplemental). When `details.hardware` is absent, the legacy
+  System display is **unchanged**; `details=null` safety is intact.
+- **Import review shows parsed hardware (read-only):** `ImportRowModal` passes `systemExtras` +
+  `hideKeys` (no `onExtraChange`, so read-only there) and renders Hardware notes, so reviewers see the
+  parsed hardware values that will commit. The **Raw cells** panel is untouched (raw provenance kept).
+- **No backend change** (the 4B snapshot is the source; the existing `{ details: { hardware } }`
+  PATCH persists edits). Scope: frontend only — **no migration**, no Settings > Hardware change, no
+  parser matching-rule change, no NAS/proposal/scheduling, no catalogue dropdown/live lookup.
+- **Deferred:** editing item quantity via a dedicated field (it is edited inline as the "N ×" prefix;
+  a multi-item rebuild defaults un-prefixed entries to quantity 1) and site-note CT/export editing
+  (read-only).
+- **Verification:** frontend typecheck + lint (`--max-warnings 0`) + build clean; backend hardware/
+  import/snapshot regression green (no backend change). No frontend unit-test runner.
+- **Files:** frontend `lib/hardwareDisplay.ts` (new), `components/HardwareNotes.tsx` (new),
+  `components/structured/StructuredDetailsView.tsx` (`hideKeys` + editable `systemExtras`),
+  `pages/JobDetailPage.tsx` (editable System hardware fields + Hardware notes; remove the box),
+  `components/imports/ImportRowModal.tsx` (review shows parsed hardware read-only),
+  `components/JobHardwareSection.tsx` (**deleted**); docs (CHANGES, DEVELOPER_HANDOFF, business_rules).
+  Permanent.
+
+---
+
 ## 2026-06-22 — Hardware Parser lane, Stage 4B: import integration for parsed hardware snapshots (backend)
 
 - **Why:** Stage 4A built the parser runtime in isolation; 4B is the first LIVE import integration —

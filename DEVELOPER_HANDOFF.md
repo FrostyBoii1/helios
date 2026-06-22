@@ -330,6 +330,25 @@ These are stubbed/absent and represent the next phases:
   a post-commit hardware edit trips the existing pristine guard (blocked, edit preserved) — no
   hardware-specific reverse logic. Read-only against the catalogue; `source_examples` never match;
   legacy `details.system.panel/inverter` text coexists. Tests `tests/test_import_hardware.py` (10).
+  **(UX correction — parsed hardware as EDITABLE normal System fields)** there is NO separate hardware
+  box. `lib/hardwareDisplay.ts`: `deriveSystemHardware` shows ALL parsed hardware (regardless of
+  confidence) as normal System fields — **Panel type / Inverter / Battery / Metering** (+ a read-only
+  **CT / electrical** row from site-notes); `deriveHardwareNotes` is SUPPLEMENTAL only (low-confidence/
+  manual_review flags, ambiguous model_options, warnings, raw_misc) → small read-only
+  `components/HardwareNotes.tsx`; `applyHardwareSystemEdits` maps an edited textbox back to a partial
+  `details.hardware` patch. An item `quantity > 1` renders inline as **"N × MODEL"** and round-trips
+  on edit (`splitQtyModel` parses the "N ×" prefix back into `quantity` + clean `model_text`, never
+  baking the quantity into the text). `StructuredDetailsView` gained opt-in `hideKeys` + `systemExtras`
+  + `extraEdits`/`onExtraChange`: the live Job page hides the raw `panel`/`inverter` registry fields and
+  appends the hardware rows inside the System section — **editable as textboxes in edit mode** (Panel
+  type/Inverter/Battery/Metering), folded into the SAME job PATCH as `details.hardware` (registry
+  Number-of-panels/Storey/Phase/Roof stay registry fields). The former editor
+  `components/JobHardwareSection.tsx` was **DELETED**. `components/imports/ImportRowModal.tsx` passes
+  `systemExtras`+`hideKeys` (no `onExtraChange` → read-only there) so import review SHOWS the parsed
+  hardware values that will commit; the Raw cells panel is untouched (raw provenance preserved). Absent
+  snapshot → legacy System unchanged. Frontend-only — no backend change (the 4B snapshot is the
+  source; the existing `{ details: { hardware } }` PATCH persists edits). Deferred: quantity + CT/export
+  editing.
   **Stage 4C (next)** = frontend import-review display + uncertain/manual-review badges. Deferred:
   full multi-fragment bundle parsing + panel system-size derivation; a shared-alias-index optimisation
   (today `parse_hardware` rebuilds its index per enriched row). Then the remaining lane stages still

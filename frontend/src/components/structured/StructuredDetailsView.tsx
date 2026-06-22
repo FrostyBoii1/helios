@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react'
 import type { FieldRegistry, FieldSpec, ParsedDetails } from '@/types/imports'
+import type { SystemHardwareField } from '@/lib/hardwareDisplay'
 
 /** "<section>.<key>" path for a job.details.* storage path. */
 // eslint-disable-next-line react-refresh/only-export-components -- path helper co-located with its view
@@ -84,7 +85,7 @@ function FieldInput({ field, details, edit }: { field: FieldSpec; details: Parse
   return <input type={type} value={current} onChange={(e) => set(e.target.value)} className="input" />
 }
 
-function Section({ section, fields, details, edit, expanded, onToggle, addedPaths, onRemoveAdded }: {
+function Section({ section, fields, details, edit, expanded, onToggle, addedPaths, onRemoveAdded, extras = [], extraEdits, onExtraChange }: {
   section: { key: string; label: string }
   fields: FieldSpec[]
   details: ParsedDetails
@@ -93,6 +94,11 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
   onToggle: () => void
   addedPaths: Set<string>
   onRemoveAdded: (path: string) => void
+  // Derived rows appended after the registry fields (parsed hardware). Editable as a textbox when
+  // `onExtraChange` is provided AND the field is `editable`; read-only display otherwise.
+  extras?: SystemHardwareField[]
+  extraEdits?: Record<string, string>
+  onExtraChange?: (key: string, value: string) => void
 }) {
   const rows = fields.map((f) => ({ f, v: valueAtStorage(details, f.storage), path: detailsPath(f.storage) }))
   const populated = rows.filter((r) => !isBlank(r.v))
@@ -114,7 +120,7 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
   for (const r of addedRows) visibleMap.set(r.f.key, r)
   const visible = [...visibleMap.values()]
 
-  if (visible.length === 0) return null
+  if (visible.length === 0 && extras.length === 0) return null
 
   return (
     <div className="rounded-md border border-line bg-elevated p-3">
@@ -175,11 +181,35 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
           )
         })}
       </div>
+      {extras.length > 0 && (
+        <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+          {extras.map((ex) => {
+            const canEdit = !!onExtraChange && ex.editable
+            const current = extraEdits?.[ex.key] ?? ex.value
+            return (
+              <div key={ex.key} className="flex min-w-0 flex-col">
+                <span className="mb-0.5 text-xs text-faint">{ex.label}</span>
+                {canEdit ? (
+                  <input
+                    value={current}
+                    onChange={(e) => onExtraChange?.(ex.key, e.target.value)}
+                    className="input mt-0.5 px-2 py-1 text-sm"
+                  />
+                ) : (
+                  <span className={`break-words text-sm ${ex.value ? 'text-fg' : 'text-faint'}`}>
+                    {ex.value || '—'}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
-export function StructuredDetailsView({ registry, details, editable, edits, onChange, originalDetails, hideImportedNotes }: {
+export function StructuredDetailsView({ registry, details, editable, edits, onChange, originalDetails, hideImportedNotes, hideKeys = [], systemExtras = [], extraEdits, onExtraChange }: {
   registry: FieldRegistry
   details: ParsedDetails
   editable?: boolean
@@ -190,6 +220,18 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
   // hidden because the same preserved context is shown via Job.internal_notes.
   // The import review UI leaves it false so reviewers still see the raw buckets.
   hideImportedNotes?: boolean
+  // Registry field keys to suppress from this view. When the Job (or an import row) carries a
+  // structured details.hardware snapshot, the legacy raw `panel`/`inverter` System fields are
+  // hidden and the CONFIRMED parsed hardware is shown as normal System fields via `systemExtras`.
+  hideKeys?: string[]
+  // Extra rows appended to the System section (parsed hardware: Panel type / Inverter / Battery /
+  // Metering·CT). Derived from details.hardware by `lib/hardwareDisplay`. Read-only unless
+  // `onExtraChange` is provided AND the field is `editable` — then it renders a textbox whose edits
+  // the caller folds back into a `{ details: { hardware } }` PATCH (Job Detail only; import review
+  // leaves them read-only).
+  systemExtras?: SystemHardwareField[]
+  extraEdits?: Record<string, string>
+  onExtraChange?: (key: string, value: string) => void
 }) {
   const edit: EditCtx | null =
     editable && edits && onChange ? { edits, onChange, originalDetails: originalDetails ?? null } : null
@@ -231,6 +273,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
         (f) =>
           f.section === s.key &&
           isValueField(f) &&
+          !hideKeys.includes(f.key) &&
           isBlank(valueAtStorage(details, f.storage)) &&
           !addedPaths.has(detailsPath(f.storage)) &&
           !(f.category === 'core' && expanded.has(f.section)),
@@ -250,7 +293,9 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
       </h3>
 
       {registry.sections.map((section) => {
-        const fields = registry.fields.filter((f) => f.section === section.key && isValueField(f))
+        const fields = registry.fields.filter(
+          (f) => f.section === section.key && isValueField(f) && !hideKeys.includes(f.key),
+        )
         if (fields.length === 0) return null
         return (
           <Section
@@ -263,6 +308,9 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
             onToggle={() => toggleSection(section.key)}
             addedPaths={addedPaths}
             onRemoveAdded={removeAdded}
+            extras={section.key === 'system' ? systemExtras : []}
+            extraEdits={extraEdits}
+            onExtraChange={section.key === 'system' ? onExtraChange : undefined}
           />
         )
       })}

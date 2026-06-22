@@ -149,6 +149,22 @@ explains intent; protect important explicit decisions with tests, not docs alone
   reverses, but any post-commit hardware edit trips the existing pristine guard (reverse blocked, the
   edit preserved). Enrichment is read-only against the catalogue; `source_examples` still never match;
   legacy `details.system.panel/inverter` text coexists. No frontend review UI yet (Stage 4C).
+  **(UX rule)** parsed hardware is shown as **normal Job Detail System fields** (Panel type / Inverter
+  / Battery / Metering — alongside Number of panels / Storey / Phase / Roof type, plus a read-only
+  **CT / electrical** row), NOT a separate hardware card. The current parsed VALUE always shows
+  **regardless of confidence** — low confidence does NOT hide inverter/battery/etc.; it only adds a
+  supplemental flag. Panel type / Inverter / Battery / Metering are **editable as textboxes** in Job
+  Detail edit mode; the edit folds into the existing Job-details PATCH (`{ details: { hardware } }`),
+  updating the Job snapshot ONLY — never Settings > Hardware or the catalogue. An item with a recorded
+  quantity > 1 is shown inline as **"N × MODEL"** and round-trips on edit (the quantity is never lost
+  in the UI). A small read-only
+  **"Hardware notes"** area is **supplemental only** (low-confidence/`manual_review` flags, ambiguous
+  `model_options`, warnings, `raw_misc`) and is never the only place a value appears. Once a structured
+  `details.hardware` snapshot exists, the cleaned snapshot is the job-facing System value and the legacy
+  raw `system.panel`/`system.inverter` workbook text is hidden on the Job page (still stored as
+  provenance; still shown as raw source-cell data in import review's Raw cells). Import review shows the
+  same parsed hardware values read-only (what will commit). When no structured snapshot exists, the
+  legacy System display is unchanged. Deferred: editing item quantity and CT/export site-notes.
 
 ## Labels & approval (workflow signals)
 

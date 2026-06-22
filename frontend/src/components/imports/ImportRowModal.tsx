@@ -20,7 +20,9 @@ import { SeverityChip } from '@/components/imports/IssueBadges'
 import { CommitReverseSection } from '@/components/imports/CommitReverseSection'
 import { CustomerResolutionSection } from '@/components/imports/CustomerResolutionSection'
 import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
+import { HardwareNotes } from '@/components/HardwareNotes'
 import { buildDetailsPatch } from '@/lib/detailsPatch'
+import { deriveHardwareNotes, deriveSystemHardware } from '@/lib/hardwareDisplay'
 import {
   PARSED_TEXT_FIELDS,
   type FieldSpec,
@@ -166,6 +168,13 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const { data: registry } = useFieldRegistry()
   // Phase 3b-1: structured read-only view when the row carries parsed.details.
   const details = row.parsed?.details ?? null
+  // Stage 4B-followup: surface the PARSED hardware so review shows what will commit — confirmed
+  // hardware as normal System fields + a "Hardware notes" area for uncertain evidence (raw workbook
+  // cells stay available in the Raw cells panel below).
+  const hardware = details?.hardware ?? null
+  const hardwareHideKeys = hardware ? ['panel', 'inverter'] : undefined
+  const systemHardware = hardware ? deriveSystemHardware(hardware) : undefined
+  const hardwareNotes = hardware ? deriveHardwareNotes(hardware) : []
   // The GENERATED default internal notes (build_imported_notes mirror). Shown as the
   // editable textarea's value when there is no override; editing it sets an override.
   const internalNotesPreview = previewInternalNotes(details)
@@ -367,18 +376,23 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
       {/* Phase 3b-1: registry-driven structured read-only view. Falls back to the
           flat fields below (with a hint) for rows staged before structured parsing. */}
       {details && registry ? (
-        <StructuredDetailsView
-          registry={registry}
-          details={details}
-          editable={!locked}
-          edits={detailsEdits}
-          onChange={handleDetailsChange}
-          originalDetails={(row.original_parsed?.details as ParsedDetails | null) ?? null}
-          // A4: hide the "Imported review notes" / "Imported source notes" panels —
-          // the same preserved context is shown consolidated in the "On commit" Job
-          // internal-notes box (right) and verbatim in Raw cells (below).
-          hideImportedNotes
-        />
+        <>
+          <StructuredDetailsView
+            registry={registry}
+            details={details}
+            editable={!locked}
+            edits={detailsEdits}
+            onChange={handleDetailsChange}
+            originalDetails={(row.original_parsed?.details as ParsedDetails | null) ?? null}
+            // A4: hide the "Imported review notes" / "Imported source notes" panels —
+            // the same preserved context is shown consolidated in the "On commit" Job
+            // internal-notes box (right) and verbatim in Raw cells (below).
+            hideImportedNotes
+            hideKeys={hardwareHideKeys}
+            systemExtras={systemHardware}
+          />
+          {hardwareNotes.length > 0 && <HardwareNotes notes={hardwareNotes} />}
+        </>
       ) : (
         <div className="rounded-md border border-dashed border-line-strong bg-surface px-3 py-2">
           <p className="text-xs text-faint">

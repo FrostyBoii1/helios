@@ -10,7 +10,12 @@ import {
 import { CustomerOtherJobsPanel } from '@/components/CustomerOtherJobsPanel'
 import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
-import { JobHardwareSection } from '@/components/JobHardwareSection'
+import { HardwareNotes } from '@/components/HardwareNotes'
+import {
+  applyHardwareSystemEdits,
+  deriveHardwareNotes,
+  deriveSystemHardware,
+} from '@/lib/hardwareDisplay'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
 import { ImportedJobDetails } from '@/components/ImportedJobDetails'
 import { JobApprovalControl } from '@/components/JobApprovalControl'
@@ -83,6 +88,9 @@ export function JobDetailPage() {
   const [form, setForm] = useState<Record<string, string>>({})
   // Phase 4c: string UI state for structured fields, keyed by "<section>.<key>".
   const [detailsEdits, setDetailsEdits] = useState<Record<string, string>>({})
+  // System-hardware textbox edits (Panel type / Inverter / Battery / Metering), keyed by field key;
+  // folded into the same PATCH as details.hardware on save.
+  const [hardwareEdits, setHardwareEdits] = useState<Record<string, string>>({})
   const [installDate, setInstallDate] = useState('')
   const [editingInstall, setEditingInstall] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -96,6 +104,7 @@ export function JobDetailPage() {
       )
       setInstallDate(job.install_date ?? '')
       setDetailsEdits({})
+      setHardwareEdits({})
     }
   }, [job])
 
@@ -113,8 +122,12 @@ export function JobDetailPage() {
   function handleDetailsChange(path: string, value: string) {
     setDetailsEdits((prev) => ({ ...prev, [path]: value }))
   }
+  function handleHardwareChange(key: string, value: string) {
+    setHardwareEdits((prev) => ({ ...prev, [key]: value }))
+  }
 
-  // One PATCH: changed legacy fields + (structured mode) the coerced details patch.
+  // One PATCH: changed legacy fields + (structured mode) the coerced registry details patch + any
+  // System-hardware textbox edits, folded into the same details.hardware sub-patch.
   function buildPayload(): JobInput {
     const payload: JobInput = {}
     const legacyFields = structuredEditable ? STRUCTURED_MODE_LEGACY_FIELDS : DESCRIPTIVE_FIELDS
@@ -125,13 +138,17 @@ export function JobDetailPage() {
     }
     if (structuredEditable) {
       const patch = buildDetailsPatch(detailsEdits, job?.details ?? null, fieldByPath)
-      if (patch) payload.details = patch
+      const hwPatch = applyHardwareSystemEdits(job?.details?.hardware, hardwareEdits)
+      if (patch || hwPatch) {
+        payload.details = { ...(patch ?? {}), ...(hwPatch ? { hardware: hwPatch } : {}) }
+      }
     }
     return payload
   }
   const pendingPayload = useMemo(buildPayload, [
     form,
     detailsEdits,
+    hardwareEdits,
     structuredEditable,
     fieldByPath,
     job,
@@ -165,6 +182,7 @@ export function JobDetailPage() {
     try {
       await updateMutation.mutateAsync(pendingPayload)
       setDetailsEdits({})
+      setHardwareEdits({})
       setEditingDetails(false)
     } catch (err) {
       setError(describeError(err, 'Could not save job details.'))
@@ -228,6 +246,15 @@ export function JobDetailPage() {
         .join(', ')
     : ''
   const propertyAddress = jobSiteAddress || customerAddress
+
+  // When a structured hardware snapshot exists, CONFIRMED hardware shows as normal System fields
+  // (Panel type / Inverter / Battery / Metering·CT) and the legacy raw `panel`/`inverter` fields are
+  // hidden — so the job-facing System value is the cleaned snapshot, not the raw workbook text.
+  // Uncertain/ambiguous/warning evidence goes to a small "Hardware notes" area. Absent -> legacy.
+  const hasHardware = job.details?.hardware != null
+  const hardwareHideKeys = hasHardware ? ['panel', 'inverter'] : undefined
+  const systemHardware = hasHardware ? deriveSystemHardware(job.details?.hardware) : undefined
+  const hardwareNotes = hasHardware ? deriveHardwareNotes(job.details?.hardware) : []
 
   return (
     <div>
@@ -400,6 +427,10 @@ export function JobDetailPage() {
                 edits={detailsEdits}
                 onChange={handleDetailsChange}
                 hideImportedNotes
+                hideKeys={hardwareHideKeys}
+                systemExtras={systemHardware}
+                extraEdits={hardwareEdits}
+                onExtraChange={handleHardwareChange}
               />
               {/* Network approval: structured state, under the Electrical/network details. */}
               <JobApprovalControl job={job} editing />
@@ -451,7 +482,13 @@ export function JobDetailPage() {
             )}
             {/* Imported review/source notes are hidden here — the same preserved
                 context is shown in Job internal notes. */}
-            <StructuredDetailsView registry={registry} details={job.details} hideImportedNotes />
+            <StructuredDetailsView
+              registry={registry}
+              details={job.details}
+              hideImportedNotes
+              hideKeys={hardwareHideKeys}
+              systemExtras={systemHardware}
+            />
             {/* Network approval state is visible in read mode (before pressing Edit). */}
             <JobApprovalControl job={job} editing={false} />
           </div>
@@ -484,12 +521,22 @@ export function JobDetailPage() {
           </dl>
         )}
 
+        {/* Supplemental hardware notes — low-confidence/manual-review flags, ambiguous options,
+            warnings, misc (the hardware VALUES show as normal System fields above, regardless of
+            confidence). Read-only; absent when there is nothing to flag. */}
+        {hasHardware && hardwareNotes.length > 0 && (
+          <div className="mt-3">
+            <HardwareNotes notes={hardwareNotes} />
+          </div>
+        )}
+
         {editingDetails && (
           <div className="mt-5 flex justify-end gap-3">
             <button
               onClick={() => {
                 setEditingDetails(false)
                 setDetailsEdits({})
+                setHardwareEdits({})
                 setForm(
                   Object.fromEntries(
                     DESCRIPTIVE_FIELDS.map(({ key }) => [key, (job[key] as string | null) ?? '']),
@@ -531,12 +578,6 @@ export function JobDetailPage() {
             }
           />
         </aside>
-      </div>
-
-      {/* Hardware snapshot (Stage 3B): Job-owned, editable; never live-updates from the
-          Settings > Hardware catalogue. Renders safely when details / hardware are absent. */}
-      <div className="mt-6">
-        <JobHardwareSection job={job} />
       </div>
 
       {/* Tasks + timeline are live; Documents remains a later phase. */}
