@@ -253,7 +253,15 @@ These are stubbed/absent and represent the next phases:
   + **274 matchable aliases** (exact/loose/case-sensitive). `source_examples` are NOT seeded
   (evidence only, never matchable); ignore/correction/guard/normalization rules stay versioned
   config. The catalogue is reference data with no FK to/from Jobs, so `dev_reset` is unchanged.
-  **Not yet built (planned stages):** **Settings > Hardware** admin UI (search +
+  **(Stage 2A built — backend admin API)** `/api/v1/hardware` (`services/hardware.py` +
+  `schemas/hardware.py` + `endpoints/hardware.py`) — **every route admin-only** (`require_admin`):
+  catalogue list (search `q` + filters category/brand/phase/nominal_kw/capacity_kwh/wattage_w +
+  `deleted=exclude|only|include`), create/get/update (spec_id immutable)/**soft-delete**/restore,
+  and nested admin-only alias CRUD + soft-delete/restore (`/{id}/aliases…`). Never hard-deletes;
+  deleted entries move to the DELETED section (`deleted=only`) and restore with aliases intact;
+  same-key alias re-create restores a soft-deleted row; aliases are never exposed to non-admins.
+  No migration (uses the Stage-1 tables). **Stage 2B (next)** = the **Settings > Hardware** admin UI
+  (consuming this API: search +
   multi-filter by phase/size/brand/type; soft-delete + **restore** + DELETED section; aliases
   admin-only to view); **`Job.details.hardware`** editable per-job SNAPSHOTS (inverters/batteries/
   metering lists + a panel object + site_notes) that NEVER depend on the live catalogue; the parser

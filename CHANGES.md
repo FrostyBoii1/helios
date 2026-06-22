@@ -9,6 +9,41 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-20 — Hardware Parser lane, Stage 2A: admin catalogue + alias API (backend only)
+
+- **Why:** Stage 2 (Settings > Hardware) is large, so it is split per the owner's pre-authorised
+  plan: **Stage 2A = backend admin API** (this), **Stage 2B = the Settings > Hardware UI** (next).
+  2A gives admins a programmatic way to view/search/filter/manage the Stage-1 catalogue + aliases.
+- **What:** new `/api/v1/hardware` router — **every route is admin-only** (`require_admin`, reads
+  AND writes), so the catalogue management API and especially aliases are never reachable by a
+  normal user. Catalogue: `GET` (search `q` + filters: category / brand / phase / nominal_kw /
+  capacity_kwh / wattage_w + `deleted=exclude|only|include` + pagination), `POST` create,
+  `GET/{id}`, `PATCH/{id}` (spec_id immutable), `DELETE/{id}` (**soft-delete**),
+  `POST/{id}/restore`. Aliases (nested, admin-only): `GET/POST /{id}/aliases`,
+  `PATCH/DELETE /{id}/aliases/{alias_id}`, `POST .../restore`. New `services/hardware.py` +
+  `schemas/hardware.py`. List rows carry an active `alias_count`.
+- **Behaviour:** soft-delete only — **never hard-deletes**; deleted entries leave the default list
+  and appear under `deleted=only` (the DELETED section), restorable with aliases intact (soft-
+  deleting hardware does not touch its aliases). Alias types are exactly exact / loose /
+  case_sensitive (no source_example); the unique (hardware_id, alias, alias_type) is enforced —
+  creating a same-key alias that was soft-deleted RESTORES it (no true duplicate); an active dup →
+  409. `spec_id` is immutable + unique (admin-created entries get `spec_source='admin'`).
+- **Snapshot-stability preserved + scope:** the catalogue still has NO link to/from Jobs; **no**
+  parser runtime, Job snapshot, import wiring, completed-sheet/panel integration, NAS, Settings UI,
+  or `HARDWARE_UNCERTAIN` change. **No migration** (uses the Stage-1 tables; alembic head stays
+  `c3d4e5f6a7b8`). No frontend (that is Stage 2B).
+- **Deferred to a later stage:** a NORMAL-user "view canonical hardware names" read endpoint (no
+  consumer yet — every 2A route is admin-only; aliases stay admin-only forever).
+- **Tests:** `tests/test_hardware_admin_api.py` (10) — admin lifecycle; non-admins 403 on EVERY
+  route (incl. alias visibility); search + all filters; deleted exclude/only/include; restore
+  keeps aliases; duplicate spec_id 409; alias create/update/delete/restore + dup/restore semantics;
+  soft-delete is not a hard delete. Full backend suite **546 passed** (536 + 10).
+- **Files:** backend `api/v1/endpoints/hardware.py` (new), `services/hardware.py` (new),
+  `schemas/hardware.py` (new), `api/v1/router.py` (registration), `tests/test_hardware_admin_api.py`
+  (new); docs (CHANGES, DEVELOPER_HANDOFF, business_rules). Permanent.
+
+---
+
 ## 2026-06-20 — Hardware Parser lane, Stage 1: DB hardware catalogue + aliases + seed
 
 - **Why:** the lane needs a DB-backed canonical hardware catalogue (the long-term source of

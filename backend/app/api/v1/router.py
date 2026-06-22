@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     auth,
     customers,
     dev_reset,
+    hardware,
     health,
     imports,
     job_labels,
@@ -26,6 +27,8 @@ api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 api_router.include_router(activities.router, prefix="/activities", tags=["activities"])
 api_router.include_router(imports.router, prefix="/imports", tags=["imports"])
+# Hardware catalogue + alias admin (Settings > Hardware) — every route is admin-only.
+api_router.include_router(hardware.router, prefix="/hardware", tags=["hardware"])
 # Job labels declare full paths (/job-labels and /jobs/{id}/labels) — no prefix.
 api_router.include_router(job_labels.router)
 # Dev/test-only reset tools (env + system-admin + confirmation-phrase gated).

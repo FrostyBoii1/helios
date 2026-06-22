@@ -107,7 +107,12 @@ explains intent; protect important explicit decisions with tests, not docs alone
   seeded from the spec) — it has no link to/from Jobs and is NOT cleared by the dev reset tools, so
   it can evolve independently while Job snapshots stay stable. Ignore rules, specific corrections,
   guard phrases, and normalization remain versioned config (not DB-editable yet); `source_examples`
-  are evidence only and are never stored as matchable aliases.
+  are evidence only and are never stored as matchable aliases. **(Stage 2A)** the catalogue and its
+  aliases are managed through an **admin-only** API (`/api/v1/hardware`) — editing catalogue entries
+  and viewing/editing aliases require admin; normal users cannot see aliases. Hardware is
+  **soft-deleted, never hard-deleted**, and is restorable (with its aliases intact) from a DELETED
+  view; the stable `spec_id` is immutable. None of these admin actions (rename, alias add/remove,
+  soft-delete, restore) touch Jobs — the catalogue is still not wired into Jobs/imports/parser.
 
 ## Labels & approval (workflow signals)
 
