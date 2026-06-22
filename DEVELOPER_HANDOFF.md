@@ -260,8 +260,17 @@ These are stubbed/absent and represent the next phases:
   and nested admin-only alias CRUD + soft-delete/restore (`/{id}/aliases…`). Never hard-deletes;
   deleted entries move to the DELETED section (`deleted=only`) and restore with aliases intact;
   same-key alias re-create restores a soft-deleted row; aliases are never exposed to non-admins.
-  No migration (uses the Stage-1 tables). **Stage 2B (next)** = the **Settings > Hardware** admin UI
-  (consuming this API: search +
+  No migration (uses the Stage-1 tables). **(Stage 2B-1 built — frontend read-only Settings UI)**
+  the app's first **Settings** area: an admin-only gear in the top bar (`canManageHardware`) →
+  **`/settings/hardware`** (`components/SettingsLayout.tsx` + `pages/SettingsHardwarePage.tsx`, with
+  a `lib/hardware.ts` + `hooks/useHardware.ts` READ layer + `types` mirroring `schemas/hardware.py`).
+  It lists the catalogue with debounced search, filters (category/brand/phase/category-aware size),
+  an Active/Deleted/All view, per-row alias counts, and pagination. The `/settings` route group is
+  `ProtectedRoute allowedRoles={['admin']}` and the gear is hidden for non-admins (the backend still
+  enforces `require_admin` — the UI never gates on its own). Read-only: **no** create/edit/delete/
+  restore or alias controls yet, and **no backend change**. **Stage 2B-2 (next)** = create/edit/
+  soft-delete/restore hardware; **Stage 2B-3** = alias view/add/edit/soft-delete/restore. These
+  remaining sub-stages still consume this API: search +
   multi-filter by phase/size/brand/type; soft-delete + **restore** + DELETED section; aliases
   admin-only to view); **`Job.details.hardware`** editable per-job SNAPSHOTS (inverters/batteries/
   metering lists + a panel object + site_notes) that NEVER depend on the live catalogue; the parser

@@ -3,7 +3,7 @@
 
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
-import { canReviewImports } from '@/auth/permissions'
+import { canManageHardware, canReviewImports } from '@/auth/permissions'
 import { ContourBackground } from '@/components/ContourBackground'
 
 interface NavItem {
@@ -27,6 +27,9 @@ export function AppLayout() {
   const navItems = NAV_ITEMS.filter(
     (item) => !item.adminOnly || canReviewImports(user?.role.name),
   )
+  // Settings is admin-only (the gear is hidden for everyone else; the route + every
+  // hardware API additionally enforce admin server-side).
+  const showSettings = canManageHardware(user?.role.name)
 
   return (
     <div className="min-h-screen">
@@ -59,6 +62,20 @@ export function AppLayout() {
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
+            {showSettings && (
+              <NavLink
+                to="/settings/hardware"
+                aria-label="Settings"
+                title="Settings"
+                className={({ isActive }) =>
+                  `rounded-md p-1.5 transition-colors ${
+                    isActive ? 'text-brand-400' : 'text-muted hover:text-fg'
+                  }`
+                }
+              >
+                <GearIcon />
+              </NavLink>
+            )}
             {user && (
               <span className="text-muted">
                 {user.full_name}
@@ -94,5 +111,25 @@ function Wordmark() {
         <span className="ml-2 text-sm font-normal text-faint">Ops</span>
       </span>
     </Link>
+  )
+}
+
+// Inline cog (no icon library). Admin-only Settings access point in the top bar.
+function GearIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
   )
 }

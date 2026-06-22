@@ -75,6 +75,14 @@ export function canReviewImports(role: RoleName | undefined): boolean {
   return role === 'admin'
 }
 
+// ---- Hardware catalogue (Settings > Hardware) — admin-only, mirrors the backend
+// require_admin on every /hardware route. Gates the Settings gear + the /settings
+// route group. Aliases and all catalogue management are admin-only; normal users get
+// no UI path (and the backend 403s regardless — the UI never gates on its own).
+export function canManageHardware(role: RoleName | undefined): boolean {
+  return role === 'admin'
+}
+
 // ---- Tasks (per-task, evaluated against the current user) ----
 interface TaskOwnership {
   created_by_id: number | null

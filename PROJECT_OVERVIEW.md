@@ -62,8 +62,8 @@ frontend/
     auth/AuthContext.tsx session + login/logout
     lib/api.ts           fetch client with token refresh
     lib/queryClient.ts   TanStack Query config
-    components/          ProtectedRoute, AppLayout
-    pages/               LoginPage, DashboardPage, NotFoundPage
+    components/          ProtectedRoute, AppLayout, SettingsLayout
+    pages/               LoginPage, DashboardPage, SettingsHardwarePage, …
     types/               shared TS types (mirror backend schemas)
 docs/                    architecture, database_schema, business_rules
 ```
@@ -138,6 +138,12 @@ Full detail and relationships: [docs/database_schema.md](docs/database_schema.md
   - **Job labels:** `GET /job-labels` (catalogue), `GET/POST/DELETE
     /jobs/{id}/labels` (operational labels), `PUT /jobs/{id}/approval` (the
     structured approval control — sets the single system approval label).
+  - **Hardware** (admin-only — Settings > Hardware; Hardware Parser lane): `GET/POST
+    /hardware` (catalogue search/filter + create), `GET/PATCH/DELETE /hardware/{id}`
+    (soft-delete), `POST /hardware/{id}/restore`, and nested admin-only aliases
+    `GET/POST /hardware/{id}/aliases`, `PATCH/DELETE …/{alias_id}`, `POST …/restore`.
+    Catalogue is reference data with no link to/from Jobs (edits never change Job
+    hardware snapshots).
   - **Dev reset** (admin, non-production): `GET /dev/reset/counts`,
     `POST /dev/reset/imports`, `POST /dev/reset/live-crm` (typed-phrase confirmed).
 - Interactive docs at `/docs` (Swagger UI) when the backend runs.

@@ -362,3 +362,41 @@ export interface JobApprovalRead {
   state: JobApprovalState
   pending_date: string | null
 }
+
+// ---- Hardware catalogue (Settings > Hardware; admin-only) ----
+// Mirrors backend/app/schemas/hardware.py (HardwareCatalogueRead) + enums.py.
+export type HardwareCategory = 'inverter' | 'battery' | 'panel' | 'metering'
+export type HardwareAliasType = 'exact' | 'loose' | 'case_sensitive'
+// Visibility for soft-deletable rows: active only / the DELETED section / both.
+// Mirrors the backend `deleted` query param.
+export type HardwareDeletedMode = 'exclude' | 'only' | 'include'
+
+export interface HardwareCatalogueEntry {
+  id: number
+  spec_id: string
+  category: HardwareCategory
+  canonical_model: string | null
+  display_name: string | null
+  brand: string | null
+  phases: string | null
+  nominal_kw: number | null
+  capacity_kwh: number | null
+  wattage_w: number | null
+  model_options: string[] | null
+  attributes: Record<string, unknown> | null
+  spec_source: string
+  is_active: boolean
+  // Active (non-deleted) alias count, computed server-side.
+  alias_count: number
+  created_at: string
+  updated_at: string
+  // Set when the entry is soft-deleted (DELETED section); null = active.
+  deleted_at: string | null
+}
+
+export interface HardwareCatalogueListResponse {
+  items: HardwareCatalogueEntry[]
+  total: number
+  limit: number
+  offset: number
+}

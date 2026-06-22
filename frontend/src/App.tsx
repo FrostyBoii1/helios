@@ -10,6 +10,8 @@ import { TasksListPage } from '@/pages/TasksListPage'
 import { SchedulePage } from '@/pages/SchedulePage'
 import { ImportsListPage } from '@/pages/ImportsListPage'
 import { ImportBatchPage } from '@/pages/ImportBatchPage'
+import { SettingsLayout } from '@/components/SettingsLayout'
+import { SettingsHardwarePage } from '@/pages/SettingsHardwarePage'
 import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
@@ -29,10 +31,14 @@ export default function App() {
             <Route path="/jobs/:id" element={<JobDetailPage />} />
             <Route path="/tasks" element={<TasksListPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
-            {/* Imports review is admin-only (backend enforces this too). */}
+            {/* Imports review + Settings are admin-only (backend enforces this too). */}
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
               <Route path="/imports" element={<ImportsListPage />} />
               <Route path="/imports/:id" element={<ImportBatchPage />} />
+              <Route path="/settings" element={<SettingsLayout />}>
+                <Route index element={<Navigate to="/settings/hardware" replace />} />
+                <Route path="hardware" element={<SettingsHardwarePage />} />
+              </Route>
             </Route>
           </Route>
         </Route>

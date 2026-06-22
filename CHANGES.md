@@ -9,6 +9,43 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-22 — Hardware Parser lane, Stage 2B-1: Settings > Hardware UI (read-only catalogue list)
+
+- **Why:** Stage 2B (the Settings > Hardware admin UI) is broad — the app's first Settings area, a
+  shell access point, the API/types/hooks layer, the catalogue list/filter/deleted view, hardware
+  CRUD, and alias management. Per the owner's pre-authorised split it ships in slices: **2B-1 =
+  Settings shell + read-only catalogue list** (this), **2B-2 = create/edit/soft-delete/restore**,
+  **2B-3 = alias management**. 2B-1 makes the Stage-2A catalogue *visible* in the app.
+- **What:** the app's **first Settings area** — an admin-only gear in the top bar
+  (`canManageHardware`, admin-only) → `/settings/hardware`, a `SettingsLayout` shell (left sub-nav)
+  nested in the app shell, and a **read-only** `SettingsHardwarePage`: debounced search (`q`),
+  filters by category / brand / phase / category-aware size (kW · kWh · W), an Active / Deleted /
+  All view, a scannable table (name, category, brand, phase, size, alias count, Active/Deleted
+  state), and pagination. Brand + phase options are derived from the catalogue under the current
+  category + deleted scope (one ≤200-row facet query; covers the whole ~167-row catalogue today).
+- **Read API/types/hooks foundation:** `lib/hardware.ts` (`listHardware`), `hooks/useHardware.ts`
+  (`useHardwareList`), and `types` (`HardwareCatalogueEntry` + `HardwareCategory` /
+  `HardwareAliasType` / `HardwareDeletedMode`) mirroring `schemas/hardware.py`. Write helpers/hooks
+  (create/edit/delete/restore, aliases) land with their UI in 2B-2 / 2B-3.
+- **Permissions:** the gear is hidden for non-admins and the `/settings` route group is
+  `ProtectedRoute allowedRoles={['admin']}`; the backend already enforces `require_admin` on every
+  hardware route (defence-in-depth — the UI never relies on frontend gating alone). Normal users
+  get no UI path to the catalogue or to aliases.
+- **Snapshot stability surfaced, not changed:** a standing note on the page reads "Catalogue and
+  alias changes affect future parser matching only. Existing Job hardware snapshots do not change."
+- **Scope:** frontend only — **no backend change**, no parser runtime, no Job hardware snapshot UI,
+  no import wiring, no completed-sheet/panel integration, no NAS/proposal, no `HARDWARE_UNCERTAIN`
+  change, **no migration**. No create/edit/delete/restore or alias controls yet (2B-2 / 2B-3).
+- **Verification:** frontend `typecheck` + `lint` (`--max-warnings 0`) + `build` all clean (the
+  project has no frontend unit-test runner). Backend untouched, so backend tests were not re-run.
+- **Files:** frontend `lib/hardware.ts` (new), `hooks/useHardware.ts` (new),
+  `components/SettingsLayout.tsx` (new), `pages/SettingsHardwarePage.tsx` (new), `types/index.ts`
+  (hardware read types), `auth/permissions.ts` (`canManageHardware`), `components/AppLayout.tsx`
+  (gear), `App.tsx` (settings routes); docs (CHANGES, DEVELOPER_HANDOFF, PROJECT_OVERVIEW).
+  Permanent.
+
+---
+
 ## 2026-06-20 — Hardware Parser lane, Stage 2A: admin catalogue + alias API (backend only)
 
 - **Why:** Stage 2 (Settings > Hardware) is large, so it is split per the owner's pre-authorised
