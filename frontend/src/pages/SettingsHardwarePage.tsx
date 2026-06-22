@@ -1,14 +1,22 @@
-// Settings > Hardware (admin-only) — Stage 2B-1: read-only catalogue list.
+// Settings > Hardware (admin-only) — catalogue browser + write actions.
 //
-// Surfaces the Stage-2A hardware catalogue in the app: debounced search, filters by
-// category / brand / phase / category-aware size, an Active / Deleted / All view, a
-// scannable table (name, category, brand, phase, size, alias count, state), and
-// pagination. No create/edit/delete/restore or alias controls yet — those are 2B-2 /
-// 2B-3. Every hardware route is admin-only server-side; the route is also admin-gated.
+// 2B-1 added the read view (debounced search, filters by category / brand / phase /
+// category-aware size, an Active / Deleted / All view, a scannable table, pagination).
+// 2B-2 adds the catalogue WRITE actions: a New hardware button, per-row Edit + Delete
+// (active rows) / Restore (deleted rows), and the shared HardwareFormModal. Delete is a
+// recoverable soft-delete (window.confirm); restore is explicit. Alias management is still
+// Stage 2B-3 (no alias controls here). Every hardware route is admin-only server-side; the
+// route is also admin-gated.
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useHardwareList } from '@/hooks/useHardware'
+import { ApiError } from '@/lib/api'
+import { HardwareFormModal } from '@/components/HardwareFormModal'
+import {
+  useDeleteHardware,
+  useHardwareList,
+  useRestoreHardware,
+} from '@/hooks/useHardware'
 import type {
   HardwareCatalogueEntry,
   HardwareCategory,
@@ -59,6 +67,16 @@ export function SettingsHardwarePage() {
   const [size, setSize] = useState('')
   const [deleted, setDeleted] = useState<HardwareDeletedMode>('exclude')
   const [offset, setOffset] = useState(0)
+
+  // Create/edit modal: open with a null entry to create, or an entry to edit.
+  const [formOpen, setFormOpen] = useState(false)
+  const [formEntry, setFormEntry] = useState<HardwareCatalogueEntry | null>(null)
+  // Inline banner for row-action (delete/restore) failures.
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const deleteMutation = useDeleteHardware()
+  const restoreMutation = useRestoreHardware()
+  const actionPending = deleteMutation.isPending || restoreMutation.isPending
 
   // Debounce the search box; reset to the first page on a new query.
   useEffect(() => {
@@ -113,18 +131,68 @@ export function SettingsHardwarePage() {
     return `${start}–${end} of ${total}`
   }, [offset, total])
 
+  function openCreate() {
+    setActionError(null)
+    setFormEntry(null)
+    setFormOpen(true)
+  }
+
+  function openEdit(h: HardwareCatalogueEntry) {
+    setActionError(null)
+    setFormEntry(h)
+    setFormOpen(true)
+  }
+
+  async function handleDelete(h: HardwareCatalogueEntry) {
+    setActionError(null)
+    const name = hardwareName(h)
+    if (
+      !window.confirm(
+        `Soft-delete “${name}”? It moves to the Deleted view and can be restored. ` +
+          'Existing Job hardware snapshots are not affected.',
+      )
+    ) {
+      return
+    }
+    try {
+      await deleteMutation.mutateAsync(h.id)
+    } catch (err) {
+      setActionError(actionMessage(err, 'delete'))
+    }
+  }
+
+  async function handleRestore(h: HardwareCatalogueEntry) {
+    setActionError(null)
+    try {
+      await restoreMutation.mutateAsync(h.id)
+    } catch (err) {
+      setActionError(actionMessage(err, 'restore'))
+    }
+  }
+
   return (
     <div>
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold text-fg">Hardware catalogue</h2>
-        <span className="rounded bg-elevated px-2 py-0.5 text-xs uppercase tracking-wide text-faint">
-          Admin only
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="rounded bg-elevated px-2 py-0.5 text-xs uppercase tracking-wide text-faint">
+            Admin only
+          </span>
+          <button onClick={openCreate} className="btn-primary text-sm">
+            New hardware
+          </button>
+        </div>
       </div>
       <p className="mb-4 max-w-3xl text-sm text-muted">
         Catalogue and alias changes affect future parser matching only. Existing Job
         hardware snapshots do not change.
       </p>
+
+      {actionError && (
+        <div className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {actionError}
+        </div>
+      )}
 
       <input
         value={searchInput}
@@ -234,6 +302,7 @@ export function SettingsHardwarePage() {
               <th className="px-4 py-2 font-medium">Size</th>
               <th className="px-4 py-2 font-medium">Aliases</th>
               <th className="px-4 py-2 font-medium">State</th>
+              <th className="px-4 py-2 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -264,6 +333,36 @@ export function SettingsHardwarePage() {
                   <td className="px-4 py-2">
                     <StateBadge deleted={h.deleted_at != null} />
                   </td>
+                  <td className="px-4 py-2">
+                    <div className="flex justify-end gap-3">
+                      {h.deleted_at == null ? (
+                        <>
+                          <button
+                            onClick={() => openEdit(h)}
+                            disabled={actionPending}
+                            className="text-xs font-medium text-brand-400 hover:text-brand-300 disabled:opacity-50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(h)}
+                            disabled={actionPending}
+                            className="text-xs font-medium text-red-300 hover:text-red-200 disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleRestore(h)}
+                          disabled={actionPending}
+                          className="text-xs font-medium text-brand-400 hover:text-brand-300 disabled:opacity-50"
+                        >
+                          Restore
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
@@ -293,6 +392,14 @@ export function SettingsHardwarePage() {
           </button>
         </div>
       </div>
+
+      {formOpen && (
+        <HardwareFormModal
+          entry={formEntry}
+          onClose={() => setFormOpen(false)}
+          onSaved={() => setFormOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -309,11 +416,21 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function RowMessage({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <tr>
-      <td colSpan={7} className={`px-4 py-8 text-center text-muted ${className ?? ''}`}>
+      <td colSpan={8} className={`px-4 py-8 text-center text-muted ${className ?? ''}`}>
         {children}
       </td>
     </tr>
   )
+}
+
+function actionMessage(err: unknown, action: 'delete' | 'restore'): string {
+  if (err instanceof ApiError) {
+    if (err.status === 403) return 'You do not have permission to manage hardware.'
+    if (err.status === 404) return 'That hardware entry no longer exists. Refresh and try again.'
+  }
+  return action === 'delete'
+    ? 'Could not delete that hardware. Please try again.'
+    : 'Could not restore that hardware. Please try again.'
 }
 
 function StateBadge({ deleted }: { deleted: boolean }) {

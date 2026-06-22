@@ -267,11 +267,16 @@ These are stubbed/absent and represent the next phases:
   It lists the catalogue with debounced search, filters (category/brand/phase/category-aware size),
   an Active/Deleted/All view, per-row alias counts, and pagination. The `/settings` route group is
   `ProtectedRoute allowedRoles={['admin']}` and the gear is hidden for non-admins (the backend still
-  enforces `require_admin` — the UI never gates on its own). Read-only: **no** create/edit/delete/
-  restore or alias controls yet, and **no backend change**. **Stage 2B-2 (next)** = create/edit/
-  soft-delete/restore hardware; **Stage 2B-3** = alias view/add/edit/soft-delete/restore. These
-  remaining sub-stages still consume this API: search +
-  multi-filter by phase/size/brand/type; soft-delete + **restore** + DELETED section; aliases
+  enforces `require_admin` — the UI never gates on its own). **(Stage 2B-2 built — catalogue write
+  UI)** the same screen now has a **New hardware** action, per-row **Edit** / **Delete** (active) /
+  **Restore** (deleted), and a shared `components/HardwareFormModal.tsx` (create + edit) with
+  category-aware fields; `spec_id` is required on create and read-only on edit (immutable). The
+  `lib/hardware.ts` + `hooks/useHardware.ts` WRITE layer (`create`/`update`/`delete`(soft)/`restore`
+  + `useCreate/Update/Delete/RestoreHardware`) invalidates the whole `['hardware']` key so the list
+  + facet dropdowns refetch; delete is a `window.confirm` soft-delete, restore is explicit; 409 →
+  duplicate-spec_id copy, 403/404/422 handled. Still **no backend change** and **no alias UI**.
+  **Stage 2B-3 (next)** = alias view/add/edit/soft-delete/restore (admin-only). These remaining
+  sub-stages still consume this API: aliases
   admin-only to view); **`Job.details.hardware`** editable per-job SNAPSHOTS (inverters/batteries/
   metering lists + a panel object + site_notes) that NEVER depend on the live catalogue; the parser
   runtime (proven by the fixtures); current-sheet import integration; panel integration; clean

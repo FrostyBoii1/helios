@@ -2,15 +2,18 @@
 // is admin-only — the backend enforces `require_admin` on every hardware route, so a
 // non-admin request here returns 403 (surfaced as an ApiError).
 //
-// Stage 2B-1 ships the READ path only (list + search/filter/deleted view). Create /
-// edit / soft-delete / restore land with their UI in Stage 2B-2, and alias management
-// in Stage 2B-3 — each as its own gated slice, so this file grows with its consumers.
+// Stage 2B-1 shipped the READ path (list + search/filter/deleted view). Stage 2B-2 adds
+// the catalogue WRITE path (create / edit / soft-delete / restore). Alias management is
+// still Stage 2B-3, so no alias calls live here yet.
 
 import { apiFetch } from '@/lib/api'
 import type {
+  HardwareCatalogueEntry,
   HardwareCatalogueListResponse,
   HardwareCategory,
+  HardwareCreateInput,
   HardwareDeletedMode,
+  HardwareUpdateInput,
 } from '@/types'
 
 export interface ListHardwareParams {
@@ -43,4 +46,25 @@ export function listHardware(
   if (params.offset != null) search.set('offset', String(params.offset))
   const qs = search.toString()
   return apiFetch<HardwareCatalogueListResponse>(`/hardware${qs ? `?${qs}` : ''}`)
+}
+
+export function createHardware(input: HardwareCreateInput): Promise<HardwareCatalogueEntry> {
+  return apiFetch<HardwareCatalogueEntry>('/hardware', { method: 'POST', body: input })
+}
+
+export function updateHardware(
+  id: number,
+  input: HardwareUpdateInput,
+): Promise<HardwareCatalogueEntry> {
+  return apiFetch<HardwareCatalogueEntry>(`/hardware/${id}`, { method: 'PATCH', body: input })
+}
+
+// Soft-delete (moves the entry to the DELETED view; never hard-deletes). Returns the
+// updated entry (now carrying deleted_at).
+export function deleteHardware(id: number): Promise<HardwareCatalogueEntry> {
+  return apiFetch<HardwareCatalogueEntry>(`/hardware/${id}`, { method: 'DELETE' })
+}
+
+export function restoreHardware(id: number): Promise<HardwareCatalogueEntry> {
+  return apiFetch<HardwareCatalogueEntry>(`/hardware/${id}/restore`, { method: 'POST' })
 }

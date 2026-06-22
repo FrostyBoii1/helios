@@ -9,6 +9,47 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-22 — Hardware Parser lane, Stage 2B-2: Settings > Hardware catalogue write UI (create/edit/delete/restore)
+
+- **Why:** Stage 2B-1 made the catalogue *visible* (read-only). 2B-2 adds the catalogue **write**
+  actions to the same admin screen so admins can add/edit/soft-delete/restore canonical hardware
+  without code changes. Alias management is still **Stage 2B-3** (not in this slice).
+- **What:** the existing `SettingsHardwarePage` gains a **New hardware** action, per-row **Edit** /
+  **Delete** (active rows) and **Restore** (deleted rows), and a shared `HardwareFormModal`
+  (create + edit). Fields are **category-aware** — category, spec_id, canonical_model, display_name,
+  brand always; phase + nominal_kw for inverters; capacity_kwh for batteries; wattage_w +
+  model_options for panels (metering has no size). `spec_id` is required on create and **read-only
+  on edit** (immutable). Edit sends a **true partial PATCH** — only fields whose value actually
+  changed — so an edit never rewrites or silently wipes a field the user did not touch (the backend
+  `exclude_unset` drops omitted keys but not explicit nulls, so a blanket-null payload would clear
+  untouched columns); switching an entry's category still nulls the now-invalid old-category fields
+  (they differ). Delete uses a `window.confirm` (recoverable soft-delete) like the existing
+  contact-variant archive; Restore is an explicit one-click action.
+- **Data layer:** `lib/hardware.ts` gains `createHardware` / `updateHardware` / `deleteHardware`
+  (soft) / `restoreHardware`; `hooks/useHardware.ts` gains `useCreateHardware` /
+  `useUpdateHardware` / `useDeleteHardware` / `useRestoreHardware`, each invalidating the whole
+  `['hardware']` key so the list **and** the brand/phase facet dropdowns refetch after any change.
+  New `HardwareCreateInput` / `HardwareUpdateInput` types mirror `HardwareCatalogueCreate/Update`.
+- **Errors:** 409 → "That spec id already exists" (duplicate spec_id), 400 → spec_id required,
+  403 → permission, 404 → entry gone (refresh), 422 → invalid value. Modal shows them inline;
+  row-action (delete/restore) failures show an inline banner above the table.
+- **Permissions:** unchanged from 2B-1 — the gear + `/settings` route group are admin-only and the
+  backend enforces `require_admin` on every write route. Non-admins have no UI path.
+- **Snapshot stability:** the page note and a modal note both state catalogue changes affect future
+  parser matching only; the delete confirm repeats it ("Existing Job hardware snapshots are not
+  affected").
+- **Scope:** frontend only — **no backend change**, **no migration**, no parser runtime, no
+  Job.details / Job hardware snapshot UI, no import wiring, no completed-sheet/panel runtime, no
+  NAS/proposal, no `HARDWARE_UNCERTAIN`, **no alias UI** (that is 2B-3). `is_active` and freeform
+  `attributes` are intentionally not exposed (defaults preserved; PATCH leaves them untouched).
+- **Verification:** frontend `typecheck` + `lint` (`--max-warnings 0`) + `build` all clean (161
+  modules). Backend untouched, so backend tests were not re-run.
+- **Files:** frontend `components/HardwareFormModal.tsx` (new), `pages/SettingsHardwarePage.tsx`
+  (write actions), `lib/hardware.ts` (write helpers), `hooks/useHardware.ts` (mutations),
+  `types/index.ts` (input types); docs (CHANGES, DEVELOPER_HANDOFF). Permanent.
+
+---
+
 ## 2026-06-22 — Hardware Parser lane, Stage 2B-1: Settings > Hardware UI (read-only catalogue list)
 
 - **Why:** Stage 2B (the Settings > Hardware admin UI) is broad — the app's first Settings area, a

@@ -400,3 +400,23 @@ export interface HardwareCatalogueListResponse {
   limit: number
   offset: number
 }
+
+// Create payload (mirrors HardwareCatalogueCreate). spec_id is the stable id, set on
+// create and immutable thereafter; spec_source/attributes/is_active are server-managed
+// or advanced and not edited from this UI.
+export interface HardwareCreateInput {
+  spec_id: string
+  category: HardwareCategory
+  canonical_model?: string | null
+  display_name?: string | null
+  brand?: string | null
+  phases?: string | null
+  nominal_kw?: number | null
+  capacity_kwh?: number | null
+  wattage_w?: number | null
+  model_options?: string[] | null
+}
+
+// Partial update (mirrors HardwareCatalogueUpdate). spec_id is immutable, so it is not
+// part of the update shape.
+export type HardwareUpdateInput = Partial<Omit<HardwareCreateInput, 'spec_id'>>
