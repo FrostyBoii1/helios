@@ -132,7 +132,15 @@ explains intent; protect important explicit decisions with tests, not docs alone
   a "does not update from Settings > Hardware" note, and on a `details=null` job is read-only with
   "Hardware editing is available once structured job details exist" (it never silently initialises
   details). Provenance (`confidence`/`source_fragment`/`parser_owned`) is shown subtly, never as
-  display truth.
+  display truth. **(Stage 4A)** the parser RUNTIME now exists in isolation (`app/hardware/runtime.py`,
+  read-only): given hardware text + source metadata it reads the DB catalogue/aliases + the versioned
+  policy config and emits a `JobHardwarePatch`-valid snapshot — `source_examples` can never match,
+  unknown hardware is preserved as raw text (never guessed), panels keep `model: null` unless a real
+  catalogue model is confidently identified (ambiguous → `model_options`), and it mutates nothing. It
+  is NOT wired into the import pipeline yet (Stage 4B). The snapshot's `site_notes` buckets
+  (ct/export_limit/underground/comms/raw_misc) are now **lists**, faithful to the spec. Parser policy
+  (normalization, ignore rules, specific corrections, guard phrases, confidence mapping, panel
+  brand/wattage routing) stays in the **versioned config**, not admin-editable catalogue fields.
 
 ## Labels & approval (workflow signals)
 

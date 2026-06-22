@@ -62,6 +62,14 @@ function parseLines(s: string): string[] {
     .filter(Boolean)
 }
 
+// List-based site_notes fields (Stage 4A) edit as one-fragment-per-line textareas.
+function listToLines(list: string[] | null | undefined): string {
+  return (list ?? []).join('\n')
+}
+function linesToList(s: string): string[] {
+  return parseLines(s)
+}
+
 function panelHasContent(p: JobHardwarePanel): boolean {
   return Object.values(p).some((v) => v != null && !(Array.isArray(v) && v.length === 0) && v !== '')
 }
@@ -239,15 +247,15 @@ function HardwareView({ hardware }: { hardware: JobHardwareSnapshot | null }) {
         </div>
       )}
 
-      {site && Object.values(site).some((v) => v != null && v !== '') && (
+      {site && Object.values(site).some((v) => Array.isArray(v) && v.length > 0) && (
         <div>
           <p className="eyebrow text-faint">Site notes</p>
           <p className="mt-1 text-xs text-muted">
             {[
-              site.ct ? `CT: ${site.ct}` : null,
-              site.export_limit ? `Export: ${site.export_limit}` : null,
-              site.underground ? `Underground: ${site.underground}` : null,
-              site.comms ? `Comms: ${site.comms}` : null,
+              site.ct?.length ? `CT: ${site.ct.join(', ')}` : null,
+              site.export_limit?.length ? `Export: ${site.export_limit.join(', ')}` : null,
+              site.underground?.length ? `Underground: ${site.underground.join(', ')}` : null,
+              site.comms?.length ? `Comms: ${site.comms.join(', ')}` : null,
             ]
               .filter(Boolean)
               .join(' · ') || '—'}
@@ -411,33 +419,37 @@ function HardwareEditor(p: EditorProps) {
       </div>
 
       <div>
-        <p className="eyebrow mb-1 text-faint">Site notes</p>
+        <p className="eyebrow mb-1 text-faint">Site notes (one per line)</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Labelled label="CT">
-            <input
-              value={draft.siteNotes.ct ?? ''}
-              onChange={(e) => p.onSiteNote({ ct: e.target.value })}
+            <textarea
+              rows={2}
+              value={listToLines(draft.siteNotes.ct)}
+              onChange={(e) => p.onSiteNote({ ct: linesToList(e.target.value) })}
               className="input px-2 py-1"
             />
           </Labelled>
           <Labelled label="Export limit">
-            <input
-              value={draft.siteNotes.export_limit ?? ''}
-              onChange={(e) => p.onSiteNote({ export_limit: e.target.value })}
+            <textarea
+              rows={2}
+              value={listToLines(draft.siteNotes.export_limit)}
+              onChange={(e) => p.onSiteNote({ export_limit: linesToList(e.target.value) })}
               className="input px-2 py-1"
             />
           </Labelled>
           <Labelled label="Underground">
-            <input
-              value={draft.siteNotes.underground ?? ''}
-              onChange={(e) => p.onSiteNote({ underground: e.target.value })}
+            <textarea
+              rows={2}
+              value={listToLines(draft.siteNotes.underground)}
+              onChange={(e) => p.onSiteNote({ underground: linesToList(e.target.value) })}
               className="input px-2 py-1"
             />
           </Labelled>
           <Labelled label="Comms">
-            <input
-              value={draft.siteNotes.comms ?? ''}
-              onChange={(e) => p.onSiteNote({ comms: e.target.value })}
+            <textarea
+              rows={2}
+              value={listToLines(draft.siteNotes.comms)}
+              onChange={(e) => p.onSiteNote({ comms: linesToList(e.target.value) })}
               className="input px-2 py-1"
             />
           </Labelled>

@@ -218,7 +218,7 @@ to `hardware_catalogue`; catalogue/alias edits + soft-delete/restore never mutat
   "panel": { "quantity", "brand", "display_name", "model", "model_options",
              "canonical_hardware_id_at_parse_time", "wattage_w", "panel_array_kw",
              "confidence", "parser_owned", "source_fragment", "parser_rule_version" },
-  "site_notes": { "ct", "export_limit", "underground", "comms", "raw_misc": [] },
+  "site_notes": { "ct": [], "export_limit": [], "underground": [], "comms": [], "raw_misc": [] },
   "warnings":   []
 }
 ```

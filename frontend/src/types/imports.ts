@@ -146,10 +146,11 @@ export interface JobHardwarePanel {
 }
 
 export interface JobHardwareSiteNotes {
-  ct?: string | null
-  export_limit?: string | null
-  underground?: string | null
-  comms?: string | null
+  // List-based (Stage 4A) — faithful to the parser spec (a cell may carry several fragments).
+  ct?: string[] | null
+  export_limit?: string[] | null
+  underground?: string[] | null
+  comms?: string[] | null
   raw_misc?: string[] | null
 }
 

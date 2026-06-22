@@ -59,12 +59,14 @@ class JobHardwarePanel(_Strict):
 
 
 class JobHardwareSiteNotes(_Strict):
-    """Free-form site/electrical notes captured alongside hardware (editable text)."""
+    """Free-form site/electrical notes captured alongside hardware. List-based to stay faithful to
+    the curated parser spec (``hardware_parser_runtime_rules_v9_1.yaml`` ``site_notes`` buckets are
+    arrays) — a cell can mention more than one CT / export-limit / comms fragment (Stage 4A)."""
 
-    ct: str | None = None
-    export_limit: str | None = None
-    underground: str | None = None
-    comms: str | None = None
+    ct: list[str] | None = None
+    export_limit: list[str] | None = None
+    underground: list[str] | None = None
+    comms: list[str] | None = None
     raw_misc: list[str] | None = None
 
 

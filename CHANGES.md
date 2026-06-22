@@ -9,6 +9,57 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-22 — Hardware Parser lane, Stage 4A: standalone hardware parser runtime (the catalogue consumer)
+
+- **Why:** Stages 1–3 built the catalogue, its admin UI, and the editable Job snapshot — but nothing
+  yet *consumed* the catalogue. Stage 4A builds the **parser runtime in isolation** (the "brain")
+  and proves it emits a valid, stable `JobHardwarePatch` snapshot BEFORE any import wiring — so we
+  never wire preview/commit/reverse around an unproven parser. **No import/preview/commit/reverse/
+  frontend-review/NAS/scheduling wiring** in this slice.
+- **What:** a read-only `app/hardware/runtime.py` (`parse_hardware`) + a versioned-config loader
+  `app/hardware/rules.py`. The runtime is **source-agnostic** (inputs = strings + `source_type`/
+  `source_field`, not sheet columns): it reads the admin-editable **DB catalogue + aliases** and the
+  **versioned policy** (normalization, ignore rules, specific corrections, guard phrases, site-note
+  keyword buckets, panel brand/wattage routing, confidence vocab, pinned `parser_rule_version`) and
+  produces inverters / batteries / metering / panel / site_notes / warnings. Output is **validated
+  against `JobHardwarePatch`** (the adapter) before return.
+- **Matching:** exact / loose / case_sensitive aliases (Jinko 440 ≠ JINKO 440 → different panels);
+  loose → low confidence; metering first-class; `source_examples` can never match (not seeded as
+  aliases); guard phrases suppress inference unless a specific correction overrides; ignore rules
+  drop noise; unknown useful text is **preserved as editable raw text, never guessed**; panels keep
+  **`model: null`** unless a real catalogue model is confidently identified, ambiguous → `model_options`,
+  brand-only / wattage-only preserve text. **Mutates nothing** (catalogue/aliases/jobs/imports).
+- **C1 resolved (owner decision):** `Job.details.hardware.site_notes` ct/export_limit/underground/
+  comms are now **lists** (`list[str] | None`), faithful to the spec's array buckets — a JSON-shape
+  change only, **no DB migration**. Backend `schemas/job_hardware.py` + frontend `types/imports.ts`
+  + the Stage-3B editor (site-note fields → one-per-line textareas) + the Stage-3A snapshot test were
+  updated together.
+- **C2 resolved (owner decision):** `ignored` / `raw_evidence` stay **parser-internal** (not snapshot
+  fields); review-facing parser messages go to `hardware.warnings`; each item keeps `source_fragment`.
+  No new top-level snapshot fields. `parser_rule_version` kept pinned as-is (`hardware_parser_rules_v8`
+  for hardware, `panel_rules_v1_1` for panel). `canonical_hardware_id_at_parse_time` is the DB id,
+  provenance/debug only (never display truth).
+- **Scope:** backend service + tests + the C1 schema/frontend-compat change only — **no import
+  ingest/preview/commit/reverse change, no frontend review UI, no NAS/proposal, no completed-sheet
+  runtime, no scheduling parser, no migration**. Legacy `details.system.panel/inverter` text coexists
+  unchanged.
+- **Deferred (documented follow-up):** full multi-fragment **bundle** parsing (nested quantities /
+  capacity suffixes), panel **system-size derivation** (needs proposal/NAS evidence), and the import
+  wiring (Stage 4B). The runtime handles single/simple cells today.
+- **Tests:** `tests/test_hardware_runtime.py` (16) — exact/loose/case-sensitive matching,
+  source_examples-never-match, guard suppression, correction override, ignore rules, unknown
+  preserved, panel model-null + model_options, metering first-class, list site_notes, output
+  validates against `JobHardwarePatch`, no catalogue mutation, + a panel-fixture model-null subset.
+  Stage-0 spec validator still green; full backend suite **571 passed** (555 + 16); `alembic check`
+  clean (no migration); frontend typecheck/lint/build clean.
+- **Files:** backend `hardware/runtime.py` (new), `hardware/rules.py` (new),
+  `tests/test_hardware_runtime.py` (new), `schemas/job_hardware.py` (site_notes lists),
+  `tests/test_jobs_hardware_snapshot.py` (site_notes list); frontend `types/imports.ts` +
+  `components/JobHardwareSection.tsx` (site_notes lists); docs (CHANGES, DEVELOPER_HANDOFF,
+  business_rules, database_schema). Permanent.
+
+---
+
 ## 2026-06-22 — Hardware Parser lane, Stage 3B: Job Detail hardware snapshot UI (frontend)
 
 - **Why:** Stage 3A added backend storage + the safe `hardware` patch path; 3B makes the Job-owned

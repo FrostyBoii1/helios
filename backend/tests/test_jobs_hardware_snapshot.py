@@ -76,7 +76,7 @@ def test_patch_sets_and_reads_hardware_snapshot(client_for, users, customer, db_
             "inverters": [{"model_text": "Sungrow SG10RT", "quantity": 1, "confidence": "exact",
                            "parser_owned": True, "source_type": "manual"}],
             "panel": {"display_name": "440W LONGi", "model": None, "wattage_w": 440, "quantity": 16},
-            "site_notes": {"export_limit": "5kW"},
+            "site_notes": {"export_limit": ["5kW"]},
             "warnings": ["check phase"],
         }}},
     )
@@ -87,7 +87,7 @@ def test_patch_sets_and_reads_hardware_snapshot(client_for, users, customer, db_
     assert hw["inverters"][0]["model_text"] == "Sungrow SG10RT"
     assert hw["inverters"][0]["quantity"] == 1 and hw["inverters"][0]["parser_owned"] is True
     assert hw["panel"]["display_name"] == "440W LONGi" and hw["panel"]["wattage_w"] == 440
-    assert hw["site_notes"]["export_limit"] == "5kW"
+    assert hw["site_notes"]["export_limit"] == ["5kW"]
     assert hw["warnings"] == ["check phase"]
     # None fields are dropped from the stored snapshot (exclude_none) — tidy.
     assert "model" not in hw["panel"]
