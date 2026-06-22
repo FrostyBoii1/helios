@@ -9,6 +9,51 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-22 — Hardware Parser lane, Stage 4B: import integration for parsed hardware snapshots (backend)
+
+- **Why:** Stage 4A built the parser runtime in isolation; 4B is the first LIVE import integration —
+  the catalogue starts influencing import results. The keystone is **no preview/commit divergence**:
+  hardware is parsed ONCE at ingest and stored on the row, so preview/review and commit read the same
+  value. Backend only — **no frontend review UI** (Stage 4C), no NAS/proposal, no scheduling parser,
+  no Settings UI change, no migration.
+- **What:** a new `services/import_hardware.py` bridge with `enrich_row_hardware(db, parsed)` and
+  `validate_committed_hardware(details)`. **Ingest** (`import_ingest.ingest_worksheet`) now calls
+  `enrich_row_hardware` per parsed row — DB-aware, where the session lives (the pure `import_parser`
+  stays DB-free) — running the Stage-4A `parse_hardware` on the row's `inverter_raw` / `panel_raw` /
+  `no_of_panels` and storing the result at **`ImportRow.parsed["details"]["hardware"]`**.
+- **Single source (no divergence):** preview (`map_job_preview` → `out["details"] = parsed.details`)
+  and review (`ImportRowRead.parsed`) already return `parsed.details`, so they surface the stored
+  hardware with **zero preview/schema changes**. **Commit** (`import_commit.build_job_data`) already
+  copies `parsed.get("details")` into `Job.details`, so the stored snapshot persists verbatim into
+  `Job.details.hardware` — the parser is **NOT re-run at commit**. (If a legacy row has no stored
+  `details`, commit falls back to `build_details`, which simply yields no hardware — never a re-parse.)
+- **Commit-boundary validation:** `build_job_data` now runs `validate_committed_hardware` (a
+  `JobHardwarePatch.model_validate`) before persisting, so a malformed stored snapshot raises and
+  **fails that single row safely** (`_commit_one` rolls it back — no orphan, other rows unaffected).
+- **Reverse:** unchanged. Tests prove a pristine imported hardware job reverses cleanly, and that a
+  post-commit hardware edit trips the existing pristine guard (`job_modified` / `job_has_activity`),
+  so reverse is blocked and the edit is preserved — **no hardware-specific reverse logic added**.
+- **Hard rules preserved:** `parse_hardware` stays read-only (no catalogue/alias/job mutation — the
+  only write is the row's `parsed` JSON); `source_examples` still never match through the import path;
+  unknown/unmatched useful text is preserved, never guessed; legacy `details.system.panel/inverter`
+  text **coexists** (untouched). Settings > Hardware edits still never mutate existing Job snapshots.
+- **Scope:** backend only — **no migration** (alembic head `c3d4e5f6a7b8`), no frontend review UI,
+  no Settings UI, no NAS/proposal, no scheduling parser. **Deferred:** Stage 4C (review display
+  polish + uncertain/manual-review badges), and the Stage-4A follow-ups (full multi-fragment bundle
+  parsing, panel system-size derivation). Per-row index rebuild in `parse_hardware` (one alias query
+  per enriched row) is acceptable for a manual import; a shared-index optimisation is a follow-up.
+- **Tests:** `tests/test_import_hardware.py` (10) — end-to-end ingest populates `parsed.details.hardware`
+  (representative inverter/panel/metering), preview + commit use the same stored snapshot, commit
+  writes exactly it, commit-boundary rejects malformed safely, pristine reverse works, reverse blocked
+  after a post-commit hardware edit, source_examples don't match through import, legacy fields coexist,
+  enrichment is read-only. Import commit/reverse/parse regression green; full backend suite passes;
+  `alembic check` clean.
+- **Files:** backend `services/import_hardware.py` (new), `services/import_ingest.py` (enrich),
+  `services/import_commit.py` (commit-boundary validation), `tests/test_import_hardware.py` (new);
+  docs (CHANGES, DEVELOPER_HANDOFF, business_rules). Permanent.
+
+---
+
 ## 2026-06-22 — Hardware Parser lane, Stage 4A: standalone hardware parser runtime (the catalogue consumer)
 
 - **Why:** Stages 1–3 built the catalogue, its admin UI, and the editable Job snapshot — but nothing

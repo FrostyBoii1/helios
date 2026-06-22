@@ -141,6 +141,14 @@ explains intent; protect important explicit decisions with tests, not docs alone
   (ct/export_limit/underground/comms/raw_misc) are now **lists**, faithful to the spec. Parser policy
   (normalization, ignore rules, specific corrections, guard phrases, confidence mapping, panel
   brand/wattage routing) stays in the **versioned config**, not admin-editable catalogue fields.
+  **(Stage 4B)** the runtime is now wired into the completed-sheet import: hardware is parsed ONCE at
+  **ingest** into `ImportRow.parsed.details.hardware`, so import preview/review and commit read the
+  SAME stored snapshot (no preview/commit divergence — the parser is never re-run at commit). Commit
+  persists it verbatim into `Job.details.hardware` after a `JobHardwarePatch` validation (a malformed
+  snapshot fails that one row safely). Reverse is unchanged — a pristine imported hardware job
+  reverses, but any post-commit hardware edit trips the existing pristine guard (reverse blocked, the
+  edit preserved). Enrichment is read-only against the catalogue; `source_examples` still never match;
+  legacy `details.system.panel/inverter` text coexists. No frontend review UI yet (Stage 4C).
 
 ## Labels & approval (workflow signals)
 

@@ -48,6 +48,7 @@ from app.services.import_details import (
     build_imported_notes,
     render_legacy_blobs,
 )
+from app.services.import_hardware import validate_committed_hardware
 from app.services.import_parser import parse_date_maybe
 
 # Conservative cap for this first live-write release (owner decision D3).
@@ -110,6 +111,11 @@ def build_job_data(
     from it via the shared ``render_legacy_blobs`` renderer — so the blobs stay
     populated and exactly match the commit-preview."""
     details = parsed.get("details") or build_details(parsed, raw)
+    # Stage 4B commit-boundary safety net: the stored hardware snapshot (from ingest enrichment) is
+    # persisted verbatim into Job.details.hardware below — validate it against JobHardwarePatch
+    # FIRST so a malformed snapshot fails this row safely (raises -> _commit_one rolls back the
+    # row, no orphan). The parser is NOT re-run here (no divergence from preview).
+    validate_committed_hardware(details)
     blobs = render_legacy_blobs(
         details, parsed,
         batch_id=batch_id, source_row_index=source_row_index, legacy_reference=legacy_reference,

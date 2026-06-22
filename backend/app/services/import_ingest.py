@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import ImportBatchStatus, ImportRowClass
 from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.services import import_parser
+from app.services.import_hardware import enrich_row_hardware
 
 DEFAULT_SHEET = "COMPLETED"
 
@@ -74,6 +75,10 @@ def ingest_worksheet(
     for prow in import_parser.parse_rows(ws):
         total += 1
         counts[ImportRowClass(prow.row_class)] += 1
+        # Stage 4B: DB-aware hardware enrichment (the pure parser stays DB-free). Parses the row's
+        # hardware cells ONCE into parsed['details']['hardware'] so preview/review + commit read the
+        # SAME stored snapshot. Read-only against the catalogue; legacy details.system.* untouched.
+        enrich_row_hardware(db, prow.parsed)
         row = ImportRow(
             batch_id=batch.id,
             source_row_index=prow.source_row_index,

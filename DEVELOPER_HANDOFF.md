@@ -318,10 +318,22 @@ These are stubbed/absent and represent the next phases:
   confident + `model_options`. **Mutates nothing.** **C1 resolved**: `site_notes` ct/export_limit/
   underground/comms are now **lists** (schema + frontend + Stage-3B editor textareas; JSON-shape only,
   no migration). **C2 resolved**: `ignored`/`raw_evidence` stay parser-internal; messages → `warnings`.
-  Tests `tests/test_hardware_runtime.py` (16). **NOT wired into import yet** (Stage 4B); legacy
-  `details.system.panel/inverter` text coexists. Deferred: full multi-fragment bundle parsing + panel
-  system-size derivation. Then the remaining lane stages still consume this
-  API: current-sheet import integration; panel integration; clean
+  Tests `tests/test_hardware_runtime.py` (16). **(Stage 4B built — import integration, backend)** the
+  runtime is now wired into the completed-sheet import via `services/import_hardware.py`
+  (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware
+  ONCE, DB-aware, into `ImportRow.parsed['details']['hardware']` (the pure `import_parser` stays
+  DB-free); **preview** (`map_job_preview` returns `parsed.details`) and **review** (`ImportRowRead.parsed`)
+  surface that SAME stored value with NO preview/schema change; **commit** (`build_job_data` copies
+  `parsed.details`) persists it verbatim into `Job.details.hardware` with a commit-boundary
+  `JobHardwarePatch` validation (malformed → that row fails safely, no orphan) — the parser is NOT
+  re-run at commit (no divergence). **Reverse** unchanged: a pristine imported hardware job reverses;
+  a post-commit hardware edit trips the existing pristine guard (blocked, edit preserved) — no
+  hardware-specific reverse logic. Read-only against the catalogue; `source_examples` never match;
+  legacy `details.system.panel/inverter` text coexists. Tests `tests/test_import_hardware.py` (10).
+  **Stage 4C (next)** = frontend import-review display + uncertain/manual-review badges. Deferred:
+  full multi-fragment bundle parsing + panel system-size derivation; a shared-alias-index optimisation
+  (today `parse_hardware` rebuilds its index per enriched row). Then the remaining lane stages still
+  consume this API: panel integration; clean
   wipe + reimport; NAS/proposal later. **Keystone law:** Job hardware is a stored editable snapshot
   — catalogue renames/alias edits/deletes/restores must NOT change already-parsed Job hardware (see
   `docs/business_rules.md`). The existing `HARDWARE_UNCERTAIN` auto-label is legacy/temporary,
