@@ -12,7 +12,10 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from app.schemas.job_hardware import validate_hardware_patch
 from app.services.import_field_registry import allowed_details_paths
+
+_UNSET = object()
 
 
 def flatten_leaves(patch: dict, prefix: str = "") -> dict[str, Any]:
@@ -40,7 +43,14 @@ def merge_details_patch(details: dict | None, patch: Any) -> dict:
     if not isinstance(patch, dict):
         raise ValueError("details must be an object (partial patch), not null/scalar")
 
-    leaves = flatten_leaves(patch)
+    # The `hardware` snapshot (Stage 3) is a deeply-nested, Job-owned structure validated by
+    # SHAPE (JobHardwarePatch, extra='forbid') rather than the flat <section>.<key> path
+    # whitelist, and written as whole sub-sections — never a live catalogue reference. Split it
+    # out here; everything else stays the exact registry-whitelisted flat patch as before.
+    rest = dict(patch)
+    hardware_patch = rest.pop("hardware", _UNSET)
+
+    leaves = flatten_leaves(rest)
     allowed = allowed_details_paths()
     disallowed = sorted(p for p in leaves if p not in allowed)
     if disallowed:
@@ -54,4 +64,25 @@ def merge_details_patch(details: dict | None, patch: Any) -> dict:
         sect = dict(sect) if isinstance(sect, dict) else {}
         sect[key] = value
         merged[section] = sect
+
+    if hardware_patch is not _UNSET:
+        merged["hardware"] = _merge_hardware(merged.get("hardware"), hardware_patch)
     return merged
+
+
+def _merge_hardware(existing: Any, patch: Any) -> dict:
+    """Merge a validated hardware-snapshot patch into the existing hardware object. Each PROVIDED
+    sub-section replaces that whole sub-section (a snapshot the user fully controls); an explicit
+    ``null`` clears one; absent sub-sections are preserved. Validated by ``JobHardwarePatch`` —
+    unknown fields / wrong types raise ``ValueError`` (-> 422), so garbage can't reach details."""
+    if not isinstance(patch, dict):
+        raise ValueError("hardware must be an object (partial snapshot), not null/scalar")
+    validated = validate_hardware_patch(patch)
+    dumped = validated.model_dump(exclude_none=True)
+    hw = dict(existing) if isinstance(existing, dict) else {}
+    for key in validated.model_fields_set:
+        if getattr(validated, key) is None:
+            hw.pop(key, None)        # explicit null -> clear that sub-section
+        else:
+            hw[key] = dumped[key]    # replace the whole sub-section (list / object)
+    return hw

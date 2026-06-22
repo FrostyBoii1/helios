@@ -162,7 +162,7 @@ aliases, seeded idempotently from `docs/parser_specs/hardware/` by
 `app.hardware.seed.seed_hardware_catalogue` (wired into `python -m app.seed`): 167 catalogue rows
 + 274 matchable aliases. This is **reference/config data** (like `job_label_definitions`/`roles`)
 — it has NO FK to/from Jobs or Customers, and `dev_reset` does NOT clear it. **Snapshot-stability
-law:** a future Job hardware snapshot (`Job.details.hardware` JSONB, later stage) is editable and
+law:** the Job hardware snapshot (`Job.details.hardware` JSONB — see below) is editable and
 NEVER depends on this catalogue; it may record `canonical_hardware_id_at_parse_time` (= a
 catalogue `spec_id`/id) for DEBUG only. `source_examples` are NOT stored as aliases (evidence
 only); ignore/correction/guard/normalization rules stay versioned config (not seeded). Nothing
@@ -201,6 +201,35 @@ reads the catalogue yet (no parser runtime / Settings UI / import wiring in Stag
 | is_active | bool default true | |
 | unique (hardware_id, alias, alias_type) | | idempotent seed; no duplicate alias rows |
 | timestamps + deleted_at | | soft-delete = archive (restore-ready) |
+
+### Job.details.hardware  (Hardware Parser lane, Stage 3A — Job-owned snapshot)
+
+A Job stores its hardware as an editable SNAPSHOT inside the existing `jobs.details` JSONB (no new
+table, no migration) under the `hardware` key. It is a **stored snapshot, never a live reference**
+to `hardware_catalogue`; catalogue/alias edits + soft-delete/restore never mutate it. Shape:
+
+```jsonc
+"hardware": {
+  "inverters":  [ { "model_text", "quantity", "confidence", "parser_owned",
+                    "source_fragment", "source_type", "source_field",
+                    "canonical_hardware_id_at_parse_time", "parser_rule_version" } ],
+  "batteries":  [ /* same line-item shape */ ],
+  "metering":   [ /* same line-item shape */ ],
+  "panel": { "quantity", "brand", "display_name", "model", "model_options",
+             "canonical_hardware_id_at_parse_time", "wattage_w", "panel_array_kw",
+             "confidence", "parser_owned", "source_fragment", "parser_rule_version" },
+  "site_notes": { "ct", "export_limit", "underground", "comms", "raw_misc": [] },
+  "warnings":   []
+}
+```
+
+Writes go through the path-restricted Job-details PATCH; the `hardware` key is validated by
+`schemas/job_hardware.py` (`JobHardwarePatch`, every model `extra='forbid'`) — unknown fields or
+wrong types are rejected (422). Each provided sub-section replaces that whole sub-section; absent
+ones are preserved. All fields are optional, so jobs without `details.hardware` (or with
+`details=null`) read/render safely. `canonical_hardware_id_at_parse_time` is provenance/debug only
+— display uses the snapshot's own text (`model_text` / `display_name`), never the catalogue. No
+parser/catalogue read populates this in Stage 3A (staff edit it directly; Stage 3B UI).
 
 ### import staging (parse → review → commit pipeline)
 

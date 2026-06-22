@@ -9,6 +9,45 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-22 — Hardware Parser lane, Stage 3A: Job.details.hardware editable snapshot (backend)
+
+- **Why:** Stage 2B made the catalogue manageable; nothing yet *consumes* it. Stage 3 creates the
+  PLACE hardware lives on a Job — an editable, durable SNAPSHOT, independent of the catalogue. The
+  slice is split per the owner's pre-authorisation: **Stage 3A = backend snapshot storage + patch/
+  schema support** (this), **Stage 3B = the Job Detail hardware UI** (next). No parser runtime,
+  import wiring, or catalogue read in this stage.
+- **What:** Job hardware is stored under `Job.details.hardware` (JSONB — **no new table, no
+  migration**): `inverters` / `batteries` / `metering` line-item lists, a `panel` object,
+  `site_notes`, and `warnings`. The existing path-restricted Job-details PATCH now accepts the
+  `hardware` key, validated by a new strict schema `schemas/job_hardware.py` (`JobHardwarePatch`,
+  every model `extra='forbid'`) — the schema is the safety boundary (unknown fields / wrong types →
+  422), the analog of the flat `<section>.<key>` path whitelist used for the other sections. Each
+  PROVIDED sub-section replaces that whole sub-section; absent ones are preserved; an explicit null
+  clears one. All other details paths keep their exact existing behaviour.
+- **Hard snapshot rule (enforced + tested):** Jobs store snapshots, not live references; Settings >
+  Hardware catalogue edits, alias edits, and hardware soft-delete/restore NEVER mutate an existing
+  Job snapshot; Job hardware stays staff-editable; `canonical_hardware_id_at_parse_time` is
+  provenance/debug only (never display truth); display depends on stored snapshot text, not current
+  catalogue state; parser/reparse refresh is out of scope.
+- **Safety preserved:** the change is isolated to `merge_details_patch` (live-job details only —
+  import rows use a separate path, untouched). The NULL-details guard still rejects structured edits
+  on a `details=null` job (422). `system_details`/`install_details` re-derivation is unaffected
+  (hardware is not a legacy blob). Existing jobs without `details.hardware` read/render safely.
+- **Scope:** backend only — no frontend (that is 3B), no parser runtime, no import/commit/preview/
+  reverse change, no completed-sheet/panel runtime, no NAS/proposal, no `HARDWARE_UNCERTAIN`, no
+  catalogue-to-job refresh, **no migration** (alembic head stays `c3d4e5f6a7b8`).
+- **Tests:** `tests/test_jobs_hardware_snapshot.py` (8) — set/read snapshot; partial sub-section
+  patch preserves other sub-sections + non-hardware details; flat paths still patch alongside
+  hardware; invalid shape (`extra='forbid'`/wrong type/non-object/null) → 422 + job unchanged;
+  hardware edit does not touch `hardware_catalogue`; catalogue rename/soft-delete/restore does not
+  mutate a Job snapshot; null-details job still 422; job without hardware serialises safely. Full
+  backend suite **555 passed** (547 + 8); `alembic check` clean.
+- **Files:** backend `schemas/job_hardware.py` (new), `services/details_patch.py` (hardware branch),
+  `tests/test_jobs_hardware_snapshot.py` (new); docs (CHANGES, DEVELOPER_HANDOFF, business_rules,
+  database_schema). Permanent.
+
+---
+
 ## 2026-06-22 — Hardware Parser lane, Stage 2B-3: Settings > Hardware alias management UI
 
 - **Why:** completes the Settings > Hardware admin surface. 2B-1 read the catalogue, 2B-2 added

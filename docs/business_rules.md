@@ -113,6 +113,18 @@ explains intent; protect important explicit decisions with tests, not docs alone
   **soft-deleted, never hard-deleted**, and is restorable (with its aliases intact) from a DELETED
   view; the stable `spec_id` is immutable. None of these admin actions (rename, alias add/remove,
   soft-delete, restore) touch Jobs — the catalogue is still not wired into Jobs/imports/parser.
+  **(Stage 3A)** the snapshot now physically EXISTS and is editable: `Job.details.hardware`
+  (`inverters` / `batteries` / `metering` lists, a `panel` object, `site_notes`, `warnings`) is
+  written through the path-restricted Job-details PATCH, validated by a strict shape schema
+  (`schemas/job_hardware.py`, `extra='forbid'` — unknown fields/wrong types are rejected, 422).
+  Each provided sub-section replaces that whole sub-section; absent ones are preserved. **Hard
+  snapshot rule (enforced + tested):** (1) Jobs store snapshots, not live references; (2) catalogue
+  edits, (3) alias edits and (4) hardware soft-delete/restore must NEVER mutate an existing Job
+  snapshot; (5) Job hardware stays staff-editable; (6) `canonical_hardware_id_at_parse_time` is
+  provenance/debug only, never display truth; (7) display depends on the stored snapshot text, not
+  current catalogue state; (8) parser/reparse refresh is NOT part of this stage. No catalogue read
+  populates the snapshot yet, and no migration was needed (JSONB). Jobs without `details.hardware`
+  (or with `details=null`) read/render safely and are unaffected.
 
 ## Labels & approval (workflow signals)
 

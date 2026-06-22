@@ -285,10 +285,20 @@ These are stubbed/absent and represent the next phases:
   `useHardwareAliases`/`useCreate/Update/Delete/RestoreAlias`) invalidates `['hardware']` so the alias
   list AND the catalogue `alias_count` refetch. Aliases are never exposed to non-admins.
   Still **no backend change**, no parser runtime, and no Job/import wiring. **Stage 2B is now
-  complete** — the whole admin Settings > Hardware management surface (catalogue + aliases) exists;
-  nothing yet *consumes* the catalogue. Next lane stages still consume this API:
-  **`Job.details.hardware`** editable per-job SNAPSHOTS (inverters/batteries/
-  metering lists + a panel object + site_notes) that NEVER depend on the live catalogue; the parser
+  complete** — the whole admin Settings > Hardware management surface (catalogue + aliases) exists.
+  **(Stage 3A built — Job hardware snapshot, backend)** the PLACE hardware lives on a Job now
+  exists: `Job.details.hardware` JSONB (inverters/batteries/metering lists, a panel object,
+  site_notes, warnings) — **no new table, no migration**. The existing path-restricted Job-details
+  PATCH (`services/details_patch.merge_details_patch`, live jobs only) now accepts the `hardware`
+  key, validated by a strict shape schema `schemas/job_hardware.py` (`JobHardwarePatch`,
+  `extra='forbid'` — the schema-level whitelist; unknown fields/wrong types → 422); each provided
+  sub-section replaces that whole sub-section, absent ones preserved, all else unchanged. **Hard
+  snapshot rule enforced + tested** (`tests/test_jobs_hardware_snapshot.py`, 8): catalogue/alias
+  edits + soft-delete/restore never mutate a Job snapshot; a hardware edit never touches the
+  catalogue; `canonical_hardware_id_at_parse_time` is debug-only; the NULL-details guard still holds;
+  jobs without `details.hardware` read safely. **Stage 3B (next)** = the Job Detail editable hardware
+  UI (textbox/list editor consuming this PATCH). Then the remaining lane stages still consume this
+  API: the parser
   runtime (proven by the fixtures); current-sheet import integration; panel integration; clean
   wipe + reimport; NAS/proposal later. **Keystone law:** Job hardware is a stored editable snapshot
   — catalogue renames/alias edits/deletes/restores must NOT change already-parsed Job hardware (see
