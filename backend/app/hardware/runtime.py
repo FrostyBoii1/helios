@@ -34,6 +34,11 @@ from app.schemas.job_hardware import JobHardwarePatch
 
 _HW_CATEGORIES = {HardwareCategory.INVERTER.value, HardwareCategory.BATTERY.value,
                   HardwareCategory.METERING.value}
+_BUCKET_BY_CATEGORY = {
+    HardwareCategory.INVERTER.value: "inverters",
+    HardwareCategory.BATTERY.value: "batteries",
+    HardwareCategory.METERING.value: "metering",
+}
 # Explicit quantity prefix: "N x MODEL" / "N × MODEL" / "N*MODEL" (an x / × / * separator with
 # optional surrounding spaces). The leading digits + separator are a strong quantity signal.
 _QTY_RE = re.compile(r"^\s*(\d+)\s*[x×*]\s*(.*\S)\s*$", re.IGNORECASE)
@@ -203,7 +208,7 @@ def _parse_hardware_cell(
         warnings.append(f"Guarded hardware text preserved for manual review (not inferred): {cleaned!r}")
         return
 
-    # 4. Fragment-by-fragment matching (single fragment is the common case in Stage 4A).
+    # 4. Fragment-by-fragment matching.
     for frag in _split_fragments(cleaned):
         fkey = _key(frag)
         if not fkey:
@@ -225,11 +230,7 @@ def _parse_hardware_cell(
                 if bhit is not None:
                     qty, core, ckey, hit = bqty, bcore, bkey, bhit
         if hit and hit.entry.category in _HW_CATEGORIES and not _negative_match(hit.entry, fkey):
-            bucket_key = {
-                HardwareCategory.INVERTER.value: "inverters",
-                HardwareCategory.BATTERY.value: "batteries",
-                HardwareCategory.METERING.value: "metering",
-            }[hit.entry.category]
+            bucket_key = _BUCKET_BY_CATEGORY[hit.entry.category]
             out[bucket_key].append(_item(
                 hit.entry, hit.entry.canonical_model, quantity=qty, confidence=_confidence(hit),
                 source_fragment=frag, source_type=source_type, source_field=source_field, rules=rules))
@@ -246,11 +247,31 @@ def _parse_hardware_cell(
             warnings.append(f"Unmatched hardware preserved as raw text: {frag!r}")
 
 
+# Top-level separators that combine component fragments in a hardware cell. Stage 4A split only on
+# "+" and a SPACED " - "; P1 adds "/", "·", "•", "&", and the whole words "and" / "with" — the
+# joiners the real workbook uses for inverter/battery/metering/capacity bundles. Each is chosen so
+# it cannot occur INSIDE a catalogue model: a model-internal hyphen is never space-padded (so
+# "X1-BOOST-5K-G4" survives — only a spaced " - " splits), and "/", "•", "&", "and", "with" appear
+# in no inverter/battery/metering model. ("·" is included for safety but is normally rewritten to
+# "-" by _normalize_encoding before this runs, so a "MODEL · 25kWh" cell already splits via the
+# spaced-hyphen rule.) Panel parsing never uses this splitter.
+_FRAGMENT_SPLIT_RE = re.compile(
+    r"\s*\+\s*"          # "+"
+    r"|\s+-\s+"          # spaced hyphen (never a model-internal hyphen)
+    r"|\s*[/·•&]\s*"     # slash / middot / bullet / ampersand
+    r"|\s+and\s+"        # the word "and"
+    r"|\s+with\s+",      # the word "with"
+    re.IGNORECASE,
+)
+
+
 def _split_fragments(text: str) -> list[str]:
-    """Conservative fragment split on top-level separators. Stage 4A handles single/simple cells;
-    full multi-fragment bundle splitting (nested quantities, capacity suffixes) is a follow-up."""
-    parts = re.split(r"\s*\+\s*|\s+-\s+", text)
-    return [p.strip() for p in parts if p.strip()]
+    """Split a combined hardware cell into component fragments on the model-safe top-level
+    separators in ``_FRAGMENT_SPLIT_RE``. Each fragment is resolved independently by the caller, so
+    a bundle like "INV / 2 x BATT · 25kWh" yields the inverter, the qty-2 battery and the capacity
+    note instead of one raw blob. (P1; multi-fragment capacity-in-noun extraction is a follow-up.)"""
+    parts = _FRAGMENT_SPLIT_RE.split(text)
+    return [p.strip() for p in parts if p and p.strip()]
 
 
 def _extract_wattage(text: str) -> int | None:

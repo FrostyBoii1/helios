@@ -9,6 +9,58 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Hardware Parser P1: separator splitting (runtime only)
+
+- **Why:** the read-only E2E reimport-readiness audit found the #1 *separator* gap — the real
+  workbook joins inverter/battery/metering/capacity fragments with `/`, `and`, `&`, `·`, `•`, and
+  `with`, but the parser split only on `+` and a spaced `-`, so fully-catalogued bundles collapsed
+  into a single raw blob (wrong buckets, lost quantities, capacity glued into model_text). 60 rows
+  use `and`, 70 use `/`, 183 use `·`, 19 use `with` among the 1,036 raw rows.
+- **What (`app/hardware/runtime.py` only):** extended the hardware-cell fragment splitter
+  (`_split_fragments` / new `_FRAGMENT_SPLIT_RE`) to also split on `/`, `·`, `•`, `&`, and the
+  whole words `and` / `with`, in addition to `+` and the spaced `-`. Each separator is chosen so it
+  cannot occur inside a catalogue model: a model-internal hyphen is never space-padded (so
+  `X1-BOOST-5K-G4` survives — only a spaced ` - ` splits), and `/`,`•`,`&`,`and`,`with` appear in no
+  inverter/battery/metering model. (`·` is normally rewritten to `-` by the existing
+  `_normalize_encoding` before the splitter runs, so a `MODEL · 25kWh` cell already splits via the
+  spaced-hyphen rule; the `·` in the pattern is a harmless safety net.) Each fragment is then resolved
+  independently, so quantities (`2 x` / `2 ×`) and capacity routing (`25kWh` / `40kw hrs` → `raw_misc`)
+  work per-fragment. A pre-existing helper (the bucket-by-category map) was hoisted to a module
+  constant `_BUCKET_BY_CATEGORY` (no behaviour change). Panel parsing is untouched (it never uses the
+  splitter), and the whole-cell ignore/correction/guard checks still run first.
+- **Behaviour, before → after (live, real audit strings):**
+  - `1 x SAJ H2-10K-S3 and 2 x SAJ B2-15.0-HV1`: 1 raw blob → inverter `SAJ H2-10K-S3` + battery
+    `SAJ B2-15.0-HV1` ×2 (both exact).
+  - `1 x SAJ H2-25K-T3-AU and 2 × SAJ B2-25.0-HV1 · 25kWh`: 1 raw blob → inverter + battery ×2 +
+    `25kWh` in `site_notes.raw_misc`.
+  - `2 x Sungrow Hybrid 5kw/16kw hrs battery`: 1 raw blob (capacity glued) → inverter `SG5.0RS` ×2 +
+    a separate `16kw hrs battery` fragment (capacity no longer contaminates the inverter text).
+  - `Sungrow 10kW SH10RT/SBR128 BATT`: 1 raw blob → two separate fragments (`Sungrow 10kW SH10RT`,
+    `SBR128 BATT`) — still raw pending the brand-prefix/noise-strip fix (P2/P3).
+  - Canonical `SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs`: unchanged (no regression).
+- **Conservative guarantees preserved:** never guesses an unknown model; source_examples still never
+  resolve (the curated `… AND …` example now splits into raw fragments, none of which map to a
+  canonical model — the no-resolution invariant holds); ambiguous capacity-only text stays raw for
+  review; output still validates against `JobHardwarePatch`; read-only against the catalogue.
+- **Scope:** backend parser runtime + tests only. No frontend, imports UI, Settings, NAS/proposal,
+  scheduling parser, migrations, data files, or live import/commit/reverse/reset. No catalogue/alias
+  or YAML-rule change.
+- **Tests:** `tests/test_hardware_runtime.py` adds a P1 section (`/`, `and`, `&`, `·`/`•`+capacity,
+  `with`-meter, no-over-split of model-internal hyphens, mid-fragment quantity preserved, the
+  `·`-capacity-suffix split); the two `source_examples_never_match` tests (runtime + import) were
+  updated to assert the no-resolution invariant rather than whole-string preservation. **611 backend
+  tests pass** (45 in the two hardware files); hardware spec-validation green; `alembic check` clean.
+- **Files:** `backend/app/hardware/runtime.py`, `backend/tests/test_hardware_runtime.py`,
+  `backend/tests/test_import_hardware.py`; docs (CHANGES, DEVELOPER_HANDOFF). Permanent.
+- **Deferred (next audit slices):** P2 brand-prefix normalization (`Solax Power …`, `Sungrow …`,
+  `Neovolt …` — ~551 raw rows resolve once handled), P3 bucket routing (unmatched battery/metering
+  text currently lands in the inverter field, 265 rows), P4 catalogue adds (T-BAT, X1-VAST, X3-ULT,
+  Swatten all-in-one, Neovolt variants, Alpha extensions, missing brands), in-fragment capacity
+  extraction for `16kw hrs battery`-style nouns, P6 metering vocab (`export meter`, `with meter`),
+  and the full clean-wipe + reimport (still NOT authorized).
+
+---
+
 ## 2026-06-23 — Job Detail H5D: install-date autosave + autosave polish (frontend only)
 
 - **Why:** finish the Job Detail autosave pass. Install date was the last ordinary field still on a

@@ -326,8 +326,21 @@ These are stubbed/absent and represent the next phases:
   of contaminating the inverters bucket / any `model_text`; an unmatched explicit-`N ×` fragment stores
   the model **core** with the quantity held separately (no duplication). Still never guesses, never
   matches `source_examples`, validates against `JobHardwarePatch`, mutates nothing. The display side
-  renders `quantity > 1` as "N × MODEL" and round-trips it (`lib/hardwareDisplay.ts`). Deferred:
-  middot-glued capacity suffixes (`MODEL · 20kWh`) — `_split_fragments` only breaks on `+` and ` - `.
+  renders `quantity > 1` as "N × MODEL" and round-trips it (`lib/hardwareDisplay.ts`).
+  **(Hardware Parser P1 — separator splitting, runtime)** `_split_fragments` (new module regex
+  `_FRAGMENT_SPLIT_RE`) now also breaks a hardware cell on `/`, `·`, `•`, `&`, and the whole words
+  `and` / `with` (was only `+` and a spaced ` - `) — the joiners the E2E audit found the real workbook
+  uses for inverter/battery/metering/capacity bundles. Model-safe: only a SPACED ` - ` splits (never a
+  model-internal hyphen like `X1-BOOST-5K-G4`), and `/`,`•`,`&`,`and`,`with` occur in no
+  inverter/battery/metering model; `·` is normally rewritten to `-` by `_normalize_encoding` first, so
+  `MODEL · 25kWh` already split via the hyphen rule (the `·` in the pattern is a safety net). Panel
+  parsing never uses the splitter. Result: `1 x SAJ H2-10K-S3 and 2 x SAJ B2-15.0-HV1` now resolves to
+  inverter + qty-2 battery; `… · 25kWh` routes capacity to `site_notes.raw_misc`; source_examples still
+  never resolve (the `… AND …` example splits into raw fragments — invariant preserved). 611 backend
+  tests pass. Deferred to later audit slices: **P2 brand-prefix** (`Solax Power …`/`Sungrow …` — ~551
+  raw rows), **P3 bucket routing** (unmatched battery/metering text still lands in the inverter field,
+  265 rows), **P4 catalogue adds**, in-fragment capacity-in-noun extraction (`16kw hrs battery`),
+  metering vocab, and the (un-authorized) clean-wipe + reimport.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware

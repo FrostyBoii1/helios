@@ -230,13 +230,18 @@ def test_reverse_blocked_after_post_commit_hardware_edit(seeded, client_for, use
 # Hard rules: source_examples, legacy coexistence, read-only
 # --------------------------------------------------------------------------- #
 def test_source_examples_not_matched_through_import(seeded):
-    example = "ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY"  # a curated source_example string
+    # A curated source_example string is evidence only — through the import bridge it must never
+    # resolve to a canonical model. (P1 now SPLITS it on the embedded ' and ' into raw fragments;
+    # the invariant is that NO fragment resolves, not that the whole string stays one item.)
+    example = "ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY"
     parsed = {"details": {"_v": 2}, "inverter_raw": example}
     enrich_row_hardware(seeded, parsed)
-    inv = parsed["details"]["hardware"]["inverters"][0]
-    assert inv["model_text"] == example                      # preserved raw
-    assert inv["confidence"] == "unconfirmed_raw_text"
-    assert inv.get("canonical_hardware_id_at_parse_time") is None
+    hw = parsed["details"]["hardware"]
+    items = hw.get("inverters", []) + hw.get("batteries", []) + hw.get("metering", [])
+    assert items, "expected the source_example preserved as raw fragments"
+    assert all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
+    assert all(it["confidence"] == "unconfirmed_raw_text" for it in items)
+    assert "SMILE-M5" not in " ".join((it.get("model_text") or "") for it in items)
 
 
 def test_legacy_system_fields_coexist(seeded):

@@ -76,14 +76,16 @@ def test_case_sensitive_jinko_resolves_distinct_panels(seeded):
 
 def test_source_examples_never_match(seeded):
     # A full source_example string is evidence only — it is not a matchable alias and must NOT
-    # resolve to the canonical model; it is preserved as raw unconfirmed text.
+    # resolve to the canonical model. (P1 now SPLITS it on the embedded ' and ' into raw fragments;
+    # the invariant is that no fragment resolves, NOT that the whole string stays a single item.)
     example = "ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY"
     out = parse_hardware(seeded, inverter_text=example)
-    inv = out["inverters"][0]
-    assert inv["model_text"] == example                     # preserved verbatim
-    assert inv["model_text"] != "Alpha ESS SMILE-M5 inverter"  # NOT resolved via the source_example
-    assert inv["confidence"] == "unconfirmed_raw_text"
-    assert inv.get("canonical_hardware_id_at_parse_time") is None
+    items = out["inverters"] + out["batteries"] + out["metering"]
+    assert items, "expected the source_example preserved as raw text"
+    assert all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
+    assert all(it["confidence"] == "unconfirmed_raw_text" for it in items)
+    all_text = " ".join((it.get("model_text") or "") for it in items)
+    assert "SMILE-M5" not in all_text  # never resolved to the Alpha ESS SMILE-M5 canonical model
 
 
 # --------------------------------------------------------------------------- #
@@ -306,3 +308,102 @@ def test_panel_fixture_model_null_safety(seeded):
             assert got.get("model") == exp["model"], f"panel fixture {f['id']}: model mismatch"
         checked += 1
     assert checked >= 5, "expected to exercise several panel fixtures"
+
+
+# --------------------------------------------------------------------------- #
+# P1: separator splitting — the real workbook joins fragments with "/", "and", "&", "·", "•",
+# "with" (not just "+" / spaced "-"). Splitting on these lets each catalogued component resolve
+# instead of collapsing the whole cell into one raw blob, while never breaking a model-internal
+# token and never letting a source_example resolve.
+# --------------------------------------------------------------------------- #
+def test_slash_splits_inverter_and_battery(seeded):
+    """A "/"-joined bundle of two catalogued models (audit: 'SH10RT/SBR128 BATT') splits into the
+    inverter and the battery rather than collapsing into one raw blob."""
+    out = parse_hardware(seeded, inverter_text="SH10RT/SBR128")
+    inv = _only(out["inverters"])
+    bat = _only(out["batteries"])
+    assert inv["model_text"] == "SH10RT" and inv["canonical_hardware_id_at_parse_time"]
+    assert bat["model_text"] == "SBR128" and bat["canonical_hardware_id_at_parse_time"]
+
+
+def test_and_splits_inverter_and_qty_battery(seeded):
+    """' and ' joins an inverter + a quantified battery in the real workbook; both resolve and the
+    battery quantity is preserved (audit: '1 x SAJ H2-10K-S3 and 2 x SAJ B2-15.0-HV1')."""
+    out = parse_hardware(seeded, inverter_text="1 x SAJ H2-10K-S3 and 2 x SAJ B2-15.0-HV1")
+    inv = _only(out["inverters"])
+    bat = _only(out["batteries"])
+    assert inv["model_text"] == "SAJ H2-10K-S3" and inv["quantity"] == 1
+    assert bat["model_text"] == "SAJ B2-15.0-HV1" and bat["quantity"] == 2
+
+
+def test_middot_splits_and_routes_capacity(seeded):
+    """'and' + '·' bundle (audit: '1 x SAJ H2-25K-T3-AU and 2 × SAJ B2-25.0-HV1 · 25kWh'): inverter,
+    qty-2 battery, and the trailing capacity preserved as a note — never glued into a model_text."""
+    out = parse_hardware(seeded, inverter_text="1 x SAJ H2-25K-T3-AU and 2 × SAJ B2-25.0-HV1 · 25kWh")
+    inv = _only(out["inverters"])
+    bat = _only(out["batteries"])
+    assert inv["model_text"] == "SAJ H2-25K-T3-AU"
+    assert bat["model_text"] == "SAJ B2-25.0-HV1" and bat["quantity"] == 2
+    assert "25kWh" in out["site_notes"]["raw_misc"]
+    all_text = " ".join((it.get("model_text") or "")
+                        for b in ("inverters", "batteries", "metering") for it in out.get(b, []))
+    assert "25kwh" not in all_text.lower()
+
+
+def test_ampersand_splits_bundle(seeded):
+    out = parse_hardware(seeded, inverter_text="SH10RT & SBR128")
+    assert _only(out["inverters"])["model_text"] == "SH10RT"
+    assert _only(out["batteries"])["model_text"] == "SBR128"
+
+
+def test_with_splits_meter_from_inverter(seeded):
+    """' with ' separates an inverter from its meter so the meter resolves to first-class metering
+    instead of contaminating the inverter text."""
+    out = parse_hardware(seeded, inverter_text="SH10RT with meter")
+    assert _only(out["inverters"])["model_text"] == "SH10RT"
+    met = _only(out["metering"])
+    assert met["canonical_hardware_id_at_parse_time"]
+
+
+def test_slash_keeps_capacity_out_of_inverter_text(seeded):
+    """'2 x Sungrow Hybrid 5kw/16kw hrs battery': the '/' split breaks the cell into separate
+    fragments so the battery-capacity text never glues onto the inverter fragment (before P1 the
+    whole cell was one raw blob)."""
+    out = parse_hardware(seeded, inverter_text="2 x Sungrow Hybrid 5kw/16kw hrs battery")
+    items = out["inverters"] + out["batteries"] + out["metering"]
+    texts = [it.get("model_text") or "" for it in items]
+    assert len(items) >= 2, texts                                  # the '/' split it apart
+    # No single item glues the inverter power and the battery capacity together.
+    assert not any("5kw" in t.lower() and "16kw" in t.lower() for t in texts), texts
+    assert any("16kw" in t.lower() for t in texts), texts          # capacity kept as its own fragment
+
+
+def test_model_internal_punctuation_not_oversplit(seeded):
+    """A catalogue model with internal hyphens is matched whole — the splitter must not break it
+    apart (only a SPACED ' - ' splits, never a model-internal hyphen)."""
+    out = parse_hardware(seeded, inverter_text="X1-BOOST-5K-G4")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "X1-BOOST-5K-G4"
+    assert inv["canonical_hardware_id_at_parse_time"]
+
+
+def test_middot_capacity_suffix_splits_to_raw_unchanged(seeded):
+    """A '·' capacity/spec suffix is rewritten to a spaced '-' by _normalize_encoding, so a cell like
+    'SolaX Smart EV Charger · 22kW' splits into separate fragments via the existing hyphen rule —
+    exactly as it did BEFORE P1 (no regression). The fragments are preserved raw; nothing is guessed.
+    (The catalogue alias keeps a raw '·', which normalized input can't reach — a pre-existing trait,
+    not introduced here.)"""
+    out = parse_hardware(seeded, inverter_text="SolaX Smart EV Charger · 22kW")
+    items = out["inverters"] + out["batteries"] + out["metering"]
+    assert len(items) >= 2, items                                  # split, not one blob
+    assert all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
+    assert "22kW" in [it.get("model_text") for it in items]
+
+
+def test_mid_fragment_quantity_preserved_verbatim(seeded):
+    """A non-leading 'N x' quantity (mid-fragment) is NOT a top-level separator and is preserved in
+    the raw text — never silently dropped or over-split (resolution of such forms is P2)."""
+    out = parse_hardware(seeded, inverter_text="Sungrow Hybrid 2 x 5kw")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "Sungrow Hybrid 2 x 5kw"   # one fragment; "2 x" kept
+    assert inv["confidence"] == "unconfirmed_raw_text"
