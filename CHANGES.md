@@ -9,6 +9,52 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Job Detail H5B: structured registry fields autosave (frontend only)
+
+- **Why:** continue the no-Save-button overhaul — the structured registry-driven Job Detail fields now
+  autosave per-field (same no-clobber/retain-on-error principles as H5A). Hardware is intentionally
+  left on the temporary Edit/Save flow (H5C) so structured-field autosave isn't mixed with the
+  autocomplete/provenance behaviour in one slice.
+- **What:**
+  - **`components/AutosaveControl.tsx`** (new): the shared autosave input — text / textarea / number /
+    date / select — wrapping `useFieldAutosave`, committing on **blur** (text/textarea/number) or
+    **change** (date/select), with the inline state chip (Unsaved / Saving… / Saved ✓ / Error+Retry).
+    The single source of autosave UI; **`AutosaveField`** (H5A) was refactored to delegate to it (DRY;
+    behaviour preserved, chip now sits beneath the input).
+  - **`StructuredDetailsView`** gained an **opt-in** `autosaveField?: (path, value) => Promise<void>`
+    prop: when provided (Job Detail, editors), each registry value field renders as an `AutosaveControl`
+    and saves a single `section.key` leaf; when absent (import review), the existing batch
+    `edits`/`onChange` path is **unchanged**. Also a `recordKey` prop so the local reveal state
+    (show-empty + picker-added) resets only when the **record** changes, not on every per-field-save
+    refetch (import review, passing no `recordKey`, keeps its `details`-object reset — unchanged).
+  - **`JobDetailPage`**: structured registry fields are always-editable autosave for `canEditJobDetails`
+    users (read-only otherwise) via a new `saveStructuredField(path, value)` →
+    `buildDetailsPatch({ "section.key": value }, …)` → `PATCH { details: { section: { key } } }`
+    (single-leaf, coerced, path-whitelisted; a no-op build sends nothing). The batch `detailsEdits`
+    state, `handleDetailsChange`, and the structured part of `buildPayload` are **removed**.
+- **Temporary (H5B):** **hardware** fields keep the batch Edit/Save flow — the Edit button is relabelled
+  **"Edit hardware & approval"** and now governs only hardware + the approval control's edit form;
+  `buildPayload`/`saveDetails` cover only the hardware sub-patch. H5C converts hardware to autosave and
+  retires this batch entirely. **Approval editing gating is unchanged** (still revealed by that button).
+- **Untouched:** status, approval (own Set-approval control), install date, delete, and internal notes
+  keep their own flows. `details=null` jobs get no structured inputs and no silent `details` init.
+  Derived/read-only registry fields stay read-only (the existing `isValueField` whitelist). **Import
+  review (`ImportRowModal`) behaviour is byte-equivalent** (it passes no `autosaveField`/`recordKey`).
+- **Scope:** frontend only — no backend, no migration, no parser/import/Settings/NAS/scheduling change.
+- **Verification:** frontend typecheck + lint (`--max-warnings 0`) + build clean; an esbuild+Node
+  harness confirmed the single-leaf `buildDetailsPatch` shape + no-op→null + number coercion, and the
+  no-clobber predicate intact; two adversarial reviewers (autosave correctness + scope/import-review)
+  → GATE: PASS. No frontend unit-test runner; component behaviour covered by manual steps.
+- **Files:** frontend `components/AutosaveControl.tsx` (new), `components/AutosaveField.tsx` (refactor),
+  `components/structured/StructuredDetailsView.tsx`, `pages/JobDetailPage.tsx`; docs (CHANGES,
+  DEVELOPER_HANDOFF, business_rules). Permanent.
+- **Deferred:** H5C (hardware fields autosave — retire the Edit/Save batch + the approval coupling),
+  H5D (install-date → save-on-change, unify indicators, polish). Known minor: a structured job with no
+  hardware still shows a "No changes" hardware Save bar in the temporary Edit mode (pre-existing from
+  H5A; retired in H5C). Per-field autosave writes one `JOB_UPDATED` activity per changed field.
+
+---
+
 ## 2026-06-23 — Job Detail H5A: field-level autosave foundation + top-level descriptive fields (frontend only)
 
 - **Why:** begin the no-Save-button Job Detail overhaul — fields that are editable should be editable

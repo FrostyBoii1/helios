@@ -219,7 +219,7 @@ explains intent; protect important explicit decisions with tests, not docs alone
   a descriptive field persists when the user finishes interacting with it (blur for text, change for a
   date), as a single-field update. A background refresh never wipes an in-progress edit, and a failed
   save keeps the typed value (with a retry) — edits are never silently lost. *(Rollout: H5A converts
-  the top-level descriptive fields; structured details + hardware follow in H5B/H5C.)*
+  the top-level descriptive fields, H5B the structured registry fields; hardware follows in H5C.)*
 - **Workflow controls stay EXPLICIT and separate — they are never swept into field autosave.**
   Approval (label-is-law structured state), lifecycle **status**, **install date** (its own
   permission), and **delete** (confirmation) each keep their own deliberate control. Backend-derived

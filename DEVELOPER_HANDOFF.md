@@ -421,6 +421,22 @@ These are stubbed/absent and represent the next phases:
   details init; derived blobs stay non-editable; autosave errors are per-field (not the global banner).
   Frontend-only, no backend/migration. Deferred: H5B (structured autosave), H5C (hardware autosave),
   H5D (install-date save-on-change + remove the remaining Edit/Save + polish).
+  **(H5B — structured registry fields autosave, frontend)** structured Job Detail registry fields now
+  autosave per-field. New `components/AutosaveControl.tsx` (the shared autosave input — text/textarea/
+  number/date/select — wrapping `useFieldAutosave`; blur-commit for text/number, change-commit for
+  date/select; inline state chip). `AutosaveField` (H5A) refactored to delegate to it (DRY). The shared
+  `StructuredDetailsView` gained an **opt-in** `autosaveField?: (path,value)=>Promise<void>` prop
+  (Job Detail passes it → registry value fields render as `AutosaveControl` saving one `section.key`
+  leaf; import review passes none → batch `edits`/`onChange` path unchanged) + a `recordKey` prop so
+  reveal state (show-empty/picker) resets on the record id, not every per-save refetch (import review
+  without `recordKey` keeps the `details`-object reset). `JobDetailPage.saveStructuredField(path,value)`
+  → `buildDetailsPatch({"section.key":value})` → `PATCH {details:{section:{key}}}` (no-op build sends
+  nothing); the batch `detailsEdits`/`handleDetailsChange` + the structured part of `buildPayload` are
+  REMOVED. **Temporary H5B:** hardware keeps the batch flow (Edit button relabelled "Edit hardware &
+  approval"; `buildPayload`/`saveDetails` cover only hardware); approval editing gating unchanged.
+  details=null → no structured inputs/init; derived fields read-only; **ImportRowModal byte-equivalent**.
+  Frontend-only, no backend/migration. Deferred: H5C (hardware autosave + retire the batch/approval
+  coupling), H5D (install-date save-on-change + polish).
   **Stage 4C (next)** = frontend import-review display + uncertain/manual-review badges. Deferred:
   full multi-fragment bundle parsing + panel system-size derivation; a shared-alias-index optimisation
   (today `parse_hardware` rebuilds its index per enriched row). Then the remaining lane stages still

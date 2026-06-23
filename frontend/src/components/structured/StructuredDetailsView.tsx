@@ -9,6 +9,7 @@
 // blank legacy/import-only fields stay hidden. Dark SunCentral theme.
 
 import { useEffect, useState, type ReactNode } from 'react'
+import { AutosaveControl, type AutosaveKind } from '@/components/AutosaveControl'
 import type { FieldRegistry, FieldSpec, ParsedDetails } from '@/types/imports'
 import type { SystemHardwareField } from '@/lib/hardwareDisplay'
 
@@ -85,11 +86,42 @@ function FieldInput({ field, details, edit }: { field: FieldSpec; details: Parse
   return <input type={type} value={current} onChange={(e) => set(e.target.value)} className="input" />
 }
 
-function Section({ section, fields, details, edit, expanded, onToggle, addedPaths, onRemoveAdded, extras = [], extraEdits, onExtraChange, renderExtraInput }: {
+// Autosave variant of a single registry field (Job Detail H5B). Maps the field's `input_type` to an
+// AutosaveControl kind and saves the one changed leaf on blur/change. `value` is the current server
+// value (the control reconciles its own draft, so a refetch never clobbers an in-progress edit).
+function AutosaveStructuredField({
+  field,
+  value,
+  onSave,
+}: {
+  field: FieldSpec
+  value: string
+  onSave: (value: string) => Promise<void>
+}) {
+  const rawOpts = field.validation?.select_options
+  const options = Array.isArray(rawOpts) ? rawOpts.map(String) : undefined
+  const kind: AutosaveKind =
+    field.input_type === 'textarea'
+      ? 'textarea'
+      : field.input_type === 'select' && options
+        ? 'select'
+        : field.input_type === 'number'
+          ? 'number'
+          : field.input_type === 'date'
+            ? 'date'
+            : 'text'
+  return <AutosaveControl value={value} kind={kind} options={options} onSave={onSave} ariaLabel={field.label} />
+}
+
+function Section({ section, fields, details, edit, autosaveField, expanded, onToggle, addedPaths, onRemoveAdded, extras = [], extraEdits, onExtraChange, renderExtraInput }: {
   section: { key: string; label: string }
   fields: FieldSpec[]
   details: ParsedDetails
   edit: EditCtx | null
+  // H5B (Job Detail opt-in): when provided, registry value fields render as per-field AUTOSAVE
+  // controls (save on blur/change a single `section.key` leaf) instead of the batch `edit` inputs.
+  // Mutually exclusive with `edit` in practice — import review uses `edit`, Job Detail uses this.
+  autosaveField?: (path: string, value: string) => Promise<void>
   expanded: boolean
   onToggle: () => void
   addedPaths: Set<string>
@@ -148,7 +180,7 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
           // A locally-added field with no saved value gets a remove control (it
           // only hides the local addition + clears its unsaved edit — never a
           // persisted value).
-          const isAddedBlank = edit != null && addedPaths.has(path) && isBlank(v)
+          const isAddedBlank = (edit != null || autosaveField != null) && addedPaths.has(path) && isBlank(v)
           return (
             <div key={f.key} className="flex min-w-0 flex-col">
               <span className="mb-0.5 flex items-center gap-1.5 text-xs text-faint">
@@ -173,7 +205,13 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
                   </button>
                 )}
               </span>
-              {edit ? (
+              {autosaveField ? (
+                <AutosaveStructuredField
+                  field={f}
+                  value={toStr(v)}
+                  onSave={(val) => autosaveField(path, val)}
+                />
+              ) : edit ? (
                 <FieldInput field={f} details={details} edit={edit} />
               ) : (
                 <span className={`break-words text-sm ${isBlank(v) ? 'text-faint' : 'text-fg'}`}>
@@ -227,12 +265,21 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
   )
 }
 
-export function StructuredDetailsView({ registry, details, editable, edits, onChange, originalDetails, hideImportedNotes, hideKeys = [], systemExtras = [], extraEdits, onExtraChange, renderExtraInput }: {
+export function StructuredDetailsView({ registry, details, editable, edits, onChange, autosaveField, recordKey, originalDetails, hideImportedNotes, hideKeys = [], systemExtras = [], extraEdits, onExtraChange, renderExtraInput }: {
   registry: FieldRegistry
   details: ParsedDetails
   editable?: boolean
   edits?: Record<string, string>
   onChange?: (path: string, value: string) => void
+  // H5B (Job Detail opt-in): per-field autosave of registry value fields. When provided, fields are
+  // always-editable and each save PATCHes a single `section.key` leaf; the batch `edits`/`onChange`
+  // path is for import review only. Mutually exclusive in practice.
+  autosaveField?: (path: string, value: string) => Promise<void>
+  // Stable record identity (e.g. job id / row id). When provided, the local reveal state
+  // (show-empty + picker-added) resets only when the RECORD changes — not on every `details`
+  // refetch — so an autosave-triggered refetch doesn't collapse what the user just expanded.
+  // Omitted (import review) → falls back to resetting on the `details` object (unchanged behaviour).
+  recordKey?: string | number
   originalDetails?: ParsedDetails | null
   // When true (the live Job page), the imported review/source-note boxes are
   // hidden because the same preserved context is shown via Job.internal_notes.
@@ -257,15 +304,18 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
   const edit: EditCtx | null =
     editable && edits && onChange ? { edits, onChange, originalDetails: originalDetails ?? null } : null
 
-  // Per-section show-empty expansion + picker-added field paths. Both are local
-  // reveal state — they never persist, and reset when the record changes (a new
-  // row/job, or a post-save refetch hands us a fresh `details` object).
+  // Per-section show-empty expansion + picker-added field paths. Both are local reveal state that
+  // never persists. They reset when the RECORD changes: `recordKey` (a stable job/row id) when
+  // provided, else the `details` object itself (the original behaviour — a post-save refetch hands a
+  // fresh `details`). Keying off a stable id matters for Job Detail autosave, where each field save
+  // triggers a refetch that must NOT collapse what the user just revealed.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [addedPaths, setAddedPaths] = useState<Set<string>>(new Set())
+  const resetKey = recordKey ?? details
   useEffect(() => {
     setExpanded(new Set())
     setAddedPaths(new Set())
-  }, [details])
+  }, [resetKey])
 
   const toggleSection = (key: string) =>
     setExpanded((prev) => {
@@ -310,7 +360,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
   return (
     <section className="flex flex-col gap-3">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
-        Structured details {edit ? null : <span className="text-faint">(read-only)</span>}
+        Structured details {edit || autosaveField ? null : <span className="text-faint">(read-only)</span>}
       </h3>
 
       {registry.sections.map((section) => {
@@ -325,6 +375,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
             fields={fields}
             details={details}
             edit={edit}
+            autosaveField={autosaveField}
             expanded={expanded.has(section.key)}
             onToggle={() => toggleSection(section.key)}
             addedPaths={addedPaths}
@@ -340,7 +391,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
       {/* Add-field picker (editable only): reveal a blank/hidden registry field —
           incl. legacy/import-only fields that show-empty never surfaces. Local
           reveal only; nothing persists until the user enters a value and saves. */}
-      {edit && addableBySection.length > 0 && (
+      {(edit || autosaveField) && addableBySection.length > 0 && (
         <div className="flex items-center gap-2">
           <label htmlFor="add-structured-field" className="text-xs text-faint">
             Add field
