@@ -1615,7 +1615,7 @@ hardware_catalog:
 - id: tesla_powerwall_3_inverter
   category: inverter
   canonical_model: Tesla Powerwall 3 inverter
-  manufacturer: Unknown
+  manufacturer: Tesla
   phases: three_phase
   nominal_kw: null
   exact_aliases:
@@ -2557,6 +2557,8 @@ hardware_catalog:
   - Neo Volt 10.1kw 3 phase
   - Neovolt 10.1
   - Neovolt BW-BAT-10.1P
+  - BW-BAT-10.1
+  - BW-BAT-10.1 P
   loose_aliases: []
   source_examples:
   - 1 × Neovolt BW-BAT-10.1P · 10.1kWh
@@ -3494,6 +3496,7 @@ hardware_catalog:
   manufacturer: SolaX
   exact_aliases:
   - SolaX T-BAT HS25.2
+  - T-BAT HS25.2
   loose_aliases: []
   source_examples:
   - SOLAX ULTRA 20KW INVERTER WITH 25.2KW STORAGE - 7 X BATTERY STACK
@@ -3546,6 +3549,7 @@ hardware_catalog:
   manufacturer: SolaX
   exact_aliases:
   - SolaX T-BAT HS32.4
+  - T-BAT HS32.4
   loose_aliases: []
   source_examples:
   - SOLAX X3-Ultra-20kw 3phase + Solax T-BAT HS32.4 Battery - 9 batt stack
@@ -3751,7 +3755,7 @@ hardware_catalog:
 - id: tesla_powerwall_3_battery
   category: battery
   canonical_model: Tesla Powerwall 3 battery
-  manufacturer: Unknown
+  manufacturer: Tesla
   exact_aliases:
   - Tesla Powerwall 3 battery
   loose_aliases: []
@@ -3839,6 +3843,25 @@ hardware_catalog:
   nominal_kw: 20.0
   exact_aliases:
   - X3-PRO-20K-G2
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: smile_m_bat_5p_vi
+  category: battery
+  canonical_model: SMILE-M-BAT-5P VI
+  manufacturer: Alpha ESS
+  exact_aliases:
+  - SMILE-M-BAT-5P VI
   loose_aliases: []
   source_examples: []
   confidence:

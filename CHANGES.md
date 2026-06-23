@@ -9,6 +9,56 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-24 — Hardware Parser P4: evidence-based catalogue adds for still-raw known hardware (spec only)
+
+- **Why:** after P1–P3, several still-raw COMPLETED fragments are genuinely-known hardware the
+  catalogue couldn't match — either missing entries, or entries that carried only a brand-qualified
+  alias (so P2's brand-strip produced a bare token with no matching alias). This slice teaches the
+  curated catalogue about hardware that is actually present in the workbook / curated spec, without
+  guessing or bloating.
+- **What (`docs/parser_specs/hardware/hardware_parser_runtime_rules_v9_1.yaml` — the vendored
+  catalogue source seeded by Stage 1):**
+  - **NEW entry** `smile_m_bat_5p_vi` — Alpha ESS battery `SMILE-M-BAT-5P VI` (only iii/iv/v existed;
+    VI appeared solely in source_examples). Evidence: ~8 raw rows + curated source_examples.
+  - **New bare aliases on existing SolaX T-BAT batteries:** `T-BAT HS25.2` → `solax_t_bat_hs25_2`,
+    `T-BAT HS32.4` → `solax_t_bat_hs32_4`. These entries previously held only the `SolaX T-BAT HSxx`
+    alias, so a workbook `Solax Power T-BAT HS25.2` brand-stripped to `t-bat hs25.2` matched nothing.
+    Evidence: 7 + 6 raw rows. (HS43.2 already resolves via the existing bare-alias entry `t_bat_hs43_2`.)
+  - **New bare aliases on Neovolt `BW-BAT-10.1P`:** `BW-BAT-10.1`, `BW-BAT-10.1 P` (the entry had the
+    `-10.1P` / space variants but not the bare hyphenated form). Evidence: ~11 raw rows.
+  - **Tesla manufacturer correction:** the two `Tesla Powerwall 3` entries had manufacturer `Unknown`
+    → set to `Tesla`. (Data-quality only; applies on a FRESH seed — the idempotent seed inserts-if-
+    missing and never clobbers an already-seeded row, so an existing DB keeps the old value until a
+    clean re-seed, e.g. the future clean-wipe + reimport.)
+- **Conservative / evidence-based:** every addition is a model found in the current workbook AND/OR
+  the curated source_examples — no industry "shopping". Ambiguous capacity-only / generic text
+  (`Solis 5kw`, `Goodwe 10kw`, `15kw battery`, `inverter`) deliberately still stays raw. No catalogue
+  model is guessed; resolution is exact-alias only. Source_examples are still never aliases.
+- **No live-reference behaviour / no business-data mutation:** Jobs still store snapshots; the only
+  DB action is the idempotent reference-data seed (verified `{hardware_created:0, alias_created:0}` on
+  a second run). No runtime/parser code change, no seed-code change, no migration.
+- **Vendored-spec note:** the `docs/parser_specs/hardware` package is treated as catalogue "law"; this
+  is a DELIBERATE, evidence-based extension. The Stage-0 spec validator (unique IDs, no alias
+  collisions, source_examples-not-aliases, confidence vocab, version pin) still passes unchanged.
+- **Audit delta over COMPLETED (confidence metric):** fully-clean rows **1,149 → 1,171 (+22)**; raw
+  rows **534 → 512**. (Cumulative P1→P4: ~645 → ~1,171 fully-clean.)
+- **Scope:** catalogue spec + tests + docs only. No frontend, Settings UI, import review UI, import
+  commit/reverse, NAS/proposal, scheduling, Job UI, migration, live data files, or runtime parser code.
+- **Tests:** `tests/test_hardware_runtime.py` adds a P4 section (T-BAT HS25.2/HS32.4, Neovolt
+  BW-BAT-10.1, SMILE-M-BAT-5P VI all resolve as matched batteries; Tesla manufacturer = Tesla in the
+  spec; **seed idempotency** = 0/0 on re-seed; ambiguous capacity-only stays raw). **641 backend tests
+  pass**; spec-validation green; `alembic check` clean.
+- **Files:** `docs/parser_specs/hardware/hardware_parser_runtime_rules_v9_1.yaml`,
+  `backend/tests/test_hardware_runtime.py`; docs (CHANGES, DEVELOPER_HANDOFF). Permanent.
+- **Deferred (next slices):** **Swatten All-In-One 19.2/25.6** (needs promoting v9.1-demoted
+  source_examples back to aliases — a larger policy change for its own pass); the `13.3p` /
+  `extension 13.3p` Alpha extension shorthand (~60 rows, ambiguous aliasing); reversed-order / suffix
+  variants (`10.1 neovolt`, `neovolt bw-bat-10.1kwh`, `vast 10kw`, `smile m5`); capacity-only battery
+  descriptions (correctly raw); leading-`1`+model (`1 SBR128 battery`); metering vocab expansion;
+  in-fragment capacity-in-noun extraction; and the (un-authorized) clean-wipe + reimport.
+
+---
+
 ## 2026-06-24 — Hardware Parser P3: route unmatched battery/metering evidence to the right bucket (runtime only)
 
 - **Why:** the remaining structural-correctness gap from the audit — an UNMATCHED fragment always fell

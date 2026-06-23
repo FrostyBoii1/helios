@@ -560,3 +560,60 @@ def test_ct_still_routes_to_site_notes(seeded):
     out = parse_hardware(seeded, inverter_text="Solis 10kw + CT")
     assert out["site_notes"]["ct"] == ["CT"]
     assert out["metering"] == []
+
+
+# --------------------------------------------------------------------------- #
+# P4: evidence-based catalogue adds — real workbook hardware that was still raw now resolves
+# (no guessing; only models with workbook/curated-spec evidence were added).
+# --------------------------------------------------------------------------- #
+def test_p4_t_bat_hs25_2_resolves_battery(seeded):
+    # "Solax Power T-BAT HS25.2" -> P2 strips "solax power" -> the new bare "T-BAT HS25.2" alias.
+    out = parse_hardware(seeded, inverter_text="Solax Power T-BAT HS25.2")
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SolaX T-BAT HS25.2" and bat["canonical_hardware_id_at_parse_time"]
+    assert out["inverters"] == []
+
+
+def test_p4_t_bat_hs32_4_resolves_battery(seeded):
+    out = parse_hardware(seeded, inverter_text="Solax Power T-BAT HS32.4")
+    assert _only(out["batteries"])["model_text"] == "SolaX T-BAT HS32.4"
+
+
+def test_p4_neovolt_bw_bat_10_1_resolves_battery(seeded):
+    # "Neovolt BW-BAT-10.1" (hyphen, no trailing P) -> P2 strips "neovolt" -> new "BW-BAT-10.1" alias.
+    out = parse_hardware(seeded, inverter_text="Neovolt BW-BAT-10.1")
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "Neovolt BW-BAT-10.1P" and bat["canonical_hardware_id_at_parse_time"]
+
+
+def test_p4_smile_m_bat_5p_vi_resolves_battery(seeded):
+    # SMILE-M-BAT-5P VI was missing as an entry (only iii/iv/v existed); now a matched battery.
+    out = parse_hardware(seeded, inverter_text="Alpha ESS SMILE-M-BAT-5P VI")
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SMILE-M-BAT-5P VI" and bat["canonical_hardware_id_at_parse_time"]
+
+
+def test_p4_tesla_manufacturer_corrected():
+    # The Tesla Powerwall 3 entries had manufacturer "Unknown"; P4 corrects both to "Tesla" in the
+    # SPEC. The fix applies on a FRESH seed (the idempotent seed inserts-if-missing and never
+    # clobbers an already-seeded row), so this asserts the vendored spec rather than a live DB row.
+    runtime = yaml.safe_load(
+        (spec_dir() / "hardware_parser_runtime_rules_v9_1.yaml").read_text(encoding="utf-8")
+    )
+    tesla = [e for e in runtime["hardware_catalog"] if "Tesla Powerwall 3" in e["canonical_model"]]
+    assert len(tesla) == 2, [e["canonical_model"] for e in tesla]
+    assert all(e["manufacturer"] == "Tesla" for e in tesla), [e["manufacturer"] for e in tesla]
+
+
+def test_p4_seed_is_idempotent(seeded):
+    # The catalogue is already seeded by the fixture; a second seed must insert nothing.
+    assert seed_hardware_catalogue(seeded) == {"hardware_created": 0, "alias_created": 0}
+
+
+def test_p4_catalogue_adds_do_not_resolve_ambiguous_capacity(seeded):
+    # The new entries must NOT make ambiguous capacity-only text resolve to a model.
+    for text in ("Solis 5kw", "Goodwe 10kw"):
+        out = parse_hardware(seeded, inverter_text=text)
+        inv = _only(out["inverters"])
+        assert inv["confidence"] == "unconfirmed_raw_text"
+        assert inv.get("canonical_hardware_id_at_parse_time") is None

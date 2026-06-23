@@ -364,9 +364,24 @@ These are stubbed/absent and represent the next phases:
   via P2). Audit delta: **130 raw items re-bucketed out of inverters** (112 batteries, 18 metering);
   fully-clean 1,153 -> 1,149 / raw 530 -> 534 (a ~4-row honesty shift: `smart meter 5kw export`
   surfaced from a hidden export-limit note into a flagged metering item). 634 backend tests pass.
-  Deferred to later audit slices: **P4 catalogue adds**, metering vocab expansion, in-fragment
-  capacity-in-noun extraction (`16kw hrs battery`), leading-`1`+model resolution (`1 SBR128 battery`),
-  and the (un-authorized) clean-wipe + reimport.
+  **(Hardware Parser P4 — evidence-based catalogue adds, vendored spec)** taught the curated catalogue
+  (`docs/parser_specs/hardware/hardware_parser_runtime_rules_v9_1.yaml`, seeded by Stage 1) about
+  known workbook hardware that was still raw: NEW Alpha ESS battery entry `smile_m_bat_5p_vi`
+  (`SMILE-M-BAT-5P VI`; only iii/iv/v existed); bare aliases `T-BAT HS25.2`/`T-BAT HS32.4` on the
+  existing SolaX entries (they held only the `SolaX T-BAT HSxx` alias, so P2's `solax power`-strip
+  matched nothing); bare `BW-BAT-10.1`/`BW-BAT-10.1 P` on Neovolt `BW-BAT-10.1P`; and the
+  `Tesla Powerwall 3` manufacturer `Unknown`->`Tesla` (applies on a FRESH seed — the idempotent seed
+  inserts-if-missing and never clobbers an existing row). Evidence-based only (every model is in the
+  workbook and/or curated source_examples); ambiguous capacity-only text (`Solis 5kw`) still stays
+  raw; no runtime/parser/seed-code change, no migration. The Stage-0 spec validator still passes
+  (unique IDs, no alias collisions, source_examples-not-aliases, confidence vocab, version pin); seed
+  remains idempotent (`{0,0}` on re-seed). Audit delta (confidence metric): fully-clean **1,149 ->
+  1,171**, raw **534 -> 512** (cumulative P1->P4: ~645 -> ~1,171). 641 backend tests pass.
+  Deferred to later slices: **Swatten All-In-One** (needs reversing the v9.1 source_example demotion),
+  the `13.3p`/`extension 13.3p` Alpha shorthand, reversed-order/suffix variants, capacity-only battery
+  descriptions (correctly raw), leading-`1`+model (`1 SBR128 battery`), metering vocab expansion,
+  in-fragment capacity-in-noun extraction (`16kw hrs battery`), and the (un-authorized) clean-wipe +
+  reimport.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware
