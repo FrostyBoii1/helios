@@ -9,6 +9,54 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-24 — Hardware Parser P2: brand-prefix / noise normalization (runtime only)
+
+- **Why:** the E2E audit's #1 *resolution* gap — the catalogue stores bare model aliases (`SH10RT`,
+  `X1-SMT-10K-G2`), but the workbook writes them with a leading brand/manufacturer (and sometimes a
+  leading power token), or with a trailing hardware-type noun, so known hardware stayed raw. The
+  audit estimated ~551 raw rows would resolve once brand prefixes were handled.
+- **What (`app/hardware/runtime.py` only):** when a fragment does NOT match directly (or via the
+  existing quantity retries), a new `_normalized_hit` tries resolving it after conservatively
+  stripping (a) a known **leading brand prefix** (`_BRAND_PREFIXES`: Sungrow, Solax / Solax Power,
+  SAJ, Goodwe, Solis, Neovolt / Nevolt, Alpha ESS / Alpha-ESS — casefolded, longest-first) plus an
+  **optional single leading power token** (`_LEADING_POWER_RE`, e.g. `10kW` — never `kWh`/`kw hrs`
+  energy), and/or (b) a **trailing hardware-type noun** (`_TRAILING_NOISE_RE`: `… BATT`/`battery`/
+  `inverter`/`inv`, space-anchored so a model ending `-INV` is untouched). A candidate is accepted
+  **ONLY** when the transformed remainder is itself a catalogue alias.
+- **Conservative by construction:**
+  - **Purely additive** — `_normalized_hit` runs only when `hit is None`, so it can never change a
+    previously-matched item; it can only turn a previously-raw fragment into a resolved one.
+  - **Never guesses** — resolves only to an existing exact/loose alias; brand-only (`Sungrow`) and
+    capacity-only (`Solis 5kw`, `Goodwe 10kw`) produce no resolving candidate and stay raw for review
+    (decision log D-v9.1-002).
+  - **No catalogue bloat** — the brand list is a small version-controlled CODE constant, NOT seeded
+    as hundreds of brand-prefixed aliases and NOT added to the vendored v9.1 spec YAML.
+  - **Provenance preserved** — `source_fragment` stays the original workbook fragment; `model_text`
+    becomes the resolved canonical model; quantity and confidence follow the matched alias.
+- **Behaviour, before → after (live):** `Solax Power X1-SMT-10K-G2` → `X1-SMT-10K-G2`; `Sungrow
+  SH10RT` → `SH10RT`; `Sungrow 10kW SH10RT/SBR128 BATT` → inverter `SH10RT` + battery `SBR128` (P1
+  split + P2 resolve); `2 x Sungrow SH10RT` → `SH10RT` ×2; `Solis 5kw` / `Sungrow` → stay raw;
+  canonical `SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs` → unchanged.
+- **Audit delta over COMPLETED (1,686 inverter-text rows), confidence metric (same as the after-P1
+  baseline):** fully-clean rows **654 → 1,153 (+499)**; rows with ≥1 raw item **1,029 → 530** (about
+  halved). (Under a per-component "resolved to a catalogue entry" metric: 1,207 / 476.)
+- **Scope:** backend parser runtime + tests only. No frontend, imports UI, import commit/reverse,
+  Settings, NAS/proposal, scheduling, migration, data files, catalogue/alias seeding, or YAML-rule
+  change.
+- **Tests:** `tests/test_hardware_runtime.py` adds a P2 section (Solax Power / Sungrow / leading-power
+  resolution, the P1+P2 slash bundle, quantity preservation, SAJ direct, Alpha ESS direct, brand-only
+  non-resolution, capacity-only stays raw, source_example never resolves via strip). **625 backend
+  tests pass**; spec-validation green; `alembic check` clean.
+- **Files:** `backend/app/hardware/runtime.py`, `backend/tests/test_hardware_runtime.py`; docs
+  (CHANGES, DEVELOPER_HANDOFF). Permanent.
+- **Deferred (next slices):** P3 bucket routing (unmatched battery/metering text still lands in the
+  inverter field), P4 catalogue adds (T-BAT, X1-VAST, X3-ULT, Swatten all-in-one, Neovolt variants,
+  Alpha extensions, missing brands), metering vocab (`export meter`, `with meter`), in-fragment
+  capacity-in-noun extraction, leading bare-`1`+trailing-noun forms (`1 SBR128 battery`), and the
+  (un-authorized) clean-wipe + reimport.
+
+---
+
 ## 2026-06-23 — Hardware Parser P1: separator splitting (runtime only)
 
 - **Why:** the read-only E2E reimport-readiness audit found the #1 *separator* gap — the real

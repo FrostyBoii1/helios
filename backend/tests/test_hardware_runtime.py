@@ -407,3 +407,84 @@ def test_mid_fragment_quantity_preserved_verbatim(seeded):
     inv = _only(out["inverters"])
     assert inv["model_text"] == "Sungrow Hybrid 2 x 5kw"   # one fragment; "2 x" kept
     assert inv["confidence"] == "unconfirmed_raw_text"
+
+
+# --------------------------------------------------------------------------- #
+# P2: brand-prefix / noise normalization — resolve a BARE catalogue model that the workbook prefixed
+# with brand (+ optional power) text or suffixed with a hardware-type noun, WITHOUT guessing or
+# bloating the catalogue. Resolves ONLY when the stripped remainder is itself a catalogue alias.
+# --------------------------------------------------------------------------- #
+def test_brand_prefix_solax_power_resolves(seeded):
+    out = parse_hardware(seeded, inverter_text="Solax Power X1-SMT-10K-G2")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "X1-SMT-10K-G2"                   # resolved canonical, not the raw text
+    assert inv["canonical_hardware_id_at_parse_time"]
+    assert inv["source_fragment"] == "Solax Power X1-SMT-10K-G2"  # provenance keeps the original fragment
+
+
+def test_brand_prefix_sungrow_resolves(seeded):
+    out = parse_hardware(seeded, inverter_text="Sungrow SH10RT")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "SH10RT" and inv["canonical_hardware_id_at_parse_time"]
+
+
+def test_brand_prefix_with_leading_power_resolves(seeded):
+    out = parse_hardware(seeded, inverter_text="Sungrow 10kW SH10RT")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "SH10RT" and inv["canonical_hardware_id_at_parse_time"]
+
+
+def test_p1_plus_p2_slash_bundle_fully_resolves(seeded):
+    """The audit case: 'Sungrow 10kW SH10RT/SBR128 BATT' splits on '/' (P1) then resolves the brand-
+    prefixed inverter and the trailing-noun battery (P2)."""
+    out = parse_hardware(seeded, inverter_text="Sungrow 10kW SH10RT/SBR128 BATT")
+    inv = _only(out["inverters"])
+    bat = _only(out["batteries"])
+    assert inv["model_text"] == "SH10RT" and inv["canonical_hardware_id_at_parse_time"]
+    assert bat["model_text"] == "SBR128" and bat["canonical_hardware_id_at_parse_time"]
+
+
+def test_brand_prefix_preserves_quantity(seeded):
+    out = parse_hardware(seeded, inverter_text="2 x Sungrow SH10RT")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "SH10RT" and inv["quantity"] == 2
+
+
+def test_saj_prefixed_still_resolves_directly(seeded):
+    # SAJ aliases already INCLUDE the brand, so this matches directly (the strip is a harmless no-op).
+    out = parse_hardware(seeded, inverter_text="SAJ H2-10K-S3")
+    assert _only(out["inverters"])["model_text"] == "SAJ H2-10K-S3"
+
+
+def test_alpha_ess_known_alias_resolves(seeded):
+    out = parse_hardware(seeded, inverter_text="Alpha ESS SMILE-G3-B5-INV")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "Alpha ESS SMILE-G3-B5-INV"
+    assert inv["canonical_hardware_id_at_parse_time"]
+
+
+@pytest.mark.parametrize("text", ["Sungrow", "Solax", "Goodwe"])
+def test_brand_only_does_not_resolve(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    items = out["inverters"] + out["batteries"] + out["metering"]
+    assert all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
+
+
+@pytest.mark.parametrize("text", ["Solis 5kw", "Goodwe 10kw", "Sungrow 5kw"])
+def test_capacity_only_stays_raw(seeded, text):
+    """Brand + capacity-only ('Solis 5kw') must NOT resolve to a model — there is no exact model to
+    pick, so it stays unconfirmed raw for review (decision log D-v9.1-002)."""
+    out = parse_hardware(seeded, inverter_text=text)
+    items = out["inverters"] + out["batteries"] + out["metering"]
+    assert items, "the capacity-only text is preserved as raw"
+    assert all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
+    assert all(it["confidence"] in ("unconfirmed_raw_text", "manual_review") for it in items)
+
+
+def test_brand_strip_never_resolves_source_example(seeded):
+    """Brand normalization must not let a source_example resolve: 'Alpha ESS SMILE-M5 5KW INVERTER'
+    (a curated example fragment) strips to nothing a catalogue alias matches — it stays raw."""
+    out = parse_hardware(seeded, inverter_text="Alpha ESS M5 5KW INVERTER")
+    items = out["inverters"] + out["batteries"] + out["metering"]
+    assert all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
+    assert "SMILE-M5" not in " ".join((it.get("model_text") or "") for it in items)

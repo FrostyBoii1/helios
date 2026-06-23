@@ -52,6 +52,32 @@ _BARE_QTY_RE = re.compile(r"^\s*(\d+)\s+(.*\S)\s*$")
 _CAPACITY_RE = re.compile(r"^\s*\d+(?:\.\d+)?\s*kw\s*h(?:rs?|ours?)?\s*$", re.IGNORECASE)
 _WATTAGE_RE = re.compile(r"(\d{3,4})\s*w\b", re.IGNORECASE)
 
+# P2 brand-prefix normalization: known leading brand/manufacturer prefixes the workbook writes in
+# front of a BARE catalogue model (the catalogue often stores the bare model — "SH10RT",
+# "X1-SMT-10K-G2"). When a fragment does NOT match directly, the brand (and an OPTIONAL single
+# leading power token like "10kW") is stripped and the REMAINDER is re-looked-up; a hit is accepted
+# ONLY when that remainder is itself a catalogue alias (never a guess). Kept as a small, version-
+# controlled CODE constant — deliberately NOT seeded as catalogue aliases (no hundreds of duplicate
+# brand-prefixed rows) and NOT added to the vendored v9.1 spec YAML. Casefolded; longest-first at use
+# so "solax power" wins over "solax".
+_BRAND_PREFIXES = tuple(sorted({
+    "alpha ess", "alpha-ess",
+    "sungrow",
+    "solax power", "solax",
+    "saj",
+    "goodwe",
+    "solis",
+    "neovolt", "nevolt",
+}, key=len, reverse=True))
+# A single leading POWER token ("10kW", "5 kw") — strippable noise between brand and model. It does
+# NOT match ENERGY/capacity ("kWh" / "kw hrs": there is no word boundary after "kw"), so battery
+# capacity evidence is never consumed by the brand-prefix strip.
+_LEADING_POWER_RE = re.compile(r"^\d+(?:\.\d+)?\s*kw\b\s*", re.IGNORECASE)
+# A trailing hardware-TYPE noun ("SBR128 BATT", "SH10RT inverter") — descriptive noise after the
+# model, not part of it. Requires a leading space so a model ending in "-INV" (e.g.
+# "SMILE-G3-B5-INV") is never touched. Only stripped as a normalization retry, re-validated below.
+_TRAILING_NOISE_RE = re.compile(r"\s+(?:batteries|battery|batt|inverters?|inv)\.?$", re.IGNORECASE)
+
 
 def _clean(text: str) -> str:
     """Whitespace-collapse, case preserved (the case-sensitive comparison form)."""
@@ -154,6 +180,43 @@ def _extract_bare_quantity(fragment: str) -> tuple[int, str]:
     return 1, fragment
 
 
+def _normalized_hit(core: str, idx: "_Index") -> "_Hit | None":
+    """P2 conservative brand/noise normalization for a fragment that did NOT match directly. Tries
+    resolving ``core`` after stripping a known leading brand/manufacturer prefix (+ an optional single
+    leading power token like "10kW") and/or a trailing hardware-type noun ("... BATT" / "... inverter").
+    A hit is returned ONLY when a transformed remainder is ITSELF a catalogue alias — it never guesses,
+    and never resolves brand-only or capacity-only text (those produce no resolving candidate). The
+    matched alias's confidence / category / provenance are used unchanged by the caller (quantity and
+    the original source_fragment stay as-is; model_text becomes the resolved canonical model)."""
+    collapsed = _clean(core)
+    candidates: list[str] = []
+
+    def _add_brand_strip(s: str) -> None:
+        low = s.casefold()
+        for brand in _BRAND_PREFIXES:                 # longest-first ("solax power" before "solax")
+            if not low.startswith(brand + " "):
+                continue
+            rem = s[len(brand) + 1:].strip()          # brand names are ASCII -> casefold len matches
+            if rem:
+                candidates.append(rem)                # "Solax Power X1-SMT-10K-G2" -> "X1-SMT-10K-G2"
+                powerless = _LEADING_POWER_RE.sub("", rem, count=1).strip()
+                if powerless and powerless != rem:
+                    candidates.append(powerless)      # "Sungrow 10kW SH10RT" -> "SH10RT"
+            return                                    # brand matched (empty remainder = brand-only)
+
+    _add_brand_strip(collapsed)
+    trimmed = _TRAILING_NOISE_RE.sub("", collapsed).strip()
+    if trimmed and trimmed != collapsed:
+        candidates.append(trimmed)                    # "SBR128 BATT" -> "SBR128"
+        _add_brand_strip(trimmed)                     # "Sungrow SH10RT inverter" -> "SH10RT"
+
+    for cand in candidates:
+        hit = idx.exact_ci.get(_key(cand)) or idx.loose_ci.get(_key(cand))
+        if hit is not None:
+            return hit
+    return None
+
+
 def _site_bucket(fragment_key: str, rules: ParserRules) -> str | None:
     for bucket, keywords in rules.site_note_keywords.items():
         for kw in keywords:
@@ -229,6 +292,16 @@ def _parse_hardware_cell(
                 bhit = idx.exact_ci.get(bkey) or idx.loose_ci.get(bkey)
                 if bhit is not None:
                     qty, core, ckey, hit = bqty, bcore, bkey, bhit
+        if hit is None:
+            # P2: brand/manufacturer-prefix (+ trailing hardware-noun) normalization. "Sungrow 10kW
+            # SH10RT" / "Solax Power X1-SMT-10K-G2" / "SBR128 BATT" carry a known catalogue model behind
+            # brand (+ optional power) and/or after a trailing type-noun; strip and resolve the
+            # remainder. Accepted ONLY when the remainder is a real catalogue alias (never a guess);
+            # brand-only / capacity-only text stays raw. Quantity + the original source_fragment are
+            # unchanged; model_text becomes the resolved canonical model.
+            nhit = _normalized_hit(core, idx)
+            if nhit is not None:
+                hit = nhit
         if hit and hit.entry.category in _HW_CATEGORIES and not _negative_match(hit.entry, fkey):
             bucket_key = _BUCKET_BY_CATEGORY[hit.entry.category]
             out[bucket_key].append(_item(

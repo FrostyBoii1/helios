@@ -337,10 +337,25 @@ These are stubbed/absent and represent the next phases:
   parsing never uses the splitter. Result: `1 x SAJ H2-10K-S3 and 2 x SAJ B2-15.0-HV1` now resolves to
   inverter + qty-2 battery; `… · 25kWh` routes capacity to `site_notes.raw_misc`; source_examples still
   never resolve (the `… AND …` example splits into raw fragments — invariant preserved). 611 backend
-  tests pass. Deferred to later audit slices: **P2 brand-prefix** (`Solax Power …`/`Sungrow …` — ~551
-  raw rows), **P3 bucket routing** (unmatched battery/metering text still lands in the inverter field,
-  265 rows), **P4 catalogue adds**, in-fragment capacity-in-noun extraction (`16kw hrs battery`),
-  metering vocab, and the (un-authorized) clean-wipe + reimport.
+  tests pass.
+  **(Hardware Parser P2 — brand-prefix / noise normalization, runtime)** when a fragment does not
+  match directly (or via the quantity retries), `_normalized_hit` retries resolving it after stripping
+  a known leading brand prefix (`_BRAND_PREFIXES`: Sungrow, Solax/Solax Power, SAJ, Goodwe, Solis,
+  Neovolt/Nevolt, Alpha ESS/Alpha-ESS) + an optional single leading power token (`_LEADING_POWER_RE`,
+  e.g. `10kW`, never energy `kWh`) and/or a trailing hardware-type noun (`_TRAILING_NOISE_RE`,
+  `… BATT`/`battery`/`inverter`, space-anchored so a `-INV` model is safe). Accepted ONLY when the
+  transformed remainder is itself a catalogue alias. **Purely additive** (runs only when `hit is None`,
+  so it never changes a previously-matched item); **never guesses** (brand-only `Sungrow` / capacity-
+  only `Solis 5kw` stay raw); **no catalogue bloat** (the brand list is a small version-controlled CODE
+  constant, NOT seeded aliases and NOT in the vendored v9.1 YAML); provenance preserved (`source_fragment`
+  stays original, `model_text` becomes the resolved canonical). Result: `Solax Power X1-SMT-10K-G2` ->
+  `X1-SMT-10K-G2`, `Sungrow SH10RT` -> `SH10RT`, `Sungrow 10kW SH10RT/SBR128 BATT` -> inverter `SH10RT`
+  + battery `SBR128`. Audit delta over COMPLETED (confidence metric): fully-clean rows **654 -> 1,153**,
+  raw rows **1,029 -> 530** (~halved). 625 backend tests pass. Deferred to later audit slices: **P3
+  bucket routing** (unmatched battery/metering text still lands in the inverter field, 265 rows), **P4
+  catalogue adds**, metering vocab (`export meter`/`with meter`), in-fragment capacity-in-noun
+  extraction (`16kw hrs battery`), leading-`1`+trailing-noun forms (`1 SBR128 battery`), and the
+  (un-authorized) clean-wipe + reimport.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware
