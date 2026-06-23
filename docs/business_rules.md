@@ -149,6 +149,13 @@ explains intent; protect important explicit decisions with tests, not docs alone
   reverses, but any post-commit hardware edit trips the existing pristine guard (reverse blocked, the
   edit preserved). Enrichment is read-only against the catalogue; `source_examples` still never match;
   legacy `details.system.panel/inverter` text coexists. No frontend review UI yet (Stage 4C).
+  **(Quantity rule)** explicit hardware quantity is core truth and must be preserved. The parser reads
+  a `N x` / `N × ` / `N*` prefix into the item's `quantity`; a bare `N MODEL` is treated as a quantity
+  ONLY when the remainder resolves to a catalogue model (so unit/capacity/phase text is never
+  mis-split). Capacity / evidence fragments (battery ENERGY like `40kw hrs` / `40kwh`, but NOT bare
+  `10kw` inverter power) are preserved as a hardware note (`site_notes.raw_misc`) and must NEVER be
+  appended to an inverter/battery `model_text` or dumped into the inverters bucket. The UI shows a
+  quantity > 1 inline as "N × MODEL" and round-trips it on edit, so the quantity is never lost.
   **(UX rule)** parsed hardware is shown as **normal Job Detail System fields** (Panel type / Inverter
   / Battery / Metering — alongside Number of panels / Storey / Phase / Roof type, plus a read-only
   **CT / electrical** row), NOT a separate hardware card. The current parsed VALUE always shows

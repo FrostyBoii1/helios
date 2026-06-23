@@ -152,6 +152,84 @@ def test_panel_exact_alias_resolves_model_and_array_kw(seeded):
 
 
 # --------------------------------------------------------------------------- #
+# Hardware quantity preservation + capacity-evidence routing (the "2 × MODEL" bug)
+# --------------------------------------------------------------------------- #
+def _only(items: list[dict]) -> dict:
+    assert len(items) == 1, f"expected exactly one item, got {items!r}"
+    return items[0]
+
+
+def test_bundle_preserves_quantity_and_keeps_capacity_out_of_model_text(seeded):
+    """The reported blocker: 'SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs' must split into a
+    qty-1 inverter, a qty-2 battery, and the '40kw hrs' capacity preserved as a hardware note —
+    NOT a third raw inverter item and NOT glued onto any model_text."""
+    out = parse_hardware(seeded, inverter_text="SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs")
+
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "SAJ H2-10K-S3-A"
+    assert inv["quantity"] == 1
+    assert inv["confidence"] == "exact"
+
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SAJ B2-20.0-HV1"   # canonical model only — no "2 × " prefix
+    assert bat["quantity"] == 2                       # explicit quantity preserved
+
+    # The trailing capacity evidence is preserved as a hardware note, never an inverter/battery item
+    # and never contaminating a model_text.
+    assert out["site_notes"]["raw_misc"] == ["40kw hrs"]
+    all_model_text = " | ".join(
+        it.get("model_text") or ""
+        for bucket in ("inverters", "batteries", "metering")
+        for it in out.get(bucket, [])
+    )
+    assert "40kw" not in all_model_text.lower()
+    JobHardwarePatch.model_validate(out)             # still a valid snapshot
+
+
+@pytest.mark.parametrize("text", [
+    "SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1",   # × (multiplication sign)
+    "SAJ H2-10K-S3-A + 2 x SAJ B2-20.0-HV1",   # x (letter)
+    "SAJ H2-10K-S3-A + 2*SAJ B2-20.0-HV1",     # * (asterisk, no spaces)
+    "SAJ H2-10K-S3-A + 2 SAJ B2-20.0-HV1",     # bare "N MODEL" (resolves -> safe to split)
+])
+def test_quantity_separators_all_yield_qty_two_battery(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SAJ B2-20.0-HV1"
+    assert bat["quantity"] == 2
+    assert _only(out["inverters"])["model_text"] == "SAJ H2-10K-S3-A"
+
+
+def test_bare_number_not_split_when_model_does_not_resolve(seeded):
+    """A bare leading number is honoured as a quantity ONLY when the remainder resolves to a
+    catalogue model — otherwise unit/capacity text would be mis-split. An unresolved bare-number
+    fragment is preserved verbatim (quantity falls back to 1)."""
+    out = parse_hardware(seeded, inverter_text="2 Frobnicator 9000")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "2 Frobnicator 9000"   # the leading "2" is NOT stripped
+    assert inv["quantity"] == 1
+    assert inv["confidence"] == "unconfirmed_raw_text"
+
+
+def test_bare_kw_power_is_not_treated_as_capacity_evidence(seeded):
+    """Capacity routing targets ENERGY units (kWh / kw hrs). Bare 'kw' is inverter POWER and must
+    stay an ordinary (unmatched) item, not get diverted into a capacity note."""
+    out = parse_hardware(seeded, inverter_text="10kw inverter")
+    assert out.get("site_notes") in (None, {}) or "raw_misc" not in (out.get("site_notes") or {})
+    assert _only(out["inverters"])["model_text"] == "10kw inverter"
+
+
+def test_unmatched_explicit_quantity_strips_prefix_into_quantity_field(seeded):
+    """An UNMATCHED fragment carrying an explicit 'N ×' prefix stores the quantity separately and
+    the model CORE as text (so the quantity is rendered once, never doubled into model_text)."""
+    out = parse_hardware(seeded, inverter_text="3 × Frobnicator 9000")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "Frobnicator 9000"
+    assert inv["quantity"] == 3
+    assert inv["confidence"] == "unconfirmed_raw_text"
+
+
+# --------------------------------------------------------------------------- #
 # Metering + site_notes + schema conformance + no-mutation
 # --------------------------------------------------------------------------- #
 def test_metering_is_first_class(seeded):

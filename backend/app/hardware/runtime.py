@@ -34,7 +34,17 @@ from app.schemas.job_hardware import JobHardwarePatch
 
 _HW_CATEGORIES = {HardwareCategory.INVERTER.value, HardwareCategory.BATTERY.value,
                   HardwareCategory.METERING.value}
-_QTY_RE = re.compile(r"^\s*(\d+)\s*[x×]\s+(.*\S)\s*$", re.IGNORECASE)
+# Explicit quantity prefix: "N x MODEL" / "N × MODEL" / "N*MODEL" (an x / × / * separator with
+# optional surrounding spaces). The leading digits + separator are a strong quantity signal.
+_QTY_RE = re.compile(r"^\s*(\d+)\s*[x×*]\s*(.*\S)\s*$", re.IGNORECASE)
+# Bare "N MODEL" quantity (digits + whitespace + remainder, no x/×/* separator). Honoured ONLY
+# when the stripped remainder resolves to a catalogue hit (see the matcher) — so ambiguous unit /
+# capacity text ("40kw hrs", "10kw 3 phase") can never be mis-split into a quantity.
+_BARE_QTY_RE = re.compile(r"^\s*(\d+)\s+(.*\S)\s*$")
+# Battery ENERGY-capacity evidence ("40kw hrs", "40kwh", "20 kWh", "30kw hr") — preserved as a
+# hardware note, NEVER attached to an inverter/battery model_text. Bare "kw" (inverter POWER, no
+# "h") is intentionally NOT matched.
+_CAPACITY_RE = re.compile(r"^\s*\d+(?:\.\d+)?\s*kw\s*h(?:rs?|ours?)?\s*$", re.IGNORECASE)
 _WATTAGE_RE = re.compile(r"(\d{3,4})\s*w\b", re.IGNORECASE)
 
 
@@ -123,8 +133,17 @@ def _negative_match(entry: _Entry, fragment_key: str) -> bool:
 
 
 def _extract_quantity(fragment: str) -> tuple[int, str]:
-    """Pull a leading ``N x`` / ``N ×`` quantity; return (qty, remainder)."""
+    """Pull a leading ``N x`` / ``N ×`` / ``N*`` quantity; return (qty, remainder)."""
     m = _QTY_RE.match(fragment)
+    if m:
+        return int(m.group(1)), m.group(2)
+    return 1, fragment
+
+
+def _extract_bare_quantity(fragment: str) -> tuple[int, str]:
+    """Pull a leading bare ``N MODEL`` quantity (no x/×/* separator); return (qty, remainder).
+    The caller MUST only honour this when the remainder resolves to a catalogue hit."""
+    m = _BARE_QTY_RE.match(fragment)
     if m:
         return int(m.group(1)), m.group(2)
     return 1, fragment
@@ -196,6 +215,15 @@ def _parse_hardware_cell(
         qty, core = _extract_quantity(frag)
         ckey = _key(core)
         hit = idx.exact_ci.get(fkey) or idx.exact_ci.get(ckey) or idx.loose_ci.get(fkey) or idx.loose_ci.get(ckey)
+        if hit is None:
+            # Bare "N MODEL" quantity — honoured ONLY when the stripped model resolves (safe:
+            # unit / capacity text like "40kw hrs" never resolves, so it cannot be mis-split).
+            bqty, bcore = _extract_bare_quantity(frag)
+            if bqty != 1:
+                bkey = _key(bcore)
+                bhit = idx.exact_ci.get(bkey) or idx.loose_ci.get(bkey)
+                if bhit is not None:
+                    qty, core, ckey, hit = bqty, bcore, bkey, bhit
         if hit and hit.entry.category in _HW_CATEGORIES and not _negative_match(hit.entry, fkey):
             bucket_key = {
                 HardwareCategory.INVERTER.value: "inverters",
@@ -205,10 +233,15 @@ def _parse_hardware_cell(
             out[bucket_key].append(_item(
                 hit.entry, hit.entry.canonical_model, quantity=qty, confidence=_confidence(hit),
                 source_fragment=frag, source_type=source_type, source_field=source_field, rules=rules))
+        elif _CAPACITY_RE.match(core):
+            # Battery capacity evidence (kWh / kw hrs) — preserve as a hardware note, NEVER a model
+            # and NEVER appended to the inverter/battery model_text.
+            out["site_notes"].setdefault("raw_misc", []).append(frag)
         else:
-            # Unmatched useful text — preserve as editable raw text, NEVER guess.
+            # Unmatched useful text — preserve the model CORE as editable raw text with the quantity
+            # stored separately (so an explicit quantity is shown once, never doubled into the text).
             out["inverters"].append(_item(
-                None, frag, quantity=qty, confidence="unconfirmed_raw_text",
+                None, core, quantity=qty, confidence="unconfirmed_raw_text",
                 source_fragment=frag, source_type=source_type, source_field=source_field, rules=rules))
             warnings.append(f"Unmatched hardware preserved as raw text: {frag!r}")
 

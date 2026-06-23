@@ -9,6 +9,51 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Hardware Parser lane, parser fix: preserve item quantity, keep capacity evidence out of model_text (backend)
+
+- **Why (owner blocker):** a hardware cell like `SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs`
+  parsed wrongly — the battery **quantity (2) was effectively lost** to the reader and the trailing
+  battery-capacity text (`40kw hrs`) was dumped into the **inverters** bucket, contaminating the
+  inverter field. Hardware quantity is core hardware truth; it must be preserved, and capacity /
+  evidence fragments must never contaminate a model_text.
+- **What (runtime `app/hardware/runtime.py`, READ-ONLY parser):**
+  - **Broader explicit-quantity detection** — `_QTY_RE` now accepts `N x` / `N × ` / `N*` (an
+    x / × / * separator with optional spacing), so e.g. `2*SAJ B2-20.0-HV1` is recognised as
+    quantity 2, not raw text. The quantity is stored on the item's `quantity` field.
+  - **Safe bare-number quantity** — a bare `N MODEL` (no separator) is split into a quantity ONLY
+    when the stripped remainder resolves to a catalogue model (`_extract_bare_quantity`, gated on a
+    hit). So real quantities like `2 SAJ B2-20.0-HV1` are captured, while unit / capacity / phase
+    text (`40kw hrs`, `10kw 3 phase`) — which never resolves — is **never** mis-split.
+  - **Capacity-evidence routing** — an unmatched fragment that is pure battery ENERGY capacity
+    (`_CAPACITY_RE`: `40kw hrs` / `40kwh` / `30kw hr`, but NOT bare `10kw` power) is preserved as a
+    hardware note in `site_notes.raw_misc` (surfaced read-only under "Hardware notes"), never as an
+    inverter/battery item and never glued onto a model_text.
+  - **No quantity duplication** — an UNMATCHED fragment carrying an explicit `N ×` prefix now stores
+    the model **core** as `model_text` with the quantity held separately (so the UI renders the
+    quantity once, paired with the display-side fix in the UX entry below).
+- **Invariants preserved:** never guesses an unknown model (unmatched useful text stays
+  `unconfirmed_raw_text` + a warning); never matches `source_examples`; output still validates against
+  `JobHardwarePatch` (`extra='forbid'`); reads only, mutates nothing. The import bridge
+  (`enrich_row_hardware`) is unchanged — it simply stores the improved snapshot (parsed once at
+  ingest; preview = commit).
+- **Scope:** backend parser runtime only — **no** catalogue / alias mutation, **no** Settings >
+  Hardware change, **no** rules-config (YAML spec) change, **no** import-pipeline behaviour change
+  beyond better parser output, **no** migration, **no** NAS/proposal/scheduling.
+- **Deferred (documented follow-up):** middot-glued capacity suffixes (`MODEL · 20kWh` in one
+  fragment) are not yet split — the existing `_split_fragments` only breaks on `+` and ` - `; the
+  reported blocker (dash-separated `- 40kw hrs`) is covered. Per-item quantity editing via a
+  dedicated field is also still deferred.
+- **Verification:** new focused runtime tests (`test_hardware_runtime.py`) for the exact bundle +
+  all separator variants (`×`, `x`, `*`, bare) + bare-number safety + bare-`kw`-not-capacity +
+  unmatched-prefix-strips-core; import-path test (`test_import_hardware.py`) proving the stored
+  snapshot has quantity 2 + capacity in `raw_misc`. Full backend suite **590 passed**. Three
+  adversarial reviewers (parser / display / tests) returned GATE: PASS.
+- **Files:** `backend/app/hardware/runtime.py`, `backend/tests/test_hardware_runtime.py`,
+  `backend/tests/test_import_hardware.py`; docs (CHANGES, DEVELOPER_HANDOFF, business_rules).
+  Permanent.
+
+---
+
 ## 2026-06-23 — Hardware Parser lane, UX correction: parsed hardware shown + edited as normal System fields (frontend)
 
 - **Why (owner correction):** parsed hardware must appear as **normal Job Detail System fields**

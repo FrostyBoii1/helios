@@ -318,7 +318,17 @@ These are stubbed/absent and represent the next phases:
   confident + `model_options`. **Mutates nothing.** **C1 resolved**: `site_notes` ct/export_limit/
   underground/comms are now **lists** (schema + frontend + Stage-3B editor textareas; JSON-shape only,
   no migration). **C2 resolved**: `ignored`/`raw_evidence` stay parser-internal; messages → `warnings`.
-  Tests `tests/test_hardware_runtime.py` (16). **(Stage 4B built — import integration, backend)** the
+  Tests `tests/test_hardware_runtime.py`. **(Quantity fix — `runtime.py`)** explicit quantity is
+  preserved: `_QTY_RE` reads `N x` / `N × ` / `N*` (x/×/* separator, optional spacing) into the item's
+  `quantity`; `_extract_bare_quantity` splits a bare `N MODEL` ONLY when the remainder resolves to a
+  catalogue hit (so `40kw hrs` / `10kw 3 phase` are never mis-split); pure battery ENERGY capacity
+  (`_CAPACITY_RE`: `40kw hrs` / `40kwh`, NOT bare `10kw` power) routes to `site_notes.raw_misc` instead
+  of contaminating the inverters bucket / any `model_text`; an unmatched explicit-`N ×` fragment stores
+  the model **core** with the quantity held separately (no duplication). Still never guesses, never
+  matches `source_examples`, validates against `JobHardwarePatch`, mutates nothing. The display side
+  renders `quantity > 1` as "N × MODEL" and round-trips it (`lib/hardwareDisplay.ts`). Deferred:
+  middot-glued capacity suffixes (`MODEL · 20kWh`) — `_split_fragments` only breaks on `+` and ` - `.
+  **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware
   ONCE, DB-aware, into `ImportRow.parsed['details']['hardware']` (the pure `import_parser` stays

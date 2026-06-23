@@ -80,6 +80,19 @@ def test_ingest_populates_hardware_snapshot_end_to_end(seeded, users):
     assert hw["inverters"]                             # inverter cell produced an item
 
 
+def test_enrich_preserves_quantity_and_routes_capacity(seeded):
+    """Through the import bridge, a 'N × MODEL ... - 40kw hrs' bundle preserves the battery
+    quantity and routes the capacity evidence to a hardware note (not an inverter item)."""
+    parsed = {"details": {"_v": 2}, "inverter_raw": "SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs"}
+    enrich_row_hardware(seeded, parsed)
+    hw = parsed["details"]["hardware"]
+    assert hw["inverters"][0]["model_text"] == "SAJ H2-10K-S3-A"
+    assert len(hw["inverters"]) == 1                       # no "40kw hrs" raw inverter
+    assert hw["batteries"][0]["model_text"] == "SAJ B2-20.0-HV1"
+    assert hw["batteries"][0]["quantity"] == 2
+    assert hw["site_notes"]["raw_misc"] == ["40kw hrs"]
+
+
 def test_enrich_representative_cases(seeded):
     inv = {"customer_name": "x", "details": {"_v": 2}, "inverter_raw": "Alpha ESS SMILE-G3-B5-INV"}
     enrich_row_hardware(seeded, inv)
