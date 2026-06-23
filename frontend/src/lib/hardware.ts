@@ -17,6 +17,7 @@ import type {
   HardwareCategory,
   HardwareCreateInput,
   HardwareDeletedMode,
+  HardwareSearchListResponse,
   HardwareUpdateInput,
 } from '@/types'
 
@@ -50,6 +51,28 @@ export function listHardware(
   if (params.offset != null) search.set('offset', String(params.offset))
   const qs = search.toString()
   return apiFetch<HardwareCatalogueListResponse>(`/hardware${qs ? `?${qs}` : ''}`)
+}
+
+export interface SearchHardwareParams {
+  q?: string
+  category?: HardwareCategory
+  limit?: number
+}
+
+// Lean, authenticated-staff hardware search (GET /hardware/search) for autocomplete. Returns ONLY
+// active, non-deleted canonical hardware (no aliases / admin internals). Unlike `listHardware` this
+// route is reachable by any signed-in staff member, not just admins — it is the search feed for the
+// hardware textboxes. Selecting a result writes canonical TEXT (+ provenance) into the Job/import
+// snapshot; it never creates a live catalogue reference.
+export function searchHardware(
+  params: SearchHardwareParams = {},
+): Promise<HardwareSearchListResponse> {
+  const search = new URLSearchParams()
+  if (params.q) search.set('q', params.q)
+  if (params.category) search.set('category', params.category)
+  if (params.limit != null) search.set('limit', String(params.limit))
+  const qs = search.toString()
+  return apiFetch<HardwareSearchListResponse>(`/hardware/search${qs ? `?${qs}` : ''}`)
 }
 
 export function createHardware(input: HardwareCreateInput): Promise<HardwareCatalogueEntry> {

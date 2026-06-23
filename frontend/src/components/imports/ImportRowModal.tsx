@@ -21,8 +21,15 @@ import { CommitReverseSection } from '@/components/imports/CommitReverseSection'
 import { CustomerResolutionSection } from '@/components/imports/CustomerResolutionSection'
 import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
 import { HardwareNotes } from '@/components/HardwareNotes'
+import { HardwareSearchInput } from '@/components/imports/HardwareSearchInput'
 import { buildDetailsPatch } from '@/lib/detailsPatch'
-import { deriveHardwareNotes, deriveSystemHardware } from '@/lib/hardwareDisplay'
+import {
+  applyHardwareSystemEdits,
+  deriveHardwareNotes,
+  deriveSystemHardware,
+  type HardwareSelection,
+} from '@/lib/hardwareDisplay'
+import type { HardwareSearchResult } from '@/types'
 import {
   PARSED_TEXT_FIELDS,
   type FieldSpec,
@@ -190,6 +197,10 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
   const [reviewNotes, setReviewNotes] = useState('')
   // Phase 3b-2: string UI state for structured fields, keyed by "<section>.<key>".
   const [detailsEdits, setDetailsEdits] = useState<Record<string, string>>({})
+  // H3: edited System-hardware textboxes (keyed by hw_panel/inverter/battery/metering) + the
+  // catalogue selection per field when the reviewer picked an autocomplete result (provenance).
+  const [hardwareEdits, setHardwareEdits] = useState<Record<string, string>>({})
+  const [hardwareSelections, setHardwareSelections] = useState<Record<string, HardwareSelection>>({})
   const [message, setMessage] = useState<{ kind: 'error' | 'success'; text: string } | null>(null)
   const [issueNotes, setIssueNotes] = useState<Record<number, string>>({})
   // Reviewer override of the seeded Job.internal_notes: null = use the generated
@@ -218,12 +229,34 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     setPhones(asPhones(row.parsed))
     setReviewNotes(row.review_notes ?? '')
     setDetailsEdits({})
+    setHardwareEdits({})
+    setHardwareSelections({})
     setInternalNotesOverride(row.internal_notes_override ?? null)
     setMessage(null)
   }, [row])
 
   function handleDetailsChange(path: string, value: string) {
     setDetailsEdits((prev) => ({ ...prev, [path]: value }))
+  }
+
+  function handleHardwareChange(key: string, value: string) {
+    setHardwareEdits((prev) => ({ ...prev, [key]: value }))
+    // Typing invalidates any prior catalogue pick for this field, so a stale canonical id is never
+    // stamped onto hand-edited text. A pick() calls this (clear) THEN handleHardwareSelect (set),
+    // and the ordered functional updates compose to "set", so a genuine selection survives.
+    setHardwareSelections((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
+  function handleHardwareSelect(key: string, result: HardwareSearchResult) {
+    setHardwareSelections((prev) => ({
+      ...prev,
+      [key]: { id: result.id, confidence: 'manual_correction', model: result.canonical_model ?? null },
+    }))
   }
 
   const isApprovable = row.row_class === 'job' || row.row_class === 'ambiguous'
@@ -271,15 +304,20 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
     if (internalNotesOverride !== curOverride) {
       edit.internal_notes_override = internalNotesOverride
     }
-    // Structured details patch — only touched-and-changed leaves, coerced.
+    // Structured details patch — only touched-and-changed leaves, coerced — plus any edited
+    // System-hardware fields folded into the same `details.hardware` sub-patch (H3). The backend
+    // validates + merges hardware by shape (JobHardwarePatch), identical to a live Job edit.
     if (details) {
       const patch = buildDetailsPatch(detailsEdits, details, fieldByPath)
-      if (patch) edit.details = patch
+      const hwPatch = applyHardwareSystemEdits(hardware, hardwareEdits, hardwareSelections)
+      if (patch || hwPatch) {
+        edit.details = { ...(patch ?? {}), ...(hwPatch ? { hardware: hwPatch } : {}) }
+      }
     }
     return edit
   }
 
-  const pendingEdit = useMemo(buildEdit, [text, emails, phones, reviewNotes, internalNotesOverride, detailsEdits, fieldByPath, details, row])
+  const pendingEdit = useMemo(buildEdit, [text, emails, phones, reviewNotes, internalNotesOverride, detailsEdits, hardwareEdits, hardwareSelections, hardware, fieldByPath, details, row])
   const hasChanges = Object.keys(pendingEdit).length > 0
 
   async function handleSave() {
@@ -390,6 +428,23 @@ function ModalBody({ batchId, row }: { batchId: number; row: ImportRow }) {
             hideImportedNotes
             hideKeys={hardwareHideKeys}
             systemExtras={systemHardware}
+            // H3: make the parsed hardware fields editable here (before commit) with catalogue
+            // autocomplete — gated to unlocked rows, same as the registry fields.
+            extraEdits={hardwareEdits}
+            onExtraChange={locked ? undefined : handleHardwareChange}
+            renderExtraInput={
+              locked
+                ? undefined
+                : (field, value, onChange) => (
+                    <HardwareSearchInput
+                      value={value}
+                      onChange={onChange}
+                      onSelect={(result) => handleHardwareSelect(field.key, result)}
+                      category={field.category}
+                      placeholder={field.label}
+                    />
+                  )
+            }
           />
           {hardwareNotes.length > 0 && <HardwareNotes notes={hardwareNotes} />}
         </>

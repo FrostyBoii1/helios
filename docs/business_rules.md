@@ -180,9 +180,16 @@ explains intent; protect important explicit decisions with tests, not docs alone
   review may now edit `parsed.details.hardware` before commit, validated and merged by the **same**
   `JobHardwarePatch` shape rule as a live Job edit (one shared merge — review and live cannot diverge);
   `original_parsed` and the raw workbook cells are preserved, and commit persists the edited snapshot
-  verbatim (the parser is not re-run). When a catalogue result is selected (future UI), the snapshot
-  records confidence `manual_correction` and keeps `canonical_hardware_id_at_parse_time` as provenance
-  only — **never a live catalogue reference**.
+  verbatim (the parser is not re-run). The import-review screen exposes these as **editable hardware
+  textboxes with catalogue autocomplete** (Panel type / Inverter / Battery / Metering): typing free
+  text is always allowed and saved as-is; picking a catalogue result autofills the canonical text and
+  records confidence `manual_correction`, `parser_owned=false`, and `canonical_hardware_id_at_parse_time`
+  as provenance only — **never a live catalogue reference**. **The textbox text is the source of truth:
+  free-typed hardware (no selection) is saved as a manual correction that drops any stale catalogue id /
+  model / parser provenance — hidden catalogue provenance exists ONLY when the reviewer actually picks a
+  result**, so a field can never show one model while silently carrying another's id. Low-confidence/unconfirmed items carry an
+  unobtrusive "review" marker but stay editable (uncertainty is shown, not hidden). Quantity (`N ×
+  MODEL`) round-trips. Locked (committed/reversed) rows are read-only.
 
 ## Labels & approval (workflow signals)
 

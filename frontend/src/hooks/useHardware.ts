@@ -15,6 +15,7 @@ import {
   listHardware,
   restoreAlias,
   restoreHardware,
+  searchHardware,
   updateAlias,
   updateHardware,
   type ListHardwareParams,
@@ -22,6 +23,7 @@ import {
 import type {
   HardwareAliasCreateInput,
   HardwareAliasUpdateInput,
+  HardwareCategory,
   HardwareCreateInput,
   HardwareDeletedMode,
   HardwareUpdateInput,
@@ -37,6 +39,22 @@ export function useHardwareList(params: ListHardwareParams, options?: { enabled?
     queryKey: keys.list(params),
     queryFn: () => listHardware(params),
     enabled: options?.enabled ?? true,
+  })
+}
+
+// Authenticated-staff hardware autocomplete (GET /hardware/search). Caches per (q, category);
+// only fires once the query is at least 2 chars so a focused-but-empty box makes no request.
+export function useHardwareSearch(
+  q: string,
+  category?: HardwareCategory,
+  options?: { enabled?: boolean },
+) {
+  const trimmed = q.trim()
+  return useQuery({
+    queryKey: ['hardware', 'search', trimmed, category ?? null] as const,
+    queryFn: () => searchHardware({ q: trimmed, category, limit: 10 }),
+    enabled: (options?.enabled ?? true) && trimmed.length >= 2,
+    staleTime: 30_000,
   })
 }
 

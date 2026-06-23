@@ -8,7 +8,7 @@
 // blank CORE fields are revealed per-section via a "show empty fields" toggle;
 // blank legacy/import-only fields stay hidden. Dark SunCentral theme.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { FieldRegistry, FieldSpec, ParsedDetails } from '@/types/imports'
 import type { SystemHardwareField } from '@/lib/hardwareDisplay'
 
@@ -85,7 +85,7 @@ function FieldInput({ field, details, edit }: { field: FieldSpec; details: Parse
   return <input type={type} value={current} onChange={(e) => set(e.target.value)} className="input" />
 }
 
-function Section({ section, fields, details, edit, expanded, onToggle, addedPaths, onRemoveAdded, extras = [], extraEdits, onExtraChange }: {
+function Section({ section, fields, details, edit, expanded, onToggle, addedPaths, onRemoveAdded, extras = [], extraEdits, onExtraChange, renderExtraInput }: {
   section: { key: string; label: string }
   fields: FieldSpec[]
   details: ParsedDetails
@@ -99,6 +99,9 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
   extras?: SystemHardwareField[]
   extraEdits?: Record<string, string>
   onExtraChange?: (key: string, value: string) => void
+  // Optional custom input for an editable extra (e.g. a catalogue-search autocomplete). When
+  // omitted, editable extras render a plain text input.
+  renderExtraInput?: (field: SystemHardwareField, value: string, onChange: (value: string) => void) => ReactNode
 }) {
   const rows = fields.map((f) => ({ f, v: valueAtStorage(details, f.storage), path: detailsPath(f.storage) }))
   const populated = rows.filter((r) => !isBlank(r.v))
@@ -186,15 +189,30 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
           {extras.map((ex) => {
             const canEdit = !!onExtraChange && ex.editable
             const current = extraEdits?.[ex.key] ?? ex.value
+            const change = (value: string) => onExtraChange?.(ex.key, value)
             return (
               <div key={ex.key} className="flex min-w-0 flex-col">
-                <span className="mb-0.5 text-xs text-faint">{ex.label}</span>
+                <span className="mb-0.5 flex items-center gap-1.5 text-xs text-faint">
+                  {ex.label}
+                  {ex.lowConfidence && (
+                    <span
+                      className="rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300"
+                      title="Low-confidence / unconfirmed — please review (still editable)"
+                    >
+                      review
+                    </span>
+                  )}
+                </span>
                 {canEdit ? (
-                  <input
-                    value={current}
-                    onChange={(e) => onExtraChange?.(ex.key, e.target.value)}
-                    className="input mt-0.5 px-2 py-1 text-sm"
-                  />
+                  renderExtraInput ? (
+                    renderExtraInput(ex, current, change)
+                  ) : (
+                    <input
+                      value={current}
+                      onChange={(e) => change(e.target.value)}
+                      className="input mt-0.5 px-2 py-1 text-sm"
+                    />
+                  )
                 ) : (
                   <span className={`break-words text-sm ${ex.value ? 'text-fg' : 'text-faint'}`}>
                     {ex.value || '—'}
@@ -209,7 +227,7 @@ function Section({ section, fields, details, edit, expanded, onToggle, addedPath
   )
 }
 
-export function StructuredDetailsView({ registry, details, editable, edits, onChange, originalDetails, hideImportedNotes, hideKeys = [], systemExtras = [], extraEdits, onExtraChange }: {
+export function StructuredDetailsView({ registry, details, editable, edits, onChange, originalDetails, hideImportedNotes, hideKeys = [], systemExtras = [], extraEdits, onExtraChange, renderExtraInput }: {
   registry: FieldRegistry
   details: ParsedDetails
   editable?: boolean
@@ -232,6 +250,9 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
   systemExtras?: SystemHardwareField[]
   extraEdits?: Record<string, string>
   onExtraChange?: (key: string, value: string) => void
+  // Optional custom input renderer for editable System-hardware extras (e.g. a catalogue-search
+  // autocomplete). Applied only to the System section's extras; omit for a plain text input.
+  renderExtraInput?: (field: SystemHardwareField, value: string, onChange: (value: string) => void) => ReactNode
 }) {
   const edit: EditCtx | null =
     editable && edits && onChange ? { edits, onChange, originalDetails: originalDetails ?? null } : null
@@ -311,6 +332,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
             extras={section.key === 'system' ? systemExtras : []}
             extraEdits={extraEdits}
             onExtraChange={section.key === 'system' ? onExtraChange : undefined}
+            renderExtraInput={section.key === 'system' ? renderExtraInput : undefined}
           />
         )
       })}

@@ -9,6 +9,55 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Hardware Parser lane, H3: import-review editable hardware UI with catalogue autocomplete (frontend only)
+
+- **Why:** make parsed hardware correctable DURING import review, before commit — using the H1 search
+  feed and the H2 import-review hardware-edit path. No Job Detail or Settings change; this is the
+  import-review screen only.
+- **What:** in the import row modal the parsed hardware now renders as **editable System fields**
+  (Panel type / Inverter / Battery / Metering) with **catalogue autocomplete**, not a separate box.
+  - **`HardwareSearchInput`** (new, `components/imports/HardwareSearchInput.tsx`): a free-text input
+    that queries `GET /api/v1/hardware/search` (debounced, ≥2 chars, cached per q+category via the new
+    `useHardwareSearch` hook) and offers canonical suggestions. Typing free text is always allowed and
+    saved as-is; clicking a suggestion autofills the canonical display/model text (preserving any
+    leading `N ×` quantity prefix) and records provenance.
+  - **`StructuredDetailsView`** gained an optional `renderExtraInput` prop (custom input for an
+    editable System-hardware extra) + an unobtrusive **"review"** marker when a field is
+    low-confidence/unconfirmed (`SystemHardwareField.lowConfidence`/`category`, set by
+    `deriveSystemHardware`). The marker never hides the value or disables the textbox.
+  - **`ImportRowModal`** holds `hardwareEdits` + `hardwareSelections` state (reset on row change),
+    folds `applyHardwareSystemEdits(...)` into the SAME `ImportRowEdit.details` patch as the registry
+    edits (`details.hardware`), saved via the existing import-row edit API. Editable only on unlocked
+    rows; committed/reversed rows stay read-only. **Raw cells** + **Hardware notes** are unchanged.
+  - **Provenance rule (textbox text is the source of truth):** a catalogue **selection** stamps
+    `canonical_hardware_id_at_parse_time` (the DB id — provenance/debug ONLY, never a live reference),
+    `confidence = manual_correction`, `parser_owned = false`. **Free-typed** text (no selection) is
+    saved as a fresh **manual** item (`parser_owned = false`, `source_type = manual`,
+    `confidence = manual_correction`) that **drops any stale canonical id / catalogue model / parser
+    provenance** — only the single original `source_fragment` is kept as evidence (never invented). A
+    panel free-text edit likewise keeps only the panel **count** + `source_fragment` and drops the old
+    catalogue model / id / descriptors (brand / wattage / model_options / array_kw), so a field can
+    never display one model while silently carrying another's id. Typing after a pick clears that
+    field's selection. Quantity round-trips (e.g. `2 × SAJ B2-20.0-HV1`).
+- **Scope:** frontend/import-review only — **no backend**, no migration, **Job Detail page untouched**
+  (it still calls the shared `applyHardwareSystemEdits`/`StructuredDetailsView` via their original,
+  backward-compatible signatures — the new params are optional), no Settings>Hardware UI change, no
+  parser/ingest/commit/reverse change, no NAS/proposal/scheduling.
+- **Verification:** frontend typecheck + lint (`--max-warnings 0`) + build clean. The pure
+  `hardwareDisplay` logic (category/lowConfidence derivation, selection provenance stamping, free-text
+  vs selection, quantity round-trip, panel selection) verified via an esbuild+Node harness over the
+  public exports (16 assertions). Two adversarial reviewers (data-flow + UX/scope) → GATE: PASS after
+  fixing one found bug (a stale catalogue selection surviving a later free-text edit — now cleared on
+  type). No frontend unit-test runner exists; component behaviour is covered by manual steps.
+- **Files:** frontend `components/imports/HardwareSearchInput.tsx` (new),
+  `components/imports/ImportRowModal.tsx`, `components/structured/StructuredDetailsView.tsx`,
+  `lib/hardwareDisplay.ts`, `lib/hardware.ts`, `hooks/useHardware.ts`, `types/index.ts`; docs
+  (CHANGES, DEVELOPER_HANDOFF, business_rules). Permanent.
+- **Deferred:** Job Detail hardware fields using the same component (H4); always-editable Job Detail
+  overhaul (H5); keyboard navigation / ARIA for the dropdown (non-blocking polish).
+
+---
+
 ## 2026-06-23 — Hardware Parser lane, H1+H2: staff hardware search endpoint + editable import-review hardware (backend only)
 
 - **Why:** backend foundation for searchable hardware textboxes (autocomplete) and for editing parsed

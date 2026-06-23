@@ -375,6 +375,25 @@ These are stubbed/absent and represent the next phases:
   commit read the same stored snapshot and commit persists it verbatim (no re-parse); approve/reject/skip/
   group unchanged. No `ImportRowEdit` schema change (its `details` is already a free dict). H2 tests in
   `tests/test_import_structured_edit.py` + `tests/test_import_hardware.py`. Both backend-only, no migration.
+  **(H3 — import-review editable hardware UI, frontend)** the import row modal now renders parsed
+  hardware as EDITABLE System fields with catalogue autocomplete. New `components/imports/
+  HardwareSearchInput.tsx` (debounced free-text input → `GET /hardware/search` via `useHardwareSearch`;
+  click a suggestion to autofill canonical text, preserving any `N ×` prefix). `StructuredDetailsView`
+  gained an optional `renderExtraInput` prop + a low-confidence "review" marker
+  (`SystemHardwareField.category`/`lowConfidence` from `deriveSystemHardware`). `ImportRowModal` keeps
+  `hardwareEdits`+`hardwareSelections` (reset on row change; typing clears a field's stale selection)
+  and folds `applyHardwareSystemEdits(hw, edits, selections)` into the SAME `ImportRowEdit.details`
+  patch (`details.hardware`) saved via the existing edit API; editable only on unlocked rows; Raw
+  cells + Hardware notes unchanged. **Provenance rule:** a catalogue pick stamps
+  `canonical_hardware_id_at_parse_time` (provenance only), `confidence='manual_correction'`,
+  `parser_owned=false`; **free-typed text drops ALL stale catalogue/parser provenance** (no carried
+  canonical id / model / descriptors) and is saved as a fresh manual item (`source_type='manual'`,
+  `confidence='manual_correction'`, single original `source_fragment` kept as evidence) — so a field
+  never displays one model while carrying another's id. `applyHardwareSystemEdits`
+  gained an optional 3rd `selections` arg and `SystemHardwareField` gained optional fields — all
+  backward-compatible, so **Job Detail (which still calls the 2-arg form + no `renderExtraInput`) is
+  unchanged**. Frontend-only, no backend/migration. Verified via typecheck/lint/build + an esbuild+Node
+  harness over the pure `hardwareDisplay` exports.
   **Stage 4C (next)** = frontend import-review display + uncertain/manual-review badges. Deferred:
   full multi-fragment bundle parsing + panel system-size derivation; a shared-alias-index optimisation
   (today `parse_hardware` rebuilds its index per enriched row). Then the remaining lane stages still

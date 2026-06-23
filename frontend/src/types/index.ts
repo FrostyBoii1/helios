@@ -401,6 +401,30 @@ export interface HardwareCatalogueListResponse {
   offset: number
 }
 
+// Lean, authenticated-staff search result (GET /hardware/search) — active canonical hardware ONLY,
+// for hardware-textbox autocomplete (import review now; Job Detail later). Mirrors the backend
+// HardwareSearchResult: NO aliases / alias_count / attributes / spec_source / is_active / timestamps.
+export interface HardwareSearchResult {
+  id: number
+  spec_id: string
+  category: HardwareCategory
+  display_name: string | null
+  canonical_model: string | null
+  brand: string | null
+  phases: string | null
+  nominal_kw: number | null
+  capacity_kwh: number | null
+  wattage_w: number | null
+  model_options: string[] | null
+}
+
+export interface HardwareSearchListResponse {
+  items: HardwareSearchResult[]
+  total: number
+  limit: number
+  offset: number
+}
+
 // Create payload (mirrors HardwareCatalogueCreate). spec_id is the stable id, set on
 // create and immutable thereafter; spec_source/attributes/is_active are server-managed
 // or advanced and not edited from this UI.

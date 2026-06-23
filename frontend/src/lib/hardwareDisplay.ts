@@ -8,9 +8,14 @@
 // Pure + read-only derivation (no catalogue lookup); editing maps a textbox back into
 // details.hardware (see applyHardwareSystemEdits).
 
+import type { HardwareCategory } from '@/types'
 import type { JobHardwareItem, JobHardwarePanel, JobHardwareSnapshot } from '@/types/imports'
 
 const LOW_CONFIDENCE = new Set(['unconfirmed_raw_text', 'manual_review'])
+
+function anyLowConfidence(items: JobHardwareItem[] | null | undefined): boolean {
+  return (items ?? []).some((it) => it.confidence != null && LOW_CONFIDENCE.has(it.confidence))
+}
 
 function itemModelText(it: JobHardwareItem): string {
   return (it.model_text ?? '').trim()
@@ -61,6 +66,11 @@ export interface SystemHardwareField {
   label: string
   value: string
   editable: boolean
+  // The catalogue category this field searches (drives autocomplete); absent for read-only rows.
+  category?: HardwareCategory
+  // True when any item in this bucket is low-confidence/unconfirmed — surfaces an unobtrusive
+  // "review" marker WITHOUT hiding the value or disabling the textbox.
+  lowConfidence?: boolean
 }
 
 /**
@@ -73,14 +83,19 @@ export function deriveSystemHardware(
   hw: JobHardwareSnapshot | null | undefined,
 ): SystemHardwareField[] {
   if (!hw) return []
+  const panelLow = hw.panel?.confidence != null && LOW_CONFIDENCE.has(hw.panel.confidence)
   const out: SystemHardwareField[] = [
-    { key: 'hw_panel', label: 'Panel type', value: panelDisplay(hw.panel), editable: true },
-    { key: 'hw_inverter', label: 'Inverter', value: joinModels(hw.inverters), editable: true },
-    { key: 'hw_battery', label: 'Battery', value: joinModels(hw.batteries), editable: true },
+    { key: 'hw_panel', label: 'Panel type', value: panelDisplay(hw.panel), editable: true,
+      category: 'panel', lowConfidence: panelLow },
+    { key: 'hw_inverter', label: 'Inverter', value: joinModels(hw.inverters), editable: true,
+      category: 'inverter', lowConfidence: anyLowConfidence(hw.inverters) },
+    { key: 'hw_battery', label: 'Battery', value: joinModels(hw.batteries), editable: true,
+      category: 'battery', lowConfidence: anyLowConfidence(hw.batteries) },
   ]
   const meteringValue = joinModels(hw.metering)
   if (meteringValue || (hw.metering?.length ?? 0) > 0) {
-    out.push({ key: 'hw_metering', label: 'Metering', value: meteringValue, editable: true })
+    out.push({ key: 'hw_metering', label: 'Metering', value: meteringValue, editable: true,
+               category: 'metering', lowConfidence: anyLowConfidence(hw.metering) })
   }
   const site = siteNoteBits(hw)
   if (site.length) {
@@ -114,38 +129,99 @@ export function deriveHardwareNotes(hw: JobHardwareSnapshot | null | undefined):
 
 // --- Editing: map an edited System-hardware textbox back into details.hardware --------------- //
 
-function textToItems(value: string, original: JobHardwareItem[] | null | undefined): JobHardwareItem[] {
+/** Provenance recorded when a user picks a catalogue result for a hardware field. Stamped onto the
+ *  snapshot as `canonical_hardware_id_at_parse_time` (provenance/debug ONLY — never a live
+ *  reference) + `confidence` (default `manual_correction`). `model` carries the catalogue
+ *  canonical_model, used to set the panel `model` on a panel selection. */
+export interface HardwareSelection {
+  id: number
+  confidence?: string
+  model?: string | null
+}
+
+function textToItems(
+  value: string,
+  original: JobHardwareItem[] | null | undefined,
+  selection?: HardwareSelection,
+): JobHardwareItem[] {
   const entries = value.split(',').map((s) => s.trim()).filter(Boolean)
-  // Common case (a single item retext): preserve its provenance, just update text + quantity. A
-  // "2 × MODEL" entry splits back into quantity 2 + model "MODEL" (the inverse of the display).
-  if (entries.length === 1 && original && original.length === 1) {
-    // The textbox always shows the "N ×" prefix when quantity > 1, so its absence means quantity 1.
+  // The one original source_fragment is kept as evidence (never invented); ALL other parser/
+  // catalogue provenance is dropped on a manual edit (the visible text is the source of truth).
+  const origFragment =
+    original && original.length === 1 ? original[0]?.source_fragment ?? undefined : undefined
+
+  // A single item (free-typed OR autocomplete-picked) becomes a fresh MANUAL item:
+  // parser_owned=false, source_type=manual, confidence=manual_correction, and NO stale
+  // canonical_hardware_id_at_parse_time / model / source_field / rule_version carried over. ONLY an
+  // actual catalogue selection stamps the chosen canonical id. Quantity comes from any "N ×" prefix.
+  if (entries.length === 1) {
     const { quantity, modelText } = splitQtyModel(entries[0] ?? '')
-    return [{ ...original[0], model_text: modelText, quantity: quantity ?? 1 }]
+    const item: JobHardwareItem = {
+      model_text: modelText,
+      quantity: quantity ?? 1,
+      confidence: selection?.confidence ?? 'manual_correction',
+      parser_owned: false,
+      source_type: 'manual',
+    }
+    if (selection) item.canonical_hardware_id_at_parse_time = selection.id
+    if (origFragment) item.source_fragment = origFragment
+    return [item]
   }
-  // Otherwise it is a manual edit — rebuild as manual items (quantity from the "N ×" prefix, else 1).
+  // A comma list is a manual multi-item rebuild — fresh manual items, no carried provenance.
   return entries.map((entry) => {
     const { quantity, modelText } = splitQtyModel(entry)
-    return { model_text: modelText, quantity: quantity ?? 1, parser_owned: false, source_type: 'manual' }
+    return {
+      model_text: modelText,
+      quantity: quantity ?? 1,
+      confidence: 'manual_correction',
+      parser_owned: false,
+      source_type: 'manual',
+    }
   })
 }
 
 /** Build the PARTIAL details.hardware patch from edited System-hardware fields. Only edited
  *  sub-sections are returned (the backend replaces those and preserves the rest); returns null when
- *  there are no edits. Never touches Settings > Hardware / the catalogue — only the Job snapshot. */
+ *  there are no edits. `selections` carries catalogue-pick provenance per field key. Never touches
+ *  Settings > Hardware / the catalogue — only the Job (or import-row) snapshot. */
 export function applyHardwareSystemEdits(
   hw: JobHardwareSnapshot | null | undefined,
   edits: Record<string, string>,
+  selections?: Record<string, HardwareSelection>,
 ): Partial<JobHardwareSnapshot> | null {
   const keys = Object.keys(edits)
   if (keys.length === 0) return null
   const patch: Partial<JobHardwareSnapshot> = {}
   if ('hw_panel' in edits) {
     const name = edits.hw_panel.trim()
-    patch.panel = { ...(hw?.panel ?? {}), display_name: name || null, parser_owned: false }
+    const sel = selections?.hw_panel
+    if (sel) {
+      // Catalogue selection -> stamp the chosen id/model/confidence as provenance.
+      patch.panel = {
+        ...(hw?.panel ?? {}),
+        display_name: name || null,
+        parser_owned: false,
+        canonical_hardware_id_at_parse_time: sel.id,
+        confidence: sel.confidence ?? 'manual_correction',
+        model: sel.model ?? null,
+      }
+    } else {
+      // Free-typed -> the text is the source of truth. Keep ONLY the panel count (independent of the
+      // model) + the single source_fragment as evidence; DROP all stale catalogue-model provenance
+      // (canonical id / model / model_options / brand / wattage / array_kw / rule version) so the
+      // panel can never display one model while silently carrying another's id.
+      const panel: JobHardwarePanel = {
+        display_name: name || null,
+        parser_owned: false,
+        confidence: 'manual_correction',
+      }
+      if (hw?.panel?.quantity != null) panel.quantity = hw.panel.quantity
+      if (hw?.panel?.source_fragment) panel.source_fragment = hw.panel.source_fragment
+      patch.panel = panel
+    }
   }
-  if ('hw_inverter' in edits) patch.inverters = textToItems(edits.hw_inverter, hw?.inverters)
-  if ('hw_battery' in edits) patch.batteries = textToItems(edits.hw_battery, hw?.batteries)
-  if ('hw_metering' in edits) patch.metering = textToItems(edits.hw_metering, hw?.metering)
+  if ('hw_inverter' in edits) patch.inverters = textToItems(edits.hw_inverter, hw?.inverters, selections?.hw_inverter)
+  if ('hw_battery' in edits) patch.batteries = textToItems(edits.hw_battery, hw?.batteries, selections?.hw_battery)
+  if ('hw_metering' in edits) patch.metering = textToItems(edits.hw_metering, hw?.metering, selections?.hw_metering)
   return patch
 }
