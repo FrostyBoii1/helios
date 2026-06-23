@@ -359,6 +359,22 @@ These are stubbed/absent and represent the next phases:
   snapshot → legacy System unchanged. Frontend-only — no backend change (the 4B snapshot is the
   source; the existing `{ details: { hardware } }` PATCH persists edits). Deferred: quantity + CT/export
   editing.
+  **(H1 — staff hardware SEARCH endpoint, backend)** `GET /api/v1/hardware/search` (`endpoints/hardware.py`),
+  gated on `get_current_user` (ANY authenticated staff, not admin), returns ONLY active + non-deleted
+  canonical hardware as a LEAN `HardwareSearchResult` (`schemas/hardware.py`: id/spec_id/category/
+  display_name/canonical_model/brand/phases/nominal_kw/capacity_kwh/wattage_w/model_options) — never
+  aliases/alias_count/attributes/spec_source/is_active/created_by/timestamps/deleted rows. `q`+`category`
+  filtering; reuses `list_hardware(..., active_only=True, deleted='exclude')` (new `active_only` flag,
+  default False keeps the admin list unchanged); declared before `/{hardware_id}`. All admin catalogue+
+  alias routes stay `require_admin`. Tests `tests/test_hardware_search.py`. **(H2 — editable import-review
+  hardware, backend)** `import_review.apply_details_patch` now splits the `hardware` key out and merges it
+  via the SHARED `details_patch.merge_hardware_subsections` (the renamed-public former `_merge_hardware`)
+  used by BOTH live `Job.details` edits and review — one `JobHardwarePatch`-validated merge, no divergence.
+  So an `ImportRowEdit.details` may carry `hardware`; invalid shape → 422; whole sub-sections replace,
+  null clears, absent preserved; `original_parsed` deep-copied (audit), raw cells untouched; preview/
+  commit read the same stored snapshot and commit persists it verbatim (no re-parse); approve/reject/skip/
+  group unchanged. No `ImportRowEdit` schema change (its `details` is already a free dict). H2 tests in
+  `tests/test_import_structured_edit.py` + `tests/test_import_hardware.py`. Both backend-only, no migration.
   **Stage 4C (next)** = frontend import-review display + uncertain/manual-review badges. Deferred:
   full multi-fragment bundle parsing + panel system-size derivation; a shared-alias-index optimisation
   (today `parse_hardware` rebuilds its index per enriched row). Then the remaining lane stages still

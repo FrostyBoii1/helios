@@ -66,15 +66,19 @@ def merge_details_patch(details: dict | None, patch: Any) -> dict:
         merged[section] = sect
 
     if hardware_patch is not _UNSET:
-        merged["hardware"] = _merge_hardware(merged.get("hardware"), hardware_patch)
+        merged["hardware"] = merge_hardware_subsections(merged.get("hardware"), hardware_patch)
     return merged
 
 
-def _merge_hardware(existing: Any, patch: Any) -> dict:
+def merge_hardware_subsections(existing: Any, patch: Any) -> dict:
     """Merge a validated hardware-snapshot patch into the existing hardware object. Each PROVIDED
     sub-section replaces that whole sub-section (a snapshot the user fully controls); an explicit
     ``null`` clears one; absent sub-sections are preserved. Validated by ``JobHardwarePatch`` —
-    unknown fields / wrong types raise ``ValueError`` (-> 422), so garbage can't reach details."""
+    unknown fields / wrong types raise ``ValueError`` (-> 422), so garbage can't reach details.
+
+    The SINGLE shared hardware-merge: both live ``Job.details`` edits (``merge_details_patch``) and
+    staging-side import-review edits (``import_review.apply_details_patch``) call this, so the two
+    paths can never diverge on how a hardware patch is validated or written."""
     if not isinstance(patch, dict):
         raise ValueError("hardware must be an object (partial snapshot), not null/scalar")
     validated = validate_hardware_patch(patch)

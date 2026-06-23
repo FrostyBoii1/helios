@@ -9,6 +9,8 @@ guarantee that a staging edit makes no live Customer/Job/Activity writes.
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -101,6 +103,89 @@ def test_apply_details_patch_rejects_disallowed_paths():
 
 
 # --------------------------------------------------------------------------- #
+# Hardware snapshot patch (H2) — the `hardware` key is validated by SHAPE
+# (JobHardwarePatch) and merged as whole sub-sections via the SAME shared helper
+# live Job.details edits use, NOT via the flat <section>.<key> whitelist.
+# --------------------------------------------------------------------------- #
+def test_apply_details_patch_accepts_and_merges_hardware():
+    parsed = {"details": {"_v": 2, "system": {"panel_count": 16}, "hardware": {
+        "inverters": [{"model_text": "Old Inv", "quantity": 1}],
+        "batteries": [{"model_text": "Keep Bat", "quantity": 2}],
+    }}}
+    out = import_review.apply_details_patch(parsed, {"hardware": {
+        "inverters": [{"model_text": "SAJ H2-10K-S3-A", "quantity": 1,
+                       "confidence": "manual_correction", "parser_owned": False}]
+    }})
+    hw = out["details"]["hardware"]
+    assert hw["inverters"][0]["model_text"] == "SAJ H2-10K-S3-A"   # provided sub-section replaced
+    assert hw["inverters"][0]["confidence"] == "manual_correction"
+    assert hw["batteries"][0]["model_text"] == "Keep Bat"          # absent sub-section preserved
+    assert out["details"]["system"]["panel_count"] == 16           # non-hardware details preserved
+    # input NOT mutated in place.
+    assert parsed["details"]["hardware"]["inverters"][0]["model_text"] == "Old Inv"
+
+
+def test_apply_details_patch_can_combine_hardware_and_registry_fields():
+    parsed = {"details": {"_v": 2, "system": {"panel_count": 16}}}
+    out = import_review.apply_details_patch(parsed, {
+        "system": {"panel_count": 24},
+        "hardware": {"inverters": [{"model_text": "Inv A", "quantity": 1}]},
+    })
+    assert out["details"]["system"]["panel_count"] == 24
+    assert out["details"]["hardware"]["inverters"][0]["model_text"] == "Inv A"
+
+
+def test_apply_details_patch_rejects_invalid_hardware_shape():
+    parsed = {"details": {"_v": 2}}
+    for patch in (
+        {"hardware": {"inverters": [{"bogus_field": 1}]}},   # extra='forbid'
+        {"hardware": {"unknown_section": []}},               # unknown sub-section
+        {"hardware": {"inverters": "not-a-list"}},           # wrong type
+        {"hardware": None},                                  # null is not an object
+    ):
+        with pytest.raises(ValueError):
+            import_review.apply_details_patch(parsed, patch)
+
+
+def _seed_hw_row(db: Session) -> tuple[ImportBatch, ImportRow]:
+    b = ImportBatch(source_filename="syn.xlsx", sheet_name="COMPLETED",
+                    status=ImportBatchStatus.PARSED.value)
+    db.add(b)
+    db.flush()
+    r = ImportRow(
+        batch_id=b.id, source_row_index=2, row_class=ImportRowClass.JOB.value,
+        legacy_reference="TESTIMPHW01", raw={"address": "1 HW St", "inverter": "raw cell text"},
+        parsed={"customer_name": "Pat", "details": {"_v": 2, "system": {"panel_count": 16},
+                "hardware": {"inverters": [{"model_text": "Parsed Inv",
+                                            "quantity": 1, "confidence": "unconfirmed_raw_text"}]}}},
+        review_status=ImportRowReviewStatus.PENDING.value,
+    )
+    db.add(r)
+    db.flush()
+    return b, r
+
+
+def test_edit_row_hardware_updates_parsed_preserves_original_and_raw(db_session: Session, users):
+    b, r = _seed_hw_row(db_session)
+    raw_before = copy.deepcopy(r.raw)
+    import_review.edit_row(
+        db_session, b, r,
+        {"details": {"hardware": {"inverters": [
+            {"model_text": "SAJ H2-10K-S3-A", "quantity": 1,
+             "confidence": "manual_correction", "parser_owned": False}]}}},
+        actor_id=users["admin"].id,
+    )
+    db_session.flush()
+    # parsed.details.hardware updated...
+    assert r.parsed["details"]["hardware"]["inverters"][0]["model_text"] == "SAJ H2-10K-S3-A"
+    assert r.parsed["details"]["hardware"]["inverters"][0]["confidence"] == "manual_correction"
+    # ...original_parsed preserves the pre-edit parser suggestion (audit)...
+    assert r.original_parsed["details"]["hardware"]["inverters"][0]["model_text"] == "Parsed Inv"
+    # ...and raw workbook cells are untouched.
+    assert r.raw == raw_before
+
+
+# --------------------------------------------------------------------------- #
 # edit_row: deep snapshot + flat back-compat (service level, seeded row)
 # --------------------------------------------------------------------------- #
 def _seed_row(db: Session) -> tuple[ImportBatch, ImportRow]:
@@ -168,3 +253,25 @@ def test_details_patch_endpoint_accepts_and_rejects(client_for, users, db_sessio
     assert db_session.scalar(select(func.count()).select_from(Customer)) == c0
     assert db_session.scalar(select(func.count()).select_from(Job)) == j0
     assert db_session.scalar(select(func.count()).select_from(Activity)) == a0
+
+
+def test_review_edit_endpoint_accepts_hardware_and_rejects_invalid(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
+
+    ok = admin.patch(
+        f"/api/v1/imports/{bid}/rows/{row['id']}",
+        json={"details": {"hardware": {"inverters": [
+            {"model_text": "Manual Inv 1", "quantity": 1,
+             "confidence": "manual_correction", "parser_owned": False}]}}},
+    )
+    assert ok.status_code == 200, ok.text
+    hw = ok.json()["parsed"]["details"]["hardware"]
+    assert hw["inverters"][0]["model_text"] == "Manual Inv 1"
+    assert hw["inverters"][0]["confidence"] == "manual_correction"
+
+    # Invalid hardware shape -> 422 (same JobHardwarePatch contract as live + commit).
+    bad = admin.patch(f"/api/v1/imports/{bid}/rows/{row['id']}",
+                      json={"details": {"hardware": {"inverters": [{"bogus": 1}]}}})
+    assert bad.status_code == 422

@@ -9,6 +9,59 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Hardware Parser lane, H1+H2: staff hardware search endpoint + editable import-review hardware (backend only)
+
+- **Why:** backend foundation for searchable hardware textboxes (autocomplete) and for editing parsed
+  hardware during import review before commit. No UI is built in this slice — it makes both live Jobs
+  and import review able to read/validate the SAME hardware-snapshot shape before screens get
+  autocomplete.
+- **H1 — lean staff search endpoint:** new `GET /api/v1/hardware/search` (`endpoints/hardware.py`),
+  gated on `get_current_user` (**any authenticated staff, NOT admin-only**). Returns ONLY **active
+  (`is_active`) + non-deleted** canonical hardware as a **lean** `HardwareSearchResult`
+  (`schemas/hardware.py`): `id, spec_id, category, display_name, canonical_model, brand, phases,
+  nominal_kw, capacity_kwh, wattage_w, model_options` — and deliberately **never** aliases,
+  `alias_count`, `attributes`, `spec_source`, `is_active`, `created_by`, timestamps, or deleted rows.
+  Supports `q` (ILIKE over canonical_model/display_name/brand/spec_id) + `category` filtering. Reuses
+  the existing `list_hardware` service via a new `active_only` flag (default `False`, so the admin
+  catalogue list is unchanged). **All existing `/api/v1/hardware` catalogue + alias CRUD routes stay
+  admin-only** (regression-tested). The route is declared before `/{hardware_id}` so "search" never
+  falls through to the int route.
+- **H2 — editable import-review hardware:** `import_review.apply_details_patch` now splits the
+  `hardware` key out of a details patch and merges it via the **same shared helper** the live
+  `Job.details` patch uses. The private `_merge_hardware` in `services/details_patch.py` was promoted
+  to public **`merge_hardware_subsections`** and is now called by BOTH `merge_details_patch` (live)
+  and `apply_details_patch` (review) — **one validation/merge, no divergence**. So an `ImportRowEdit`
+  may carry `details.hardware`; it is validated by `JobHardwarePatch` (`extra='forbid'`) exactly like
+  live + commit (invalid shape → 422), whole sub-sections replace, explicit `null` clears, absent
+  sub-sections are preserved. `original_parsed` is still deep-copied on first edit (audit), raw
+  workbook cells are untouched, preview/review/commit read the same stored `parsed.details.hardware`,
+  and commit persists it verbatim (the parser is **not** re-run). Approve/reject/skip/group flows are
+  unchanged. No `ImportRowEdit` schema change was needed — `details` is already a free dict.
+- **Scope:** backend only — **no frontend**, **no migration** (reuses existing tables + JSONB;
+  `alembic check` clean), no Settings>Hardware UI / CRUD change, no Job Detail UI change, no parser
+  runtime behaviour change (only shared validation/merge plumbing), no NAS/proposal/scheduling, no
+  live data/import/commit-to-live/reverse actions.
+- **Verification:** new `tests/test_hardware_search.py` (auth-required 401, non-admin 200, active+
+  non-deleted only, lean-keys/no-alias-leak, q/category filter, admin routes still 403); H2 tests in
+  `tests/test_import_structured_edit.py` (apply accepts/merges hardware, combines with registry
+  fields, rejects 4 invalid shapes, edit_row preserves original_parsed + raw, endpoint 200/422) and
+  `tests/test_import_hardware.py` (review edit → preview → commit persists exactly; an impossible
+  manual value surviving commit proves no re-parse). Full backend suite **602 passed**; `alembic
+  current/check` clean; `git diff --check` clean; static scope scan = all changes backend `.py`. Two
+  adversarial reviewers (H1 security / H2 correctness) returned GATE: PASS.
+- **Files:** `backend/app/api/v1/endpoints/hardware.py`, `backend/app/schemas/hardware.py`,
+  `backend/app/services/hardware.py`, `backend/app/services/details_patch.py`,
+  `backend/app/services/import_review.py`, `backend/tests/test_hardware_search.py` (new),
+  `backend/tests/test_import_structured_edit.py`, `backend/tests/test_import_hardware.py`; docs
+  (CHANGES, DEVELOPER_HANDOFF, business_rules). Permanent.
+- **Deferred (next):** frontend `HardwareSearchInput` + ImportRowModal editable hardware UI (H3),
+  Job Detail hardware fields using the same component (H4), and the always-editable Job Detail
+  overhaul (H5). When a user selects a catalogue result, the intended snapshot confidence is
+  `manual_correction` and `canonical_hardware_id_at_parse_time` records the DB id as provenance only
+  (never a live reference) — to be wired in H3/H4.
+
+---
+
 ## 2026-06-23 — Hardware Parser lane, parser fix: preserve item quantity, keep capacity evidence out of model_text (backend)
 
 - **Why (owner blocker):** a hardware cell like `SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs`

@@ -12,7 +12,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_admin
+from app.api.deps import get_current_user, require_admin
 from app.db.session import get_db
 from app.models.enums import HardwareCategory
 from app.models.user import User
@@ -25,6 +25,8 @@ from app.schemas.hardware import (
     HardwareCatalogueList,
     HardwareCatalogueRead,
     HardwareCatalogueUpdate,
+    HardwareSearchList,
+    HardwareSearchResult,
 )
 from app.services import hardware as hardware_service
 
@@ -84,6 +86,34 @@ def create_hardware(
     db.commit()
     db.refresh(hw)
     return _read(db, hw)
+
+
+# --------------------------------------------------------------------------- #
+# Lean staff search (authenticated, NOT admin) — for hardware autocomplete.
+# Returns ONLY active, non-deleted canonical hardware as lean rows: NO aliases /
+# alias_count, NO attributes / spec_source / created_by / is_active / timestamps.
+# Declared before GET /{hardware_id} so "search" never falls through to the int route.
+# --------------------------------------------------------------------------- #
+@router.get("/search", response_model=HardwareSearchList)
+def search_hardware(
+    q: str | None = Query(default=None, description="Search canonical_model/display_name/brand/spec_id"),
+    category: HardwareCategory | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> HardwareSearchList:
+    """Authenticated (not admin) lean search over ACTIVE, non-deleted canonical hardware. Reuses
+    the catalogue query with ``active_only`` + ``deleted='exclude'``; never returns aliases or any
+    admin-only internals (see ``HardwareSearchResult``)."""
+    items, total = hardware_service.list_hardware(
+        db, q=q, category=category.value if category else None,
+        deleted="exclude", active_only=True, limit=limit, offset=offset,
+    )
+    return HardwareSearchList(
+        items=[HardwareSearchResult.model_validate(h) for h in items],
+        total=total, limit=limit, offset=offset,
+    )
 
 
 @router.get("/{hardware_id}", response_model=HardwareCatalogueRead)

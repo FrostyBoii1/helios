@@ -24,7 +24,7 @@ from app.models.enums import (
 from app.models.hardware import HardwareAlias, HardwareCatalogue
 from app.models.import_staging import ImportBatch, ImportRow
 from app.models.job import Job
-from app.services import import_commit, import_ingest, import_reverse
+from app.services import import_commit, import_ingest, import_review, import_reverse
 from app.services.import_commit_preview import map_job_preview
 from app.services.import_hardware import enrich_row_hardware, validate_committed_hardware
 from tests.test_import import _synthetic_bytes
@@ -133,6 +133,39 @@ def test_preview_and_commit_use_same_stored_hardware(seeded, users):
     assert job is not None
     assert job.details["hardware"] == hardware
     assert job.details["hardware"] == row.parsed["details"]["hardware"]  # same source
+
+
+def test_review_edited_hardware_previews_and_commits_exactly(seeded, users):
+    """H2 end-to-end: a review edit to parsed.details.hardware flows through preview AND commit
+    verbatim. The edited model is a value the parser would NEVER produce, so its survival at commit
+    proves the parser is not re-run — commit persists the stored (edited) snapshot exactly."""
+    b, row = _seed_committable(
+        seeded, ref="HW-H2-0001",
+        hardware={"inverters": [{"model_text": "Goodwe GW5000", "quantity": 1}]},
+    )
+    import_review.edit_row(
+        seeded, b, row,
+        {"details": {"hardware": {"inverters": [
+            {"model_text": "MANUAL-EDIT-XYZ", "quantity": 3,
+             "confidence": "manual_correction", "parser_owned": False}]}}},
+        actor_id=users["admin"].id,
+    )
+    seeded.flush()
+
+    # Preview reflects the edited value (preview reads the same stored parsed.details).
+    preview = map_job_preview(row.parsed, predicted_case_number="X",
+                              legacy_reference=row.legacy_reference, raw=row.raw)
+    assert preview["details"]["hardware"]["inverters"][0]["model_text"] == "MANUAL-EDIT-XYZ"
+
+    # Commit persists exactly the edited snapshot (no re-parse).
+    import_commit.commit_batch(seeded, b, actor_id=users["admin"].id)
+    seeded.refresh(row)
+    job = seeded.get(Job, row.committed_job_id)
+    assert job is not None
+    inv = job.details["hardware"]["inverters"][0]
+    assert inv["model_text"] == "MANUAL-EDIT-XYZ" and inv["quantity"] == 3
+    assert inv["confidence"] == "manual_correction"
+    assert job.details["hardware"] == row.parsed["details"]["hardware"]  # commit == stored edited
 
 
 def test_commit_rejects_malformed_hardware_safely(seeded, users):

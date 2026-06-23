@@ -172,6 +172,17 @@ explains intent; protect important explicit decisions with tests, not docs alone
   provenance; still shown as raw source-cell data in import review's Raw cells). Import review shows the
   same parsed hardware values read-only (what will commit). When no structured snapshot exists, the
   legacy System display is unchanged. Deferred: editing item quantity and CT/export site-notes.
+  **(Hardware search + import-review edit — backend foundation)** a lean staff search endpoint
+  (`GET /api/v1/hardware/search`) lets ANY authenticated staff (not only admins) look up **active,
+  non-deleted** canonical hardware for autocomplete; it returns display/disambiguation fields ONLY and
+  **never exposes aliases or admin-only internals** (aliases remain admin-only). It is read-only and
+  changes no snapshot — a selection only influences a future user edit, never an existing Job. Import
+  review may now edit `parsed.details.hardware` before commit, validated and merged by the **same**
+  `JobHardwarePatch` shape rule as a live Job edit (one shared merge — review and live cannot diverge);
+  `original_parsed` and the raw workbook cells are preserved, and commit persists the edited snapshot
+  verbatim (the parser is not re-run). When a catalogue result is selected (future UI), the snapshot
+  records confidence `manual_correction` and keeps `canonical_hardware_id_at_parse_time` as provenance
+  only — **never a live catalogue reference**.
 
 ## Labels & approval (workflow signals)
 

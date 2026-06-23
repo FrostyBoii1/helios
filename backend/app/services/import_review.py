@@ -30,6 +30,7 @@ from app.models.import_staging import (
 from app.schemas.import_staging import PARSED_EDIT_FIELDS
 from app.services.activity import log_activity
 from app.services.customers import get_customer
+from app.services.details_patch import merge_hardware_subsections
 from app.services.import_field_registry import allowed_details_paths
 
 APPROVABLE_CLASSES = (ImportRowClass.JOB.value, ImportRowClass.AMBIGUOUS.value)
@@ -104,10 +105,18 @@ def apply_details_patch(parsed: dict, patch: dict) -> dict:
 
     Only the registry's editable ``job.details.<section>.<key>`` leaf paths may be
     written; any other path (unknown section/key, or a derived/read-only path such
-    as flags/provenance/notes.misfiled) raises ValueError (-> HTTP 422). Never
-    mutates the input in place.
+    as flags/provenance/notes.misfiled) raises ValueError (-> HTTP 422). The
+    ``hardware`` snapshot is the one exception: it is validated by SHAPE
+    (``JobHardwarePatch``) and merged as whole sub-sections via the SAME shared
+    helper live ``Job.details`` edits use (``merge_hardware_subsections``) — never
+    the flat path whitelist — so review and live edits can't diverge. Never mutates
+    the input in place.
     """
-    leaves = _flatten_leaves(patch)
+    rest = dict(patch or {})
+    has_hardware = "hardware" in rest
+    hardware_patch = rest.pop("hardware", None)
+
+    leaves = _flatten_leaves(rest)
     allowed = allowed_details_paths()
     disallowed = sorted(p for p in leaves if p not in allowed)
     if disallowed:
@@ -123,6 +132,8 @@ def apply_details_patch(parsed: dict, patch: dict) -> dict:
         sect = dict(sect) if isinstance(sect, dict) else {}
         sect[key] = value
         details[section] = sect
+    if has_hardware:
+        details["hardware"] = merge_hardware_subsections(details.get("hardware"), hardware_patch)
     parsed["details"] = details
     return parsed
 

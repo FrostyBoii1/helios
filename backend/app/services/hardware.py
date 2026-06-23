@@ -45,17 +45,22 @@ def list_hardware(
     capacity_kwh: float | None = None,
     wattage_w: int | None = None,
     deleted: str = "exclude",
+    active_only: bool = False,
     limit: int = 25,
     offset: int = 0,
 ) -> tuple[list[HardwareCatalogue], int]:
-    """(page of catalogue, total). `deleted`: exclude (default, active only) / only (the DELETED
-    section) / include (both). `q` searches spec_id/canonical_model/display_name/brand."""
+    """(page of catalogue, total). `deleted`: exclude (default, not soft-deleted) / only (the
+    DELETED section) / include (both). `active_only` additionally requires the spec `is_active`
+    flag (the admin catalogue list shows inactive entries; the staff search endpoint sets it True).
+    `q` searches spec_id/canonical_model/display_name/brand."""
     filters = []
     if deleted == "exclude":
         filters.append(HardwareCatalogue.deleted_at.is_(None))
     elif deleted == "only":
         filters.append(HardwareCatalogue.deleted_at.is_not(None))
     # "include" -> no deleted filter
+    if active_only:
+        filters.append(HardwareCatalogue.is_active.is_(True))
 
     if category:
         filters.append(HardwareCatalogue.category == _enum_value(category))

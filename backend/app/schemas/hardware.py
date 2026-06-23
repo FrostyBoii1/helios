@@ -87,6 +87,38 @@ class HardwareCatalogueList(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# Lean staff search (authenticated, NOT admin) — hardware autocomplete
+# --------------------------------------------------------------------------- #
+class HardwareSearchResult(BaseModel):
+    """Lean canonical-hardware row for staff autocomplete. Carries ONLY display/disambiguation
+    fields — deliberately NO aliases / alias_count, NO attributes / spec_source / created_by /
+    is_active / timestamps / deleted_at, and only active, non-deleted rows are ever returned. `id`
+    is the catalogue DB id (a future selection may record it as ``canonical_hardware_id_at_parse_time``
+    provenance — never a live reference); `spec_id` is the stable external id."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    spec_id: str
+    category: str
+    display_name: str | None
+    canonical_model: str | None
+    brand: str | None
+    phases: str | None
+    nominal_kw: float | None
+    capacity_kwh: float | None
+    wattage_w: int | None
+    model_options: list | None
+
+
+class HardwareSearchList(BaseModel):
+    items: list[HardwareSearchResult]
+    total: int
+    limit: int
+    offset: int
+
+
+# --------------------------------------------------------------------------- #
 # Aliases (admin-only — never exposed to normal users)
 # --------------------------------------------------------------------------- #
 class HardwareAliasBase(BaseModel):
