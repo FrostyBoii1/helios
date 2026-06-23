@@ -9,6 +9,52 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-24 — Hardware Parser P3: route unmatched battery/metering evidence to the right bucket (runtime only)
+
+- **Why:** the remaining structural-correctness gap from the audit — an UNMATCHED fragment always fell
+  into the `inverters` bucket, so a Job's System display showed battery/metering evidence (`12.8kw
+  batt`, `1 SBR096 battery`, `export meter`) as an *inverter*. The audit estimated ~265 affected rows.
+- **What (`app/hardware/runtime.py` only):** after all catalogue matching (direct / P1 split / P2
+  normalization) fails, the unmatched fragment is now bucketed by `_hardware_signal(frag)` —
+  `batteries` for a `batt`-prefixed word or a Sungrow `SBR<digit>` shorthand (`_BATTERY_HINT_RE`),
+  `metering` for a `meter`-prefixed word or `current transformer` (`_METERING_HINT_RE`) — defaulting
+  to `inverters` when there is no strong signal. The same signal also guards the site-note step: a
+  fragment that is metering/battery *hardware* (e.g. `smart meter 5kw export`) is no longer swallowed
+  into a NON-CT site bucket (`export_limit`/`underground`/`comms`); **bare CT still routes to
+  `site_notes.ct` unchanged**.
+- **Conservative by construction:**
+  - **Raw only** — routed items keep `confidence = unconfirmed_raw_text` and **no
+    `canonical_hardware_id`** is ever invented (no model is guessed); only the bucket changes.
+  - **Inverter stays the default** — ambiguous inverter capacity (`Solis 5kw`, `Goodwe 10kw`, `10kw
+    inverter`) has no battery/metering signal and stays a raw inverter item.
+  - **Matching is untouched** — runs only on the unmatched path, so every direct/P1/P2 match (incl.
+    `SBR128 BATT` → matched battery via P2) is unaffected; capacity-only text still routes to
+    `site_notes.raw_misc`; `source_fragment` and quantity are preserved (`6 x 3.2 batt` → battery ×6).
+  - **No CT regression**, no catalogue/alias/YAML change, source_examples still never resolve.
+- **Behaviour, before → after (live):** `1 SBR096 battery` / `12.8kw batt` → **batteries** (were
+  inverter); `1 export meter` / `smart meter 5kw export` → **metering** (were inverter / a buried
+  export-limit note); `Sungrow 10kW SH10RT/SBR128 BATT` → inverter `SH10RT` + battery `SBR128`
+  (unchanged); `Solis 5kw` → inverter raw (unchanged); canonical SAJ string → unchanged.
+- **Audit delta over COMPLETED:** **130 raw evidence items moved out of the inverter bucket** — 112
+  → batteries, 18 → metering. Fully-clean rows 1,153 → 1,149 and raw rows 530 → 534 (a small,
+  intentional shift: ~4 rows' `smart meter 5kw export`-style evidence moved from a hidden
+  `export_limit` site-note into a *visible, flagged* metering item — more honest, not a quality loss).
+- **Scope:** backend parser runtime + tests only. No frontend, imports UI, import commit/reverse,
+  Settings, NAS/proposal, scheduling, migration, data files, catalogue seed/aliases, or vendored
+  `parser_specs` YAML.
+- **Tests:** `tests/test_hardware_runtime.py` adds a P3 section (battery-word / capacity-batt → batteries;
+  `SBR128 BATT` stays matched battery; export-meter / smart-meter-export → metering; quantity preserved
+  when routing; ambiguous inverter capacity stays inverter; CT still → `site_notes.ct`). **634 backend
+  tests pass**; spec-validation green; `alembic check` clean.
+- **Files:** `backend/app/hardware/runtime.py`, `backend/tests/test_hardware_runtime.py`; docs
+  (CHANGES, DEVELOPER_HANDOFF). Permanent.
+- **Deferred (next slices):** P4 catalogue adds (T-BAT, X1-VAST, X3-ULT, Swatten all-in-one, Neovolt
+  variants, Alpha extensions, missing brands), metering vocab expansion, in-fragment capacity-in-noun
+  extraction (`16kw hrs battery` → split model + capacity note), leading-`1`+model resolution, and the
+  (un-authorized) clean-wipe + reimport.
+
+---
+
 ## 2026-06-24 — Hardware Parser P2: brand-prefix / noise normalization (runtime only)
 
 - **Why:** the E2E audit's #1 *resolution* gap — the catalogue stores bare model aliases (`SH10RT`,

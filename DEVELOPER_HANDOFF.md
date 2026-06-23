@@ -351,11 +351,22 @@ These are stubbed/absent and represent the next phases:
   stays original, `model_text` becomes the resolved canonical). Result: `Solax Power X1-SMT-10K-G2` ->
   `X1-SMT-10K-G2`, `Sungrow SH10RT` -> `SH10RT`, `Sungrow 10kW SH10RT/SBR128 BATT` -> inverter `SH10RT`
   + battery `SBR128`. Audit delta over COMPLETED (confidence metric): fully-clean rows **654 -> 1,153**,
-  raw rows **1,029 -> 530** (~halved). 625 backend tests pass. Deferred to later audit slices: **P3
-  bucket routing** (unmatched battery/metering text still lands in the inverter field, 265 rows), **P4
-  catalogue adds**, metering vocab (`export meter`/`with meter`), in-fragment capacity-in-noun
-  extraction (`16kw hrs battery`), leading-`1`+trailing-noun forms (`1 SBR128 battery`), and the
-  (un-authorized) clean-wipe + reimport.
+  raw rows **1,029 -> 530** (~halved). 625 backend tests pass.
+  **(Hardware Parser P3 — unmatched battery/metering bucket routing, runtime)** after all catalogue
+  matching fails, an unmatched fragment is bucketed by `_hardware_signal(frag)` — `batteries` for a
+  `batt`-word or Sungrow `SBR<digit>` (`_BATTERY_HINT_RE`), `metering` for a `meter`-word /
+  `current transformer` (`_METERING_HINT_RE`), else `inverters` — so a Job never shows battery/meter
+  evidence as an inverter. The same signal guards the site-note step: a metering/battery HARDWARE
+  fragment (`smart meter 5kw export`) is not swallowed into a non-CT site bucket; bare CT still ->
+  `site_notes.ct` (unchanged). Raw only (no canonical id invented, no model guessed); inverter stays
+  the default for ambiguous capacity (`Solis 5kw`); quantity + source_fragment preserved
+  (`6 x 3.2 batt` -> battery ×6); matching untouched (`SBR128 BATT` still resolves to a matched battery
+  via P2). Audit delta: **130 raw items re-bucketed out of inverters** (112 batteries, 18 metering);
+  fully-clean 1,153 -> 1,149 / raw 530 -> 534 (a ~4-row honesty shift: `smart meter 5kw export`
+  surfaced from a hidden export-limit note into a flagged metering item). 634 backend tests pass.
+  Deferred to later audit slices: **P4 catalogue adds**, metering vocab expansion, in-fragment
+  capacity-in-noun extraction (`16kw hrs battery`), leading-`1`+model resolution (`1 SBR128 battery`),
+  and the (un-authorized) clean-wipe + reimport.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware

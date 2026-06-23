@@ -488,3 +488,75 @@ def test_brand_strip_never_resolves_source_example(seeded):
     items = out["inverters"] + out["batteries"] + out["metering"]
     assert all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
     assert "SMILE-M5" not in " ".join((it.get("model_text") or "") for it in items)
+
+
+# --------------------------------------------------------------------------- #
+# P3: route UNMATCHED battery/metering-like fragments to the right bucket (not 'inverters'), so a Job
+# never shows battery/meter evidence as an inverter. Raw only — no catalogue id is ever invented.
+# --------------------------------------------------------------------------- #
+def test_unmatched_battery_word_routes_to_batteries(seeded):
+    out = parse_hardware(seeded, inverter_text="1 SBR096 battery")
+    assert out["inverters"] == []
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "1 SBR096 battery"
+    assert bat["confidence"] == "unconfirmed_raw_text"
+    assert bat.get("canonical_hardware_id_at_parse_time") is None   # never invented
+
+
+def test_unmatched_capacity_batt_routes_to_batteries(seeded):
+    out = parse_hardware(seeded, inverter_text="12.8kw batt")
+    assert out["inverters"] == []
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "12.8kw batt"
+    assert bat.get("canonical_hardware_id_at_parse_time") is None
+
+
+def test_sbr128_batt_stays_matched_battery_after_p2(seeded):
+    # P2 strips the trailing "BATT" -> SBR128 resolves; it must be a MATCHED battery (not a P3 raw item).
+    out = parse_hardware(seeded, inverter_text="SBR128 BATT")
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SBR128" and bat["canonical_hardware_id_at_parse_time"]
+    assert out["inverters"] == []
+
+
+def test_unmatched_export_meter_routes_to_metering(seeded):
+    out = parse_hardware(seeded, inverter_text="1 export meter")
+    assert out["inverters"] == []
+    met = _only(out["metering"])
+    assert met["model_text"] == "1 export meter"
+    assert met.get("canonical_hardware_id_at_parse_time") is None
+
+
+def test_smart_meter_export_routes_to_metering_not_site_or_inverter(seeded):
+    """Has both 'meter' (metering hardware) and '5kw export' (an export-limit site keyword): the meter
+    hardware wins — it lands in metering, never the inverter bucket and never swallowed as a site note."""
+    out = parse_hardware(seeded, inverter_text="smart meter 5kw export")
+    assert out["inverters"] == []
+    met = _only(out["metering"])
+    assert "meter" in met["model_text"].lower()
+    assert met.get("canonical_hardware_id_at_parse_time") is None
+    assert "export_limit" not in (out.get("site_notes") or {})
+
+
+def test_quantity_preserved_when_routing_to_battery(seeded):
+    out = parse_hardware(seeded, inverter_text="6 x 3.2 batt")
+    bat = _only(out["batteries"])
+    assert bat["quantity"] == 6 and bat["model_text"] == "3.2 batt"
+    assert out["inverters"] == []
+
+
+@pytest.mark.parametrize("text", ["Solis 5kw", "Goodwe 10kw"])
+def test_ambiguous_inverter_capacity_stays_inverter(seeded, text):
+    """No battery/metering signal -> stays raw INVERTER (P3 must not route ambiguous inverter capacity
+    to battery/metering)."""
+    out = parse_hardware(seeded, inverter_text=text)
+    inv = _only(out["inverters"])
+    assert inv["confidence"] == "unconfirmed_raw_text"
+    assert out["batteries"] == [] and out["metering"] == []
+
+
+def test_ct_still_routes_to_site_notes(seeded):
+    # P3 must NOT regress CT: a bare CT keyword stays in site_notes.ct, not metering.
+    out = parse_hardware(seeded, inverter_text="Solis 10kw + CT")
+    assert out["site_notes"]["ct"] == ["CT"]
+    assert out["metering"] == []

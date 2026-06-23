@@ -78,6 +78,28 @@ _LEADING_POWER_RE = re.compile(r"^\d+(?:\.\d+)?\s*kw\b\s*", re.IGNORECASE)
 # "SMILE-G3-B5-INV") is never touched. Only stripped as a normalization retry, re-validated below.
 _TRAILING_NOISE_RE = re.compile(r"\s+(?:batteries|battery|batt|inverters?|inv)\.?$", re.IGNORECASE)
 
+# P3 unmatched-fragment routing signals — consulted ONLY after catalogue matching fails, to keep
+# battery/metering EVIDENCE out of the inverter bucket. They never infer a catalogue id or model.
+# Battery: a "batt"-prefixed word ("batt"/"battery"/"batteries") or a Sungrow "SBR<digit>" shorthand.
+_BATTERY_HINT_RE = re.compile(r"\bbatt|\bsbr\d", re.IGNORECASE)
+# Metering: a "meter"-prefixed word ("meter"/"metering"/"meters") or "current transformer". A bare
+# "CT" is deliberately OMITTED — it stays in site_notes.ct via _site_bucket (unchanged convention).
+_METERING_HINT_RE = re.compile(r"\bmeter|current transformer", re.IGNORECASE)
+
+
+def _hardware_signal(frag: str) -> str | None:
+    """Return 'metering' / 'batteries' when a fragment carries clear metering or battery HARDWARE
+    language, else None. Conservative: no signal means the caller treats the fragment as an inverter,
+    so ambiguous inverter capacity (e.g. 'Solis 5kw', 'Goodwe 10kw') is never mis-routed to a battery
+    or meter. Used both to keep such a fragment out of a NON-CT site-note bucket and to bucket an
+    unmatched fragment correctly. Never infers a catalogue id."""
+    low = frag.casefold()
+    if _METERING_HINT_RE.search(low):
+        return "metering"
+    if _BATTERY_HINT_RE.search(low):
+        return "batteries"
+    return None
+
 
 def _clean(text: str) -> str:
     """Whitespace-collapse, case preserved (the case-sensitive comparison form)."""
@@ -277,7 +299,11 @@ def _parse_hardware_cell(
         if not fkey:
             continue
         bucket = _site_bucket(fkey, rules)
-        if bucket is not None:
+        # CT always stays site_notes.ct (unchanged). For the other site buckets (export_limit /
+        # underground / comms), a fragment that is actually metering/battery HARDWARE (e.g. "smart
+        # meter 5kw export") is NOT swallowed as a site note — it falls through to be matched /
+        # P3-routed to the metering/battery bucket instead.
+        if bucket is not None and (bucket == "ct" or _hardware_signal(frag) is None):
             out["site_notes"].setdefault(bucket, []).append(frag)
             continue
         qty, core = _extract_quantity(frag)
@@ -314,7 +340,13 @@ def _parse_hardware_cell(
         else:
             # Unmatched useful text — preserve the model CORE as editable raw text with the quantity
             # stored separately (so an explicit quantity is shown once, never doubled into the text).
-            out["inverters"].append(_item(
+            # P3: route to the bucket the fragment's language indicates — battery ("12.8kw batt",
+            # "1 SBR096 battery") and metering ("export meter") evidence go to their OWN bucket instead
+            # of always 'inverters', so a Job never displays a battery or meter as an inverter. Still
+            # raw (no canonical id, no model guess); 'inverters' stays the default for text with no
+            # strong battery/metering signal (ambiguous inverter capacity like 'Solis 5kw' stays here).
+            bucket_key = _hardware_signal(frag) or "inverters"
+            out[bucket_key].append(_item(
                 None, core, quantity=qty, confidence="unconfirmed_raw_text",
                 source_fragment=frag, source_type=source_type, source_field=source_field, rules=rules))
             warnings.append(f"Unmatched hardware preserved as raw text: {frag!r}")
