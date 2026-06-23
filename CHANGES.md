@@ -9,6 +9,54 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Job Detail H5A: field-level autosave foundation + top-level descriptive fields (frontend only)
+
+- **Why:** begin the no-Save-button Job Detail overhaul — fields that are editable should be editable
+  by default and persist when the user finishes interacting (blur for text, change for date), with no
+  global Edit wall and no Save/Cancel bar. H5A lands the safe autosave foundation on the simplest
+  fields first; structured details + hardware stay on the old batch Edit/Save flow **temporarily**
+  until H5B/H5C.
+- **What:**
+  - **`hooks/useFieldAutosave.ts`** (new): a per-field state machine — `draft` + `status`
+    (`idle/dirty/saving/saved/error`) + reconcile. The **keystone safety rule** (`canAdoptServerValue`):
+    a refetched/window-focus server value is adopted into the draft **only when idle/saved**, **never
+    while dirty/saving/error** — so a background refetch can't wipe an in-progress edit. `commit()`
+    is a no-op if unchanged vs the last-saved value (no needless PATCH / activity row). On save
+    **failure the typed value is retained** and a **Retry** is offered (nothing is lost). Saves on
+    blur (text) / change (date), never per keystroke.
+  - **`components/AutosaveField.tsx`** (new): label + input/textarea using the hook, with a small
+    per-field indicator (**Unsaved / Saving… / Saved ✓ / Error + Retry**). Non-editors see a read-only
+    value only.
+  - **`pages/JobDetailPage.tsx`**: the **top-level descriptive fields** (title, sale_date — and, for
+    legacy `details=null` jobs, the descriptive column textareas) are now **always-editable autosave**,
+    each a **single-field PATCH** via the existing job-update endpoint. The old batch `form` state, the
+    global `useEffect([job])` reset, and the Edit/Save/Cancel flow for these fields are **removed**.
+    The **global `error` banner is no longer used by these fields** (per-field inline errors instead).
+- **Temporary (H5A-only):** **structured details + hardware keep the existing Edit/Save batch flow**
+  (the Edit button now reads "Edit hardware & structured" and only governs that block); `buildPayload`
+  now covers only `details` + `hardware`. H5B (structured) and H5C (hardware) convert these to autosave.
+- **Untouched:** **status** (immediate-save dropdown), **approval** (label-is-law control), **install
+  date** (own Edit/Save + INSTALL permission), **delete** (confirm), and the **internal-notes** panel
+  — all keep their own flows. `details=null` jobs get **no silent `details` initialization** (the
+  descriptive top-level columns autosave; structured/hardware editing is simply not offered). Derived
+  blobs (system_details/install_details on structured jobs) stay non-editable.
+- **Permissions:** all autosave descriptive fields share the DESCRIPTIVE permission, gated by
+  `canEditJobDetails` (admin/sales_admin); non-editors render read-only. No field crosses into the
+  INSTALL permission, so no mixed-permission PATCH.
+- **Scope:** frontend only — no backend, no migration, no parser/import/Settings/NAS/scheduling change.
+- **Verification:** frontend typecheck + lint (`--max-warnings 0`) + build clean; the autosave
+  no-clobber predicate verified via an esbuild+Node harness; two adversarial reviewers (autosave
+  safety + scope/regression) → GATE: PASS. No frontend unit-test runner; component behaviour covered
+  by manual steps + reasoning.
+- **Files:** frontend `hooks/useFieldAutosave.ts` (new), `components/AutosaveField.tsx` (new),
+  `pages/JobDetailPage.tsx`; docs (CHANGES, DEVELOPER_HANDOFF, business_rules). Permanent.
+- **Deferred:** H5B (structured details autosave), H5C (hardware autosave), H5D (install-date →
+  save-on-change, unify indicators, remove the remaining Edit/Save, polish). Activity-log volume note:
+  per-field autosave writes one `JOB_UPDATED` activity per changed field (acceptable; revisit batching
+  in H5D if needed).
+
+---
+
 ## 2026-06-23 — Hardware Parser lane, H4: Job Detail hardware autocomplete (frontend only)
 
 - **Why:** bring the H3 hardware-correction workflow (free text + catalogue autocomplete) to

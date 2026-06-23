@@ -7,6 +7,7 @@ import {
   canEditJobDetails,
   canEditJobInstallDate,
 } from '@/auth/permissions'
+import { AutosaveField } from '@/components/AutosaveField'
 import { CustomerOtherJobsPanel } from '@/components/CustomerOtherJobsPanel'
 import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
@@ -87,7 +88,6 @@ export function JobDetailPage() {
   const { data: registry } = useFieldRegistry()
 
   const [editingDetails, setEditingDetails] = useState(false)
-  const [form, setForm] = useState<Record<string, string>>({})
   // Phase 4c: string UI state for structured fields, keyed by "<section>.<key>".
   const [detailsEdits, setDetailsEdits] = useState<Record<string, string>>({})
   // System-hardware textbox edits (Panel type / Inverter / Battery / Metering), keyed by field key;
@@ -99,13 +99,12 @@ export function JobDetailPage() {
   const [editingInstall, setEditingInstall] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // H5A: top-level descriptive fields are now field-level autosave (each AutosaveField reconciles
+  // its OWN draft from the server, only when it isn't mid-edit), so there is NO global form reset
+  // here — a refetch can never wipe a dirty field. The structured-details + hardware edits below
+  // TEMPORARILY keep the batch Edit/Save flow (converted to autosave in H5B/H5C).
   useEffect(() => {
     if (job) {
-      setForm(
-        Object.fromEntries(
-          DESCRIPTIVE_FIELDS.map(({ key }) => [key, (job[key] as string | null) ?? '']),
-        ),
-      )
       setInstallDate(job.install_date ?? '')
       setDetailsEdits({})
       setHardwareEdits({})
@@ -120,8 +119,13 @@ export function JobDetailPage() {
     return m
   }, [registry])
 
-  // A details-bearing job (with the registry loaded) edits structured fields;
-  // a details=NULL job keeps the legacy pipe-string textareas.
+  // Two DISTINCT concepts — do NOT collapse them:
+  //  • whether the job HAS structured details (`job.details`) decides which fields are top-level
+  //    columns vs derived/structured — drives the autosave field set (see `isStructuredJob` below);
+  //  • whether the structured-details EDITOR can render (needs the registry too) — `structuredEditable`.
+  // A structured job is still structured while the registry is loading, so the autosave field set must
+  // key off `job.details` ALONE, never off `structuredEditable`, or derived blobs (system_details/
+  // install_details/approval_details/notes) would briefly become editable during that load window.
   const structuredEditable = !!(job?.details && registry)
 
   function handleDetailsChange(path: string, value: string) {
@@ -146,16 +150,11 @@ export function JobDetailPage() {
     }))
   }
 
-  // One PATCH: changed legacy fields + (structured mode) the coerced registry details patch + any
-  // System-hardware textbox edits, folded into the same details.hardware sub-patch.
+  // H5A: this batch payload now covers ONLY the structured details + hardware sub-edits, which keep
+  // the TEMPORARY Edit/Save flow. Top-level descriptive fields autosave individually (AutosaveField),
+  // so they are no longer collected here.
   function buildPayload(): JobInput {
     const payload: JobInput = {}
-    const legacyFields = structuredEditable ? STRUCTURED_MODE_LEGACY_FIELDS : DESCRIPTIVE_FIELDS
-    for (const { key } of legacyFields) {
-      const current = (job?.[key] as string | null) ?? ''
-      const next = form[key] ?? ''
-      if (next !== current) (payload as Record<string, string | null>)[key] = next || null
-    }
     if (structuredEditable) {
       const patch = buildDetailsPatch(detailsEdits, job?.details ?? null, fieldByPath)
       const hwPatch = applyHardwareSystemEdits(job?.details?.hardware, hardwareEdits, hardwareSelections)
@@ -166,7 +165,6 @@ export function JobDetailPage() {
     return payload
   }
   const pendingPayload = useMemo(buildPayload, [
-    form,
     detailsEdits,
     hardwareEdits,
     hardwareSelections,
@@ -277,6 +275,17 @@ export function JobDetailPage() {
   const hardwareHideKeys = hasHardware ? ['panel', 'inverter'] : undefined
   const systemHardware = hasHardware ? deriveSystemHardware(job.details?.hardware) : undefined
   const hardwareNotes = hasHardware ? deriveHardwareNotes(job.details?.hardware) : []
+
+  // H5A: top-level descriptive fields that now autosave (no Edit wall). The field set keys off
+  // whether the job HAS structured details (`isStructuredJob`), NOT off registry readiness — so a
+  // structured job NEVER exposes its derived blobs (system_details/install_details/approval_details/
+  // notes) as editable, even during the registry-load window. A structured job exposes only title +
+  // sale_date as top-level columns; a legacy details=NULL job edits the full descriptive column set.
+  // All share the DESCRIPTIVE permission, so each is a single-field PATCH gated by `mayEditDetails`.
+  const isStructuredJob = job.details != null
+  const descriptiveAutosaveFields = isStructuredJob ? STRUCTURED_MODE_LEGACY_FIELDS : DESCRIPTIVE_FIELDS
+  const saveTopLevel = (key: keyof JobInput) => (value: string) =>
+    updateMutation.mutateAsync({ [key]: value || null } as JobInput).then(() => undefined)
 
   return (
     <div>
@@ -398,160 +407,116 @@ export function JobDetailPage() {
       <div className="card p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="eyebrow">Details</h2>
-          {mayEditDetails && !editingDetails && (
+          {/* H5A: top-level descriptive fields autosave (no Edit wall). This button is TEMPORARY
+              and governs ONLY the structured details + hardware block below, until those convert to
+              field-level autosave in H5B/H5C. */}
+          {structuredEditable && mayEditDetails && !editingDetails && (
             <button
               onClick={() => setEditingDetails(true)}
               className="btn-secondary px-3 py-1 text-sm"
             >
-              Edit
+              Edit hardware &amp; structured
             </button>
           )}
         </div>
 
-        {editingDetails ? (
-          job.details && registry ? (
-            // Phase 4c: structured edit — editable details + non-derived legacy
-            // fields (title/sale_date/approval_details/notes). system_details/
-            // install_details are derived from details, so they are not edited here.
-            <div className="flex flex-col gap-4">
-              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-                {STRUCTURED_MODE_LEGACY_FIELDS.map(({ key, label, textarea }) => (
-                  <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
-                    <dt className="eyebrow text-faint">{label}</dt>
-                    {textarea ? (
-                      <textarea
-                        rows={2}
-                        value={form[key] ?? ''}
-                        onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                        className="input mt-1 px-2 py-1 text-sm"
-                      />
-                    ) : (
-                      <input
-                        type={key === 'sale_date' ? 'date' : 'text'}
-                        value={form[key] ?? ''}
-                        onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                        className="input mt-1 px-2 py-1 text-sm"
-                      />
-                    )}
-                  </div>
-                ))}
-              </dl>
-              {propertyAddress && (
-                <div>
-                  <span className="eyebrow text-faint">Property address</span>
-                  <p className="mt-0.5 text-fg">{propertyAddress}</p>
-                </div>
-              )}
-              <StructuredDetailsView
-                registry={registry}
-                details={job.details}
-                editable
-                edits={detailsEdits}
-                onChange={handleDetailsChange}
-                hideImportedNotes
-                hideKeys={hardwareHideKeys}
-                systemExtras={systemHardware}
-                extraEdits={hardwareEdits}
-                onExtraChange={handleHardwareChange}
-                // H4: same catalogue autocomplete as import review on the editable hardware fields.
-                renderExtraInput={(field, value, onChange) => (
-                  <HardwareSearchInput
-                    value={value}
-                    onChange={onChange}
-                    onSelect={(result) => handleHardwareSelect(field.key, result)}
-                    category={field.category}
-                    placeholder={field.label}
-                  />
-                )}
-              />
-              {/* Network approval: structured state, under the Electrical/network details. */}
-              <JobApprovalControl job={job} editing />
-            </div>
-          ) : (
-            // Legacy edit mode (details=NULL) — unchanged raw text fields.
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-              {DESCRIPTIVE_FIELDS.map(({ key, label, textarea }) => (
-                <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
-                  <dt className="eyebrow text-faint">{label}</dt>
-                  {textarea ? (
-                    <textarea
-                      rows={2}
-                      value={form[key] ?? ''}
-                      onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                      className="input mt-1 px-2 py-1 text-sm"
-                    />
-                  ) : (
-                    <input
-                      type={key === 'sale_date' ? 'date' : 'text'}
-                      value={form[key] ?? ''}
-                      onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                      className="input mt-1 px-2 py-1 text-sm"
+        {/* Top-level descriptive fields — always-editable, field-level autosave (H5A). Saved on
+            blur (text) / change (date); non-editors see read-only values. */}
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+          {descriptiveAutosaveFields.map(({ key, label, textarea }) => (
+            <AutosaveField
+              key={key}
+              label={label}
+              value={(job[key] as string | null) ?? ''}
+              kind={textarea ? 'textarea' : key === 'sale_date' ? 'date' : 'text'}
+              colSpan={textarea}
+              canEdit={mayEditDetails}
+              onSave={saveTopLevel(key)}
+            />
+          ))}
+        </dl>
+
+        {propertyAddress && (
+          <div className="mt-4">
+            <span className="eyebrow text-faint">Property address</span>
+            <p className="mt-0.5 text-fg">{propertyAddress}</p>
+          </div>
+        )}
+
+        {/* Structured details + hardware. TEMPORARY H5A behaviour: these keep the batch Edit/Save
+            flow until H5B (structured details) and H5C (hardware) convert them to autosave. The
+            top-level descriptive fields above already autosave. */}
+        {job.details && registry ? (
+          <div className="mt-4 flex flex-col gap-4">
+            {editingDetails ? (
+              <>
+                <StructuredDetailsView
+                  registry={registry}
+                  details={job.details}
+                  editable
+                  edits={detailsEdits}
+                  onChange={handleDetailsChange}
+                  hideImportedNotes
+                  hideKeys={hardwareHideKeys}
+                  systemExtras={systemHardware}
+                  extraEdits={hardwareEdits}
+                  onExtraChange={handleHardwareChange}
+                  // H4: same catalogue autocomplete as import review on the editable hardware fields.
+                  renderExtraInput={(field, value, onChange) => (
+                    <HardwareSearchInput
+                      value={value}
+                      onChange={onChange}
+                      onSelect={(result) => handleHardwareSelect(field.key, result)}
+                      category={field.category}
+                      placeholder={field.label}
                     />
                   )}
+                />
+                {/* Network approval: structured state, under the Electrical/network details. */}
+                <JobApprovalControl job={job} editing />
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setEditingDetails(false)
+                      setDetailsEdits({})
+                      setHardwareEdits({})
+                      setHardwareSelections({})
+                      setError(null)
+                    }}
+                    className="btn-secondary text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveDetails}
+                    disabled={updateMutation.isPending || !hasDetailChanges}
+                    className="btn-primary text-sm disabled:opacity-50"
+                  >
+                    {updateMutation.isPending ? 'Saving…' : hasDetailChanges ? 'Save changes' : 'No changes'}
+                  </button>
                 </div>
-              ))}
-            </dl>
-          )
-        ) : job.details && registry ? (
-          // Phase 4a: structured Job.details (registry-driven, read-only). Takes
-          // priority over the legacy pipe-string view when details is present.
-          <div className="flex flex-col gap-4">
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-              <div>
-                <dt className="eyebrow text-faint">Title</dt>
-                <dd className="mt-0.5 text-fg">{job.title || '—'}</dd>
-              </div>
-              <div>
-                <dt className="eyebrow text-faint">Sale date</dt>
-                <dd className="mt-0.5 text-fg">{job.sale_date || '—'}</dd>
-              </div>
-            </dl>
-            {propertyAddress && (
-              <div>
-                <span className="eyebrow text-faint">Property address</span>
-                <p className="mt-0.5 text-fg">{propertyAddress}</p>
-              </div>
+              </>
+            ) : (
+              <>
+                <StructuredDetailsView
+                  registry={registry}
+                  details={job.details}
+                  hideImportedNotes
+                  hideKeys={hardwareHideKeys}
+                  systemExtras={systemHardware}
+                />
+                {/* Network approval state is visible in read mode (before pressing Edit). */}
+                <JobApprovalControl job={job} editing={false} />
+              </>
             )}
-            {/* Imported review/source notes are hidden here — the same preserved
-                context is shown in Job internal notes. */}
-            <StructuredDetailsView
-              registry={registry}
-              details={job.details}
-              hideImportedNotes
-              hideKeys={hardwareHideKeys}
-              systemExtras={systemHardware}
-            />
-            {/* Network approval state is visible in read mode (before pressing Edit). */}
-            <JobApprovalControl job={job} editing={false} />
           </div>
         ) : importedView ? (
-          // Imported job (legacy blobs): title/sale-date + structured detail sections.
-          <div className="flex flex-col gap-4">
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-              <div>
-                <dt className="eyebrow text-faint">Title</dt>
-                <dd className="mt-0.5 text-fg">{job.title || '—'}</dd>
-              </div>
-              <div>
-                <dt className="eyebrow text-faint">Sale date</dt>
-                <dd className="mt-0.5 text-fg">{job.sale_date || '—'}</dd>
-              </div>
-            </dl>
+          // Legacy imported job (details=NULL): the descriptive fields above are now editable; the
+          // parsed legacy detail sections remain below as a read-only reference.
+          <div className="mt-4">
             <ImportedJobDetails view={importedView} />
           </div>
-        ) : (
-          // Non-imported job: original plain rendering, unchanged.
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-            {DESCRIPTIVE_FIELDS.map(({ key, label, textarea }) => (
-              <div key={key} className={textarea ? 'sm:col-span-2' : ''}>
-                <dt className="eyebrow text-faint">{label}</dt>
-                <dd className="mt-0.5 whitespace-pre-wrap text-fg">
-                  {(job[key] as string | null) || '—'}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
+        ) : null}
 
         {/* Supplemental hardware notes — low-confidence/manual-review flags, ambiguous options,
             warnings, misc (the hardware VALUES show as normal System fields above, regardless of
@@ -559,35 +524,6 @@ export function JobDetailPage() {
         {hasHardware && hardwareNotes.length > 0 && (
           <div className="mt-3">
             <HardwareNotes notes={hardwareNotes} />
-          </div>
-        )}
-
-        {editingDetails && (
-          <div className="mt-5 flex justify-end gap-3">
-            <button
-              onClick={() => {
-                setEditingDetails(false)
-                setDetailsEdits({})
-                setHardwareEdits({})
-                setHardwareSelections({})
-                setForm(
-                  Object.fromEntries(
-                    DESCRIPTIVE_FIELDS.map(({ key }) => [key, (job[key] as string | null) ?? '']),
-                  ),
-                )
-                setError(null)
-              }}
-              className="btn-secondary text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={saveDetails}
-              disabled={updateMutation.isPending || !hasDetailChanges}
-              className="btn-primary text-sm disabled:opacity-50"
-            >
-              {updateMutation.isPending ? 'Saving…' : hasDetailChanges ? 'Save changes' : 'No changes'}
-            </button>
           </div>
         )}
           </div>

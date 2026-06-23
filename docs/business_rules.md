@@ -213,6 +213,19 @@ explains intent; protect important explicit decisions with tests, not docs alone
 - **Future direction:** some operational labels should become real assignable
   **tasks** (owner + due date), not passive flags.
 
+## Job Detail editing (autosave model)
+
+- **Ordinary editable Job Detail fields autosave — no global Save button, no Edit wall.** A change to
+  a descriptive field persists when the user finishes interacting with it (blur for text, change for a
+  date), as a single-field update. A background refresh never wipes an in-progress edit, and a failed
+  save keeps the typed value (with a retry) — edits are never silently lost. *(Rollout: H5A converts
+  the top-level descriptive fields; structured details + hardware follow in H5B/H5C.)*
+- **Workflow controls stay EXPLICIT and separate — they are never swept into field autosave.**
+  Approval (label-is-law structured state), lifecycle **status**, **install date** (its own
+  permission), and **delete** (confirmation) each keep their own deliberate control. Backend-derived
+  blobs (`system_details`/`install_details`) remain non-editable; the hardware snapshot stays stable
+  (a catalogue change never live-updates a Job).
+
 ## Tasks & accountability
 
 - **Every task has an owner** (assignee) so work is never invisible or assumed.

@@ -405,6 +405,22 @@ These are stubbed/absent and represent the next phases:
   (selection stamps id+manual_correction; free-text drops stale id). Frontend-only, no backend/migration,
   no Settings/import-review behaviour change. NOT the always-editable overhaul (H5) — the Edit-button/
   permission gate is unchanged.
+  **(H5A — Job Detail field-level autosave foundation, frontend)** the no-Save-button Job Detail
+  overhaul begins. New `hooks/useFieldAutosave.ts` (per-field `draft` + `status`
+  idle/dirty/saving/saved/error; the exported `canAdoptServerValue` guard adopts a refetched server
+  value ONLY when idle/saved, so a window-focus/invalidate refetch never clobbers a dirty draft; no-op
+  if unchanged; **retains the typed value on failure** + Retry; saves on blur for text, change for
+  date — never per keystroke) + `components/AutosaveField.tsx` (input + Unsaved/Saving…/Saved ✓/Error
+  indicator; read-only for non-editors). `JobDetailPage`: top-level descriptive fields (title,
+  sale_date; for legacy details=null jobs the descriptive columns) are now always-editable autosave,
+  each a SINGLE-field PATCH via `useUpdateJob`; the old batch `form` + global `useEffect([job])` reset
+  + Edit/Save/Cancel for these fields are REMOVED (per-field reconcile replaces the global reset).
+  **Temporary H5A:** structured details + hardware KEEP the Edit/Save batch flow (the Edit button now
+  reads "Edit hardware & structured"; `buildPayload` covers only details+hardware) until H5B/H5C.
+  Status/approval/install-date/delete/internal-notes are untouched; details=null jobs get no silent
+  details init; derived blobs stay non-editable; autosave errors are per-field (not the global banner).
+  Frontend-only, no backend/migration. Deferred: H5B (structured autosave), H5C (hardware autosave),
+  H5D (install-date save-on-change + remove the remaining Edit/Save + polish).
   **Stage 4C (next)** = frontend import-review display + uncertain/manual-review badges. Deferred:
   full multi-fragment bundle parsing + panel system-size derivation; a shared-alias-index optimisation
   (today `parse_hardware` rebuilds its index per enriched row). Then the remaining lane stages still
