@@ -9,6 +9,56 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Job Detail H5C: hardware fields autosave + retire the temporary edit flow (frontend only)
+
+- **Why:** remove the last hardware-specific Save button. Job Detail hardware System fields now behave
+  like the rest of the page — editable in place, saved when the user finishes interacting — with the
+  same catalogue autocomplete + safe-provenance rules. The temporary "Edit hardware & approval" batch
+  flow is retired and approval is decoupled into its own explicit affordance.
+- **What:**
+  - **`components/AutosaveHardwareField.tsx`** (new): wraps `useFieldAutosave` + `HardwareSearchInput`
+    for one hardware field — typing invalidates any prior pick and **saves on blur** (free text drops
+    stale catalogue ids); **clicking a catalogue suggestion saves immediately**, stamping
+    `canonical_hardware_id_at_parse_time` + `confidence = manual_correction` (`parser_owned = false`);
+    quantity (`N × MODEL`) round-trips; inline Saving…/Saved ✓/Error+Retry chip.
+  - **`StructuredDetailsView`** gained an opt-in `renderAutosaveExtra` prop: when provided (Job
+    Detail), each editable System-hardware extra renders that self-contained autosave control instead
+    of the batch input. Import review passes none → its hardware extras keep the H3 batch flow.
+  - **`JobDetailPage.saveHardwareField(field, value, selection)`** → `applyHardwareSystemEdits` with a
+    single field key → `PATCH { details: { hardware: <one sub-section> } }` (panel / inverters /
+    batteries / metering); the backend replaces only that sub-section. An unchanged blur sends nothing.
+  - **`HardwareSearchInput`** gained an optional `onBlur` (free-text commit) and, when `onBlur` is set,
+    a suggestion-button `onMouseDown preventDefault` so a pick can't blur-commit the partial text
+    first. **`useFieldAutosave.commit`** gained `{ force }` so a re-selection persists provenance even
+    if the visible text is unchanged. `AutosaveControl` now exports the shared status chip + error
+    helper (reused by `AutosaveHardwareField`).
+- **Retired:** the temporary hardware **Save/Cancel** bar, the **"Edit hardware & approval"** button,
+  and all hardware batch state (`editingDetails`, `hardwareEdits`, `hardwareSelections`, `buildPayload`,
+  `pendingPayload`, `saveDetails`, the page-level `describeError`). **Approval is decoupled**: it has
+  its own small **"Edit approval" / "Done editing approval"** toggle (`editingApproval`), gated on
+  `mayEditDetails` exactly as the old coupled button was — so who can edit approval, the "label is law"
+  behaviour, and its own Set-approval mutation are **unchanged**; approval is NOT turned into autosave.
+- **Untouched:** status, install date, delete, and internal notes keep their own flows. `details=null`
+  jobs get no hardware inputs / no silent init; the read-only CT/electrical row and **Hardware Notes**
+  stay read-only; Settings > Hardware still never live-updates a Job snapshot. **Import review
+  (`ImportRowModal`) is byte-equivalent** (no `renderAutosaveExtra`/`onBlur`).
+- **Scope:** frontend only — no backend, no migration, no parser/import/Settings/NAS/scheduling change.
+- **Verification:** frontend typecheck + lint (`--max-warnings 0`) + build clean; an esbuild+Node
+  harness confirmed a one-field edit builds only that sub-section, free text drops the stale id, a
+  selection stamps the id, quantity round-trips, and the no-clobber predicate holds; two adversarial
+  reviewers (hardware-autosave correctness incl. the blur-vs-click race + scope/import-review/approval)
+  → GATE: PASS. No frontend unit-test runner; component behaviour covered by manual steps.
+- **Files:** frontend `components/AutosaveHardwareField.tsx` (new), `components/AutosaveControl.tsx`,
+  `components/HardwareSearchInput.tsx`, `components/structured/StructuredDetailsView.tsx`,
+  `hooks/useFieldAutosave.ts`, `pages/JobDetailPage.tsx`; docs (CHANGES, DEVELOPER_HANDOFF,
+  business_rules). Permanent.
+- **Deferred:** H5D polish only (install-date → save-on-change under its own permission; unify the
+  autosave indicators; optional per-field activity-log batching/debounce; the approval "Done" toggle
+  could auto-collapse after a Set-approval). The no-global-Save-button Job Detail model is now
+  complete for descriptive + structured + hardware fields.
+
+---
+
 ## 2026-06-23 — Job Detail H5B: structured registry fields autosave (frontend only)
 
 - **Why:** continue the no-Save-button overhaul — the structured registry-driven Job Detail fields now

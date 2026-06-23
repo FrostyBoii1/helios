@@ -24,8 +24,10 @@ export interface FieldAutosave {
   /** onChange — update the draft and mark dirty (idle if typed back to the saved value). No save. */
   onChange: (value: string) => void
   /** Commit (blur for text; immediately for date/select). Saves only if changed vs the last-saved
-   *  value; pass an explicit value when the new value isn't in the draft state yet (e.g. date change). */
-  commit: (explicit?: string) => void
+   *  value; pass an explicit value when the new value isn't in the draft state yet (e.g. date change).
+   *  `force` skips the unchanged check — used when a save must persist even if the visible text is the
+   *  same (e.g. a catalogue selection that adds provenance to an already-correct value). */
+  commit: (explicit?: string, opts?: { force?: boolean }) => void
   /** Re-attempt the last failed save with the current draft. */
   retry: () => void
 }
@@ -90,9 +92,9 @@ export function useFieldAutosave(
   }, [])
 
   const commit = useCallback(
-    (explicit?: string) => {
+    (explicit?: string, opts?: { force?: boolean }) => {
       const value = explicit ?? draftRef.current
-      if (value === baselineRef.current) {
+      if (!opts?.force && value === baselineRef.current) {
         setStatus('idle') // no-op: nothing changed since the last save
         return
       }

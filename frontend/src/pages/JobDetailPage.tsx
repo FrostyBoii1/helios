@@ -8,16 +8,17 @@ import {
   canEditJobInstallDate,
 } from '@/auth/permissions'
 import { AutosaveField } from '@/components/AutosaveField'
+import { AutosaveHardwareField } from '@/components/AutosaveHardwareField'
 import { CustomerOtherJobsPanel } from '@/components/CustomerOtherJobsPanel'
 import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
 import { HardwareNotes } from '@/components/HardwareNotes'
-import { HardwareSearchInput } from '@/components/HardwareSearchInput'
 import {
   applyHardwareSystemEdits,
   deriveHardwareNotes,
   deriveSystemHardware,
   type HardwareSelection,
+  type SystemHardwareField,
 } from '@/lib/hardwareDisplay'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
 import { ImportedJobDetails } from '@/components/ImportedJobDetails'
@@ -29,10 +30,9 @@ import { Timeline } from '@/components/Timeline'
 import { useCustomer } from '@/hooks/useCustomers'
 import { useChangeJobStatus, useDeleteJob, useJob, useUpdateJob } from '@/hooks/useJobs'
 import { useFieldRegistry } from '@/hooks/useImports'
-import { ApiError } from '@/lib/api'
 import { buildDetailsPatch } from '@/lib/detailsPatch'
 import { parseImportedJobDetails } from '@/lib/importedJobDetails'
-import type { HardwareSearchResult, JobInput, JobStatus } from '@/types'
+import type { JobInput, JobStatus } from '@/types'
 import type { FieldSpec } from '@/types/imports'
 
 const DESCRIPTIVE_FIELDS: { key: keyof JobInput; label: string; textarea?: boolean }[] = [
@@ -58,21 +58,6 @@ const STRUCTURED_MODE_LEGACY_FIELDS = DESCRIPTIVE_FIELDS.filter(
     f.key !== 'approval_details',
 )
 
-function describeError(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    if (err.status === 403) {
-      return typeof err.detail === 'string' ? err.detail : 'You do not have permission to do that.'
-    }
-    if (err.status === 422) {
-      return typeof err.detail === 'string'
-        ? err.detail
-        : 'Some structured fields could not be saved (disallowed path or invalid value).'
-    }
-    if (typeof err.detail === 'string') return err.detail
-  }
-  return fallback
-}
-
 export function JobDetailPage() {
   const { id } = useParams()
   const jobId = Number(id)
@@ -87,28 +72,19 @@ export function JobDetailPage() {
   // Phase 4a: drives the read-only structured view when job.details is present.
   const { data: registry } = useFieldRegistry()
 
-  // H5B: structured registry fields autosave per-field (no batch state). `editingDetails` now toggles
-  // ONLY the TEMPORARY hardware Edit/Save flow below (H5C converts hardware to autosave).
-  const [editingDetails, setEditingDetails] = useState(false)
-  // System-hardware textbox edits (Panel type / Inverter / Battery / Metering), keyed by field key;
-  // folded into the same PATCH as details.hardware on save. `hardwareSelections` records the
-  // catalogue pick per field (provenance) when the user chose an autocomplete result.
-  const [hardwareEdits, setHardwareEdits] = useState<Record<string, string>>({})
-  const [hardwareSelections, setHardwareSelections] = useState<Record<string, HardwareSelection>>({})
+  // H5C: top-level (H5A), structured registry (H5B) AND hardware (H5C) fields all autosave per-field —
+  // no batch hardware state and no "Edit" wall remain. Approval keeps its own explicit edit toggle
+  // (decoupled from the retired hardware batch), preserving its read-vs-edit behaviour unchanged.
+  const [editingApproval, setEditingApproval] = useState(false)
   const [installDate, setInstallDate] = useState('')
   const [editingInstall, setEditingInstall] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // H5A: top-level descriptive fields are now field-level autosave (each AutosaveField reconciles
-  // its OWN draft from the server, only when it isn't mid-edit), so there is NO global form reset
-  // here — a refetch can never wipe a dirty field. The structured-details + hardware edits below
-  // TEMPORARILY keep the batch Edit/Save flow (converted to autosave in H5B/H5C).
+  // H5A–C: descriptive / structured / hardware fields are all field-level autosave (each control
+  // reconciles its OWN draft from the server only when not mid-edit), so there is NO global form reset
+  // here — a refetch can never wipe a dirty field. Only the install-date local input is synced.
   useEffect(() => {
-    if (job) {
-      setInstallDate(job.install_date ?? '')
-      setHardwareEdits({})
-      setHardwareSelections({})
-    }
+    if (job) setInstallDate(job.install_date ?? '')
   }, [job])
 
   // path ("<section>.<key>") → field spec, for input_type-aware coercion on save.
@@ -117,15 +93,6 @@ export function JobDetailPage() {
     if (registry) for (const f of registry.fields) m.set(detailsPath(f.storage), f)
     return m
   }, [registry])
-
-  // Two DISTINCT concepts — do NOT collapse them:
-  //  • whether the job HAS structured details (`job.details`) decides which fields are top-level
-  //    columns vs derived/structured — drives the autosave field set (see `isStructuredJob` below);
-  //  • whether the structured-details EDITOR can render (needs the registry too) — `structuredEditable`.
-  // A structured job is still structured while the registry is loading, so the autosave field set must
-  // key off `job.details` ALONE, never off `structuredEditable`, or derived blobs (system_details/
-  // install_details/approval_details/notes) would briefly become editable during that load window.
-  const structuredEditable = !!(job?.details && registry)
 
   // H5B: autosave a single structured registry leaf. Builds the same one-leaf, coerced,
   // path-restricted patch the batch save used (`buildDetailsPatch` with one `section.key`) and
@@ -136,36 +103,23 @@ export function JobDetailPage() {
     await updateMutation.mutateAsync({ details: patch })
   }
 
-  function handleHardwareChange(key: string, value: string) {
-    setHardwareEdits((prev) => ({ ...prev, [key]: value }))
-    // Typing invalidates any prior catalogue pick for this field, so a stale canonical id is never
-    // stamped onto hand-edited text. A pick() calls this (clear) THEN handleHardwareSelect (set), and
-    // the ordered functional updates compose to "set", so a genuine selection survives.
-    setHardwareSelections((prev) => {
-      if (!(key in prev)) return prev
-      const next = { ...prev }
-      delete next[key]
-      return next
-    })
+  // H5C: autosave ONE hardware System field. `applyHardwareSystemEdits` with a single key builds a
+  // patch touching only that sub-section (panel / inverters / batteries / metering): free text drops
+  // stale catalogue provenance; a selection stamps `canonical_hardware_id_at_parse_time` +
+  // manual_correction. PATCHes only `{ details: { hardware: <one-subsection> } }`.
+  async function saveHardwareField(
+    field: SystemHardwareField,
+    value: string,
+    selection: HardwareSelection | undefined,
+  ): Promise<void> {
+    const patch = applyHardwareSystemEdits(
+      job?.details?.hardware,
+      { [field.key]: value },
+      selection ? { [field.key]: selection } : undefined,
+    )
+    if (!patch) return
+    await updateMutation.mutateAsync({ details: { hardware: patch } })
   }
-  function handleHardwareSelect(key: string, result: HardwareSearchResult) {
-    setHardwareSelections((prev) => ({
-      ...prev,
-      [key]: { id: result.id, confidence: 'manual_correction', model: result.canonical_model ?? null },
-    }))
-  }
-
-  // H5B: this batch payload now covers ONLY the TEMPORARY hardware Edit/Save flow. Top-level
-  // descriptive fields (H5A) and structured registry fields (H5B) autosave individually, so they are
-  // no longer collected here; H5C will convert hardware to autosave and retire this batch entirely.
-  function buildPayload(): JobInput {
-    const payload: JobInput = {}
-    const hwPatch = applyHardwareSystemEdits(job?.details?.hardware, hardwareEdits, hardwareSelections)
-    if (hwPatch) payload.details = { hardware: hwPatch }
-    return payload
-  }
-  const pendingPayload = useMemo(buildPayload, [hardwareEdits, hardwareSelections, job])
-  const hasDetailChanges = Object.keys(pendingPayload).length > 0
 
   const role = user?.role.name
   const mayEditDetails = canEditJobDetails(role)
@@ -183,23 +137,6 @@ export function JobDetailPage() {
         </Link>
       </div>
     )
-  }
-
-  // H5B: the batch save now covers ONLY the temporary hardware edit flow.
-  async function saveDetails() {
-    setError(null)
-    if (!hasDetailChanges) {
-      setEditingDetails(false)
-      return
-    }
-    try {
-      await updateMutation.mutateAsync(pendingPayload)
-      setHardwareEdits({})
-      setHardwareSelections({})
-      setEditingDetails(false)
-    } catch (err) {
-      setError(describeError(err, 'Could not save hardware.'))
-    }
   }
 
   async function saveInstallDate() {
@@ -396,22 +333,11 @@ export function JobDetailPage() {
       {/* Operational labels (Phase L2) — shown near the lifecycle status. */}
       <JobLabelChips jobId={job.id} />
 
-      {/* Descriptive details */}
+      {/* Descriptive details — H5A/B/C: every editable Job Detail field autosaves; there is no
+          Edit wall and no global Save button. (Approval keeps its own small Edit toggle below.) */}
       <div className="card p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="eyebrow">Details</h2>
-          {/* H5B: top-level descriptive fields (H5A) AND structured registry fields (H5B) autosave —
-              no Edit wall. This button is TEMPORARY and now governs only the remaining batch items —
-              hardware + the approval control's edit form — until hardware converts to autosave in
-              H5C. (Approval editing stays gated on this button exactly as before, unchanged.) */}
-          {structuredEditable && mayEditDetails && !editingDetails && (
-            <button
-              onClick={() => setEditingDetails(true)}
-              className="btn-secondary px-3 py-1 text-sm"
-            >
-              Edit hardware &amp; approval
-            </button>
-          )}
         </div>
 
         {/* Top-level descriptive fields — always-editable, field-level autosave (H5A). Saved on
@@ -437,9 +363,9 @@ export function JobDetailPage() {
           </div>
         )}
 
-        {/* Structured registry fields autosave per-field (H5B) — always-editable for editors, no
-            Save button. Hardware fields TEMPORARILY keep the batch Edit/Save flow (the "Edit hardware
-            & approval" button) until H5C converts them. */}
+        {/* Structured registry fields (H5B) AND hardware System fields (H5C) autosave per-field —
+            always-editable for editors, no Save button. Hardware free text saves on blur; a catalogue
+            selection saves immediately, stamping provenance. */}
         {job.details && registry ? (
           <div className="mt-4 flex flex-col gap-4">
             <StructuredDetailsView
@@ -451,50 +377,36 @@ export function JobDetailPage() {
               systemExtras={systemHardware}
               // H5B: registry value fields autosave per-field for editors; read-only otherwise.
               autosaveField={mayEditDetails ? saveStructuredField : undefined}
-              // Hardware extras stay on the temporary batch flow — editable only in the hardware Edit
-              // mode (H5C converts them to autosave like the registry fields).
-              extraEdits={editingDetails ? hardwareEdits : undefined}
-              onExtraChange={editingDetails && mayEditDetails ? handleHardwareChange : undefined}
-              renderExtraInput={
-                editingDetails && mayEditDetails
-                  ? (field, value, onChange) => (
-                      <HardwareSearchInput
-                        value={value}
-                        onChange={onChange}
-                        onSelect={(result) => handleHardwareSelect(field.key, result)}
-                        category={field.category}
-                        placeholder={field.label}
+              // H5C: hardware System fields autosave per-field (autocomplete + safe provenance).
+              renderAutosaveExtra={
+                mayEditDetails
+                  ? (field) => (
+                      <AutosaveHardwareField
+                        field={field}
+                        onSave={(value, selection) => saveHardwareField(field, value, selection)}
                       />
                     )
                   : undefined
               }
             />
-            {/* Network approval: structured state with its own Set-approval control. Its editable
-                form is gated on the temporary Edit button exactly as before (unchanged). */}
-            <JobApprovalControl job={job} editing={editingDetails} />
-            {/* Temporary hardware Save/Cancel bar (H5C retires it). Saves only the hardware sub-patch. */}
-            {editingDetails && (
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => {
-                    setEditingDetails(false)
-                    setHardwareEdits({})
-                    setHardwareSelections({})
-                    setError(null)
-                  }}
-                  className="btn-secondary text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveDetails}
-                  disabled={updateMutation.isPending || !hasDetailChanges}
-                  className="btn-primary text-sm disabled:opacity-50"
-                >
-                  {updateMutation.isPending ? 'Saving…' : hasDetailChanges ? 'Save hardware' : 'No changes'}
-                </button>
-              </div>
-            )}
+            {/* Network approval: structured "label is law" state with its OWN Set-approval control.
+                Now that the hardware batch is retired (H5C), approval has its own explicit edit
+                toggle (decoupled), preserving its read-vs-edit behaviour. Gated on mayEditDetails
+                exactly as the prior coupled button was, so who can edit approval is unchanged. */}
+            <div className="flex flex-col gap-1">
+              {mayEditDetails && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setEditingApproval((v) => !v)}
+                    className="text-xs text-brand-400 underline hover:text-brand-500"
+                  >
+                    {editingApproval ? 'Done editing approval' : 'Edit approval'}
+                  </button>
+                </div>
+              )}
+              <JobApprovalControl job={job} editing={editingApproval} />
+            </div>
           </div>
         ) : importedView ? (
           // Legacy imported job (details=NULL): the descriptive fields above are now editable; the

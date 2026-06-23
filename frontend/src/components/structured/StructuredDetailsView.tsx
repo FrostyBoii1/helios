@@ -113,7 +113,7 @@ function AutosaveStructuredField({
   return <AutosaveControl value={value} kind={kind} options={options} onSave={onSave} ariaLabel={field.label} />
 }
 
-function Section({ section, fields, details, edit, autosaveField, expanded, onToggle, addedPaths, onRemoveAdded, extras = [], extraEdits, onExtraChange, renderExtraInput }: {
+function Section({ section, fields, details, edit, autosaveField, expanded, onToggle, addedPaths, onRemoveAdded, extras = [], extraEdits, onExtraChange, renderExtraInput, renderAutosaveExtra }: {
   section: { key: string; label: string }
   fields: FieldSpec[]
   details: ParsedDetails
@@ -134,6 +134,10 @@ function Section({ section, fields, details, edit, autosaveField, expanded, onTo
   // Optional custom input for an editable extra (e.g. a catalogue-search autocomplete). When
   // omitted, editable extras render a plain text input.
   renderExtraInput?: (field: SystemHardwareField, value: string, onChange: (value: string) => void) => ReactNode
+  // H5C (Job Detail opt-in): when provided, an editable extra renders this fully self-contained
+  // AUTOSAVE control instead of the batch input — it manages its own draft/save (no `onExtraChange`).
+  // Import review does not pass this, so its hardware extras stay on the batch flow.
+  renderAutosaveExtra?: (field: SystemHardwareField) => ReactNode
 }) {
   const rows = fields.map((f) => ({ f, v: valueAtStorage(details, f.storage), path: detailsPath(f.storage) }))
   const populated = rows.filter((r) => !isBlank(r.v))
@@ -225,7 +229,7 @@ function Section({ section, fields, details, edit, autosaveField, expanded, onTo
       {extras.length > 0 && (
         <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
           {extras.map((ex) => {
-            const canEdit = !!onExtraChange && ex.editable
+            const canEdit = (!!onExtraChange || !!renderAutosaveExtra) && ex.editable
             const current = extraEdits?.[ex.key] ?? ex.value
             const change = (value: string) => onExtraChange?.(ex.key, value)
             return (
@@ -242,7 +246,9 @@ function Section({ section, fields, details, edit, autosaveField, expanded, onTo
                   )}
                 </span>
                 {canEdit ? (
-                  renderExtraInput ? (
+                  renderAutosaveExtra ? (
+                    renderAutosaveExtra(ex)
+                  ) : renderExtraInput ? (
                     renderExtraInput(ex, current, change)
                   ) : (
                     <input
@@ -265,7 +271,7 @@ function Section({ section, fields, details, edit, autosaveField, expanded, onTo
   )
 }
 
-export function StructuredDetailsView({ registry, details, editable, edits, onChange, autosaveField, recordKey, originalDetails, hideImportedNotes, hideKeys = [], systemExtras = [], extraEdits, onExtraChange, renderExtraInput }: {
+export function StructuredDetailsView({ registry, details, editable, edits, onChange, autosaveField, recordKey, originalDetails, hideImportedNotes, hideKeys = [], systemExtras = [], extraEdits, onExtraChange, renderExtraInput, renderAutosaveExtra }: {
   registry: FieldRegistry
   details: ParsedDetails
   editable?: boolean
@@ -300,6 +306,9 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
   // Optional custom input renderer for editable System-hardware extras (e.g. a catalogue-search
   // autocomplete). Applied only to the System section's extras; omit for a plain text input.
   renderExtraInput?: (field: SystemHardwareField, value: string, onChange: (value: string) => void) => ReactNode
+  // H5C (Job Detail opt-in): self-contained AUTOSAVE control for an editable System-hardware extra.
+  // When provided, it replaces the batch input for the System extras (import review omits it).
+  renderAutosaveExtra?: (field: SystemHardwareField) => ReactNode
 }) {
   const edit: EditCtx | null =
     editable && edits && onChange ? { edits, onChange, originalDetails: originalDetails ?? null } : null
@@ -384,6 +393,7 @@ export function StructuredDetailsView({ registry, details, editable, edits, onCh
             extraEdits={extraEdits}
             onExtraChange={section.key === 'system' ? onExtraChange : undefined}
             renderExtraInput={section.key === 'system' ? renderExtraInput : undefined}
+            renderAutosaveExtra={section.key === 'system' ? renderAutosaveExtra : undefined}
           />
         )
       })}

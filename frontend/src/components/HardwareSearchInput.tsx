@@ -41,6 +41,7 @@ export function HardwareSearchInput({
   value,
   onChange,
   onSelect,
+  onBlur,
   category,
   disabled,
   placeholder,
@@ -48,6 +49,10 @@ export function HardwareSearchInput({
   value: string
   onChange: (text: string) => void
   onSelect: (result: HardwareSearchResult, text: string) => void
+  // Optional: called when the input loses focus (used by Job Detail autosave to save free text on
+  // blur). Import review passes none. When provided, a suggestion click is prevented from blurring
+  // the input first (so a pick doesn't trigger a premature free-text save before onSelect).
+  onBlur?: () => void
   category?: HardwareCategory
   disabled?: boolean
   placeholder?: string
@@ -97,6 +102,7 @@ export function HardwareSearchInput({
           setOpen(true)
         }}
         onFocus={() => setOpen(true)}
+        onBlur={onBlur}
         className="input mt-0.5 px-2 py-1 text-sm"
       />
       {showMenu && (
@@ -112,6 +118,9 @@ export function HardwareSearchInput({
               <button
                 key={r.id}
                 type="button"
+                // When autosave-on-blur is active, keep focus on mousedown so the pick (onSelect)
+                // runs WITHOUT the input first blurring + committing the partial free text.
+                onMouseDown={onBlur ? (e) => e.preventDefault() : undefined}
                 onClick={() => pick(r)}
                 className="block w-full cursor-pointer px-2 py-1.5 text-left text-sm hover:bg-surface"
               >

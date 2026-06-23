@@ -218,13 +218,20 @@ explains intent; protect important explicit decisions with tests, not docs alone
 - **Ordinary editable Job Detail fields autosave — no global Save button, no Edit wall.** A change to
   a descriptive field persists when the user finishes interacting with it (blur for text, change for a
   date), as a single-field update. A background refresh never wipes an in-progress edit, and a failed
-  save keeps the typed value (with a retry) — edits are never silently lost. *(Rollout: H5A converts
-  the top-level descriptive fields, H5B the structured registry fields; hardware follows in H5C.)*
+  save keeps the typed value (with a retry) — edits are never silently lost. *(Rollout: H5A converted
+  the top-level descriptive fields, H5B the structured registry fields, H5C the hardware System fields
+  — the model is now complete for every ordinary Job Detail field.)*
+- **Hardware System fields (panel / inverter / battery / metering) autosave the same way, with
+  catalogue autocomplete.** Free text saves on blur and drops any stale catalogue id; picking a
+  catalogue suggestion saves immediately and stamps provenance (the selected canonical id +
+  `manual_correction`, `parser_owned = false`). Each edit persists only its own hardware sub-section.
+  This is the same safe-provenance rule as import review — it records text + provenance into the Job
+  snapshot, never a live catalogue reference, so a later catalogue change still never live-updates a Job.
 - **Workflow controls stay EXPLICIT and separate — they are never swept into field autosave.**
-  Approval (label-is-law structured state), lifecycle **status**, **install date** (its own
-  permission), and **delete** (confirmation) each keep their own deliberate control. Backend-derived
-  blobs (`system_details`/`install_details`) remain non-editable; the hardware snapshot stays stable
-  (a catalogue change never live-updates a Job).
+  Approval (label-is-law structured state) keeps its own deliberate **"Edit approval"** affordance and
+  its own Set-approval action; lifecycle **status**, **install date** (its own permission), and
+  **delete** (confirmation) each keep their own deliberate control too. Backend-derived blobs
+  (`system_details`/`install_details`) and the hardware **Notes** remain non-editable.
 
 ## Tasks & accountability
 

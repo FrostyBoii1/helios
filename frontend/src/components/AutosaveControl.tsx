@@ -10,7 +10,9 @@ import { useFieldAutosave, type AutosaveStatus } from '@/hooks/useFieldAutosave'
 
 export type AutosaveKind = 'text' | 'textarea' | 'number' | 'date' | 'select'
 
-function describeSaveError(err: unknown): string {
+// Shared with other autosave inputs (e.g. AutosaveHardwareField) so the error messaging matches.
+// eslint-disable-next-line react-refresh/only-export-components -- small helper co-located with the control
+export function describeSaveError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 403) {
       return typeof err.detail === 'string' ? err.detail : 'You do not have permission to do that.'
@@ -20,7 +22,9 @@ function describeSaveError(err: unknown): string {
   return 'Could not save.'
 }
 
-function StatusChip({
+/** The inline per-field autosave state chip (Unsaved / Saving… / Saved ✓ / Error + Retry). Reused by
+ *  AutosaveControl and the hardware autosave field so all autosave inputs look identical. */
+export function AutosaveStatusChip({
   status,
   error,
   onRetry,
@@ -59,7 +63,7 @@ export function AutosaveControl({
   ariaLabel?: string
 }) {
   const fa = useFieldAutosave(value, onSave, describeSaveError)
-  const chip = <StatusChip status={fa.status} error={fa.error} onRetry={fa.retry} />
+  const chip = <AutosaveStatusChip status={fa.status} error={fa.error} onRetry={fa.retry} />
 
   if (kind === 'textarea') {
     return (

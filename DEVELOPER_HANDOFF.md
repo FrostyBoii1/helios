@@ -437,6 +437,24 @@ These are stubbed/absent and represent the next phases:
   details=null → no structured inputs/init; derived fields read-only; **ImportRowModal byte-equivalent**.
   Frontend-only, no backend/migration. Deferred: H5C (hardware autosave + retire the batch/approval
   coupling), H5D (install-date save-on-change + polish).
+  **(H5C — hardware fields autosave + retire the temporary batch, frontend)** Job Detail hardware
+  System fields now autosave per-field. New `components/AutosaveHardwareField.tsx` (wraps
+  `useFieldAutosave` + `HardwareSearchInput`: typing clears any pick + saves on blur (free text drops
+  stale catalogue ids); a suggestion pick saves immediately, stamping provenance). `StructuredDetailsView`
+  gained opt-in `renderAutosaveExtra` (Job Detail → autosave hardware extra; import review omits it →
+  batch H3 path). `JobDetailPage.saveHardwareField(field,value,selection)` → `applyHardwareSystemEdits`
+  with ONE key → `PATCH {details:{hardware:<one sub-section>}}`. `HardwareSearchInput` gained optional
+  `onBlur` + (when set) suggestion `onMouseDown preventDefault` so a pick can't blur-commit first;
+  `useFieldAutosave.commit` gained `{force}` (re-selection persists provenance even if text unchanged);
+  `AutosaveControl` exports the shared status chip + error helper. RETIRED: the hardware Save/Cancel
+  bar, the "Edit hardware & approval" button, and all hardware batch state (`editingDetails`/
+  `hardwareEdits`/`hardwareSelections`/`buildPayload`/`pendingPayload`/`saveDetails`/page `describeError`).
+  Approval DECOUPLED: its own "Edit approval"/"Done editing approval" toggle (`editingApproval`) gated on
+  `mayEditDetails` exactly as the old button — same who-can-edit, same "label is law", own Set-approval
+  mutation; NOT autosave. Status/install-date/delete/internal-notes untouched; details=null → no hardware
+  inputs/init; CT/electrical + Hardware Notes read-only; **ImportRowModal byte-equivalent**. Frontend-only,
+  no backend/migration. **The no-Save-button Job Detail model is now complete (descriptive + structured +
+  hardware).** Deferred: H5D polish (install-date save-on-change; unify indicators; activity-log batching).
   **Stage 4C (next)** = frontend import-review display + uncertain/manual-review badges. Deferred:
   full multi-fragment bundle parsing + panel system-size derivation; a shared-alias-index optimisation
   (today `parse_hardware` rebuilds its index per enriched row). Then the remaining lane stages still
