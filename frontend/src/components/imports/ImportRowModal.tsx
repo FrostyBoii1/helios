@@ -21,7 +21,7 @@ import { CommitReverseSection } from '@/components/imports/CommitReverseSection'
 import { CustomerResolutionSection } from '@/components/imports/CustomerResolutionSection'
 import { StructuredDetailsView, detailsPath } from '@/components/structured/StructuredDetailsView'
 import { HardwareNotes } from '@/components/HardwareNotes'
-import { HardwareSearchInput } from '@/components/imports/HardwareSearchInput'
+import { HardwareSearchInput } from '@/components/HardwareSearchInput'
 import { buildDetailsPatch } from '@/lib/detailsPatch'
 import {
   applyHardwareSystemEdits,

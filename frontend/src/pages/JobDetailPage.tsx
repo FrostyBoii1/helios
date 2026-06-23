@@ -11,10 +11,12 @@ import { CustomerOtherJobsPanel } from '@/components/CustomerOtherJobsPanel'
 import { ImportedSourceNotes } from '@/components/ImportedSourceNotes'
 import { InternalNotesPanel } from '@/components/InternalNotesPanel'
 import { HardwareNotes } from '@/components/HardwareNotes'
+import { HardwareSearchInput } from '@/components/HardwareSearchInput'
 import {
   applyHardwareSystemEdits,
   deriveHardwareNotes,
   deriveSystemHardware,
+  type HardwareSelection,
 } from '@/lib/hardwareDisplay'
 import { JobStatusBadge, JOB_STATUS_LABELS, JOB_STATUS_ORDER } from '@/components/JobStatusBadge'
 import { ImportedJobDetails } from '@/components/ImportedJobDetails'
@@ -29,7 +31,7 @@ import { useFieldRegistry } from '@/hooks/useImports'
 import { ApiError } from '@/lib/api'
 import { buildDetailsPatch } from '@/lib/detailsPatch'
 import { parseImportedJobDetails } from '@/lib/importedJobDetails'
-import type { JobInput, JobStatus } from '@/types'
+import type { HardwareSearchResult, JobInput, JobStatus } from '@/types'
 import type { FieldSpec } from '@/types/imports'
 
 const DESCRIPTIVE_FIELDS: { key: keyof JobInput; label: string; textarea?: boolean }[] = [
@@ -89,8 +91,10 @@ export function JobDetailPage() {
   // Phase 4c: string UI state for structured fields, keyed by "<section>.<key>".
   const [detailsEdits, setDetailsEdits] = useState<Record<string, string>>({})
   // System-hardware textbox edits (Panel type / Inverter / Battery / Metering), keyed by field key;
-  // folded into the same PATCH as details.hardware on save.
+  // folded into the same PATCH as details.hardware on save. `hardwareSelections` records the
+  // catalogue pick per field (provenance) when the user chose an autocomplete result.
   const [hardwareEdits, setHardwareEdits] = useState<Record<string, string>>({})
+  const [hardwareSelections, setHardwareSelections] = useState<Record<string, HardwareSelection>>({})
   const [installDate, setInstallDate] = useState('')
   const [editingInstall, setEditingInstall] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,6 +109,7 @@ export function JobDetailPage() {
       setInstallDate(job.install_date ?? '')
       setDetailsEdits({})
       setHardwareEdits({})
+      setHardwareSelections({})
     }
   }, [job])
 
@@ -124,6 +129,21 @@ export function JobDetailPage() {
   }
   function handleHardwareChange(key: string, value: string) {
     setHardwareEdits((prev) => ({ ...prev, [key]: value }))
+    // Typing invalidates any prior catalogue pick for this field, so a stale canonical id is never
+    // stamped onto hand-edited text. A pick() calls this (clear) THEN handleHardwareSelect (set), and
+    // the ordered functional updates compose to "set", so a genuine selection survives.
+    setHardwareSelections((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+  function handleHardwareSelect(key: string, result: HardwareSearchResult) {
+    setHardwareSelections((prev) => ({
+      ...prev,
+      [key]: { id: result.id, confidence: 'manual_correction', model: result.canonical_model ?? null },
+    }))
   }
 
   // One PATCH: changed legacy fields + (structured mode) the coerced registry details patch + any
@@ -138,7 +158,7 @@ export function JobDetailPage() {
     }
     if (structuredEditable) {
       const patch = buildDetailsPatch(detailsEdits, job?.details ?? null, fieldByPath)
-      const hwPatch = applyHardwareSystemEdits(job?.details?.hardware, hardwareEdits)
+      const hwPatch = applyHardwareSystemEdits(job?.details?.hardware, hardwareEdits, hardwareSelections)
       if (patch || hwPatch) {
         payload.details = { ...(patch ?? {}), ...(hwPatch ? { hardware: hwPatch } : {}) }
       }
@@ -149,6 +169,7 @@ export function JobDetailPage() {
     form,
     detailsEdits,
     hardwareEdits,
+    hardwareSelections,
     structuredEditable,
     fieldByPath,
     job,
@@ -183,6 +204,7 @@ export function JobDetailPage() {
       await updateMutation.mutateAsync(pendingPayload)
       setDetailsEdits({})
       setHardwareEdits({})
+      setHardwareSelections({})
       setEditingDetails(false)
     } catch (err) {
       setError(describeError(err, 'Could not save job details.'))
@@ -431,6 +453,16 @@ export function JobDetailPage() {
                 systemExtras={systemHardware}
                 extraEdits={hardwareEdits}
                 onExtraChange={handleHardwareChange}
+                // H4: same catalogue autocomplete as import review on the editable hardware fields.
+                renderExtraInput={(field, value, onChange) => (
+                  <HardwareSearchInput
+                    value={value}
+                    onChange={onChange}
+                    onSelect={(result) => handleHardwareSelect(field.key, result)}
+                    category={field.category}
+                    placeholder={field.label}
+                  />
+                )}
               />
               {/* Network approval: structured state, under the Electrical/network details. */}
               <JobApprovalControl job={job} editing />
@@ -537,6 +569,7 @@ export function JobDetailPage() {
                 setEditingDetails(false)
                 setDetailsEdits({})
                 setHardwareEdits({})
+                setHardwareSelections({})
                 setForm(
                   Object.fromEntries(
                     DESCRIPTIVE_FIELDS.map(({ key }) => [key, (job[key] as string | null) ?? '']),

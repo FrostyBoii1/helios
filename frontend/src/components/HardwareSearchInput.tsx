@@ -1,4 +1,5 @@
-// Reusable hardware textbox with catalogue autocomplete (Hardware Parser lane, H3).
+// Reusable hardware textbox with catalogue autocomplete (Hardware Parser lane, H3/H4).
+// Shared by import review (ImportRowModal) and committed Job Detail (JobDetailPage).
 //
 // A free-text input that, as the user types, queries the lean staff search feed
 // (GET /api/v1/hardware/search) and offers canonical-hardware suggestions. Typing free text is
@@ -74,7 +75,7 @@ export function HardwareSearchInput({
 
   function pick(r: HardwareSearchResult) {
     const label = hardwareResultLabel(r)
-    // Preserve any "N ×" quantity prefix the reviewer already typed; only the model part is replaced.
+    // Preserve any "N ×" quantity prefix the user already typed; only the model part is replaced.
     const m = value.match(QTY_PREFIX_RE)
     const filled = m ? `${m[1]}${label}` : label
     onChange(filled)

@@ -9,6 +9,42 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Hardware Parser lane, H4: Job Detail hardware autocomplete (frontend only)
+
+- **Why:** bring the H3 hardware-correction workflow (free text + catalogue autocomplete) to
+  already-committed Jobs, so a staff member editing a Job can search the catalogue and correct
+  Inverter / Battery / Panel / Metering — saving stable `Job.details.hardware` snapshots only.
+- **What:** the Job Detail System hardware fields now use the **same** `HardwareSearchInput`
+  autocomplete as import review (in edit mode). `JobDetailPage` gained `hardwareSelections` state +
+  `handleHardwareSelect`, passes `renderExtraInput` (the autocomplete) to the **edit-mode**
+  `StructuredDetailsView`, threads `hardwareSelections` into `applyHardwareSystemEdits(hw, edits,
+  selections)`, and clears a field's selection on typing (so a stale canonical id can't attach to
+  hand-edited text). Read-mode stays read-only; `details=null` jobs stay inert (no hardware inputs,
+  no silent init). Save still uses the existing single job PATCH and only touches `details.hardware`.
+  - **Provenance is identical to H3** (the shared `lib/hardwareDisplay.ts` is **unchanged**): a
+    catalogue **selection** stamps `canonical_hardware_id_at_parse_time` (provenance only, never a
+    live reference) + `confidence = manual_correction` + `parser_owned = false`; **free-typed** text
+    drops any stale canonical id / catalogue model / parser provenance. Quantity round-trips.
+- **Component move:** `HardwareSearchInput` moved from `components/imports/` to the neutral
+  `components/HardwareSearchInput.tsx` (it is now shared by import review AND Job Detail). The only
+  change to import review is `ImportRowModal`'s import path — **import-review behaviour is unchanged**.
+- **Scope:** frontend only — **no backend**, no migration, **no parser/ingest/commit/reverse change**,
+  **no Settings>Hardware change**, no import-review behaviour change, no NAS/proposal/scheduling. This
+  is NOT the always-editable Job Detail overhaul (H5) — the existing Edit-button / permission gate is
+  unchanged. Settings>Hardware catalogue edits still never live-update Job snapshots.
+- **Verification:** frontend typecheck + lint (`--max-warnings 0`) + build clean. `hardwareDisplay.ts`
+  untouched, so the H3 provenance assertions still hold (free-text drops stale id; selection stamps
+  it; quantity round-trips). Two adversarial reviewers (wiring + scope) → GATE: PASS. No frontend
+  unit-test runner; component behaviour covered by manual steps.
+- **Files:** frontend `components/HardwareSearchInput.tsx` (moved here),
+  `components/imports/HardwareSearchInput.tsx` (deleted), `components/imports/ImportRowModal.tsx`
+  (import path only), `pages/JobDetailPage.tsx` (autocomplete wiring); docs (CHANGES,
+  DEVELOPER_HANDOFF, business_rules). Permanent.
+- **Deferred:** the always-editable Job Detail overhaul (H5); dropdown keyboard navigation / ARIA
+  (non-blocking polish).
+
+---
+
 ## 2026-06-23 — Hardware Parser lane, H3: import-review editable hardware UI with catalogue autocomplete (frontend only)
 
 - **Why:** make parsed hardware correctable DURING import review, before commit — using the H1 search

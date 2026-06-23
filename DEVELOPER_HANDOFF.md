@@ -394,6 +394,17 @@ These are stubbed/absent and represent the next phases:
   backward-compatible, so **Job Detail (which still calls the 2-arg form + no `renderExtraInput`) is
   unchanged**. Frontend-only, no backend/migration. Verified via typecheck/lint/build + an esbuild+Node
   harness over the pure `hardwareDisplay` exports.
+  **(H4 — Job Detail hardware autocomplete, frontend)** committed Jobs now use the SAME
+  `HardwareSearchInput` on the System hardware fields (edit mode). `HardwareSearchInput` was MOVED to
+  the neutral `components/HardwareSearchInput.tsx` (shared by import review + Job Detail; ImportRowModal's
+  import path updated, behaviour unchanged). `JobDetailPage` adds `hardwareSelections` + `handleHardwareSelect`,
+  passes `renderExtraInput` to the edit-mode `StructuredDetailsView`, and threads selections into
+  `applyHardwareSystemEdits(hw, edits, selections)` (clears a field's selection on type). Read-mode +
+  `details=null` jobs stay inert; save uses the existing single job PATCH (`details.hardware` only).
+  `hardwareDisplay.ts`/`StructuredDetailsView.tsx` are UNCHANGED, so provenance is identical to H3
+  (selection stamps id+manual_correction; free-text drops stale id). Frontend-only, no backend/migration,
+  no Settings/import-review behaviour change. NOT the always-editable overhaul (H5) — the Edit-button/
+  permission gate is unchanged.
   **Stage 4C (next)** = frontend import-review display + uncertain/manual-review badges. Deferred:
   full multi-fragment bundle parsing + panel system-size derivation; a shared-alias-index optimisation
   (today `parse_hardware` rebuilds its index per enriched row). Then the remaining lane stages still

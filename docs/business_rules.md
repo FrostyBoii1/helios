@@ -160,9 +160,12 @@ explains intent; protect important explicit decisions with tests, not docs alone
   / Battery / Metering — alongside Number of panels / Storey / Phase / Roof type, plus a read-only
   **CT / electrical** row), NOT a separate hardware card. The current parsed VALUE always shows
   **regardless of confidence** — low confidence does NOT hide inverter/battery/etc.; it only adds a
-  supplemental flag. Panel type / Inverter / Battery / Metering are **editable as textboxes** in Job
-  Detail edit mode; the edit folds into the existing Job-details PATCH (`{ details: { hardware } }`),
-  updating the Job snapshot ONLY — never Settings > Hardware or the catalogue. An item with a recorded
+  supplemental flag. Panel type / Inverter / Battery / Metering are **editable as textboxes with
+  catalogue autocomplete** (the same free-text + search/select as import review) in Job Detail edit
+  mode; the edit folds into the existing Job-details PATCH (`{ details: { hardware } }`), updating the
+  Job snapshot ONLY — never Settings > Hardware or the catalogue. A catalogue selection records
+  provenance (`canonical_hardware_id_at_parse_time` + `manual_correction`); free-typed text is saved
+  as a manual correction with no stale catalogue id. An item with a recorded
   quantity > 1 is shown inline as **"N × MODEL"** and round-trips on edit (the quantity is never lost
   in the UI). A small read-only
   **"Hardware notes"** area is **supplemental only** (low-confidence/`manual_review` flags, ambiguous
