@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import {
@@ -7,6 +7,7 @@ import {
   canEditJobDetails,
   canEditJobInstallDate,
 } from '@/auth/permissions'
+import { AutosaveControl } from '@/components/AutosaveControl'
 import { AutosaveField } from '@/components/AutosaveField'
 import { AutosaveHardwareField } from '@/components/AutosaveHardwareField'
 import { CustomerOtherJobsPanel } from '@/components/CustomerOtherJobsPanel'
@@ -76,16 +77,11 @@ export function JobDetailPage() {
   // no batch hardware state and no "Edit" wall remain. Approval keeps its own explicit edit toggle
   // (decoupled from the retired hardware batch), preserving its read-vs-edit behaviour unchanged.
   const [editingApproval, setEditingApproval] = useState(false)
-  const [installDate, setInstallDate] = useState('')
-  const [editingInstall, setEditingInstall] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // H5A–C: descriptive / structured / hardware fields are all field-level autosave (each control
-  // reconciles its OWN draft from the server only when not mid-edit), so there is NO global form reset
-  // here — a refetch can never wipe a dirty field. Only the install-date local input is synced.
-  useEffect(() => {
-    if (job) setInstallDate(job.install_date ?? '')
-  }, [job])
+  // H5A–D: descriptive / structured / hardware / install-date fields are ALL field-level autosave —
+  // each control reconciles its OWN draft from the server only when idle/saved — so there is NO global
+  // form reset here and a background refetch can never wipe a dirty in-progress edit.
 
   // path ("<section>.<key>") → field spec, for input_type-aware coercion on save.
   const fieldByPath = useMemo(() => {
@@ -139,20 +135,12 @@ export function JobDetailPage() {
     )
   }
 
-  async function saveInstallDate() {
-    setError(null)
-    const next = installDate || null
-    if ((job!.install_date ?? null) === next) {
-      setEditingInstall(false)
-      return
-    }
-    try {
-      await updateMutation.mutateAsync({ install_date: next })
-      setEditingInstall(false)
-    } catch {
-      setError('Could not update the install date.')
-    }
-  }
+  // H5D: install date is field-level autosave under its OWN INSTALL_ROLES permission — a single
+  // `{ install_date }` PATCH, never batched with descriptive details. The shared autosave hook no-ops
+  // when unchanged, retains the typed value + offers inline Retry on failure (not the global banner),
+  // and never clobbers an in-flight edit on refetch.
+  const saveInstallDate = (value: string): Promise<void> =>
+    updateMutation.mutateAsync({ install_date: value || null }).then(() => undefined)
 
   async function onStatusChange(next: JobStatus) {
     setError(null)
@@ -289,43 +277,17 @@ export function JobDetailPage() {
 
         <div className="card p-4">
           <h2 className="eyebrow mb-2">Install date</h2>
-          {editingInstall ? (
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={installDate}
-                onChange={(e) => setInstallDate(e.target.value)}
-                className="input w-auto px-2 py-1 text-sm"
-              />
-              <button
-                onClick={saveInstallDate}
-                disabled={updateMutation.isPending}
-                className="btn-primary px-3 py-1 text-sm"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setEditingInstall(false)
-                  setInstallDate(job.install_date ?? '')
-                }}
-                className="text-sm text-muted underline hover:text-fg"
-              >
-                Cancel
-              </button>
-            </div>
+          {/* H5D: save-on-change autosave under its OWN INSTALL_ROLES permission — same
+              AutosaveControl + status chip as every other Job Detail field. Read-only otherwise. */}
+          {mayEditInstall ? (
+            <AutosaveControl
+              value={job.install_date ?? ''}
+              kind="date"
+              onSave={saveInstallDate}
+              ariaLabel="Install date"
+            />
           ) : (
-            <div className="flex items-center gap-3">
-              <span className="text-fg">{job.install_date ?? 'Not scheduled'}</span>
-              {mayEditInstall && (
-                <button
-                  onClick={() => setEditingInstall(true)}
-                  className="text-sm text-brand-400 underline hover:text-brand-500"
-                >
-                  {job.install_date ? 'Reschedule' : 'Set date'}
-                </button>
-              )}
-            </div>
+            <p className="text-fg">{job.install_date ?? 'Not scheduled'}</p>
           )}
         </div>
       </div>
@@ -405,7 +367,13 @@ export function JobDetailPage() {
                   </button>
                 </div>
               )}
-              <JobApprovalControl job={job} editing={editingApproval} />
+              <JobApprovalControl
+                job={job}
+                editing={editingApproval}
+                // H5D: collapse the editor back to the read view after a successful approval set
+                // (UX only — the mutation, permission gating, and "label is law" rules are unchanged).
+                onSaved={() => setEditingApproval(false)}
+              />
             </div>
           </div>
         ) : importedView ? (

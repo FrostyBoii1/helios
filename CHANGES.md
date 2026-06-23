@@ -9,6 +9,59 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-23 — Job Detail H5D: install-date autosave + autosave polish (frontend only)
+
+- **Why:** finish the Job Detail autosave pass. Install date was the last ordinary field still on a
+  small Edit / Save / Cancel flow; convert it to save-on-change autosave (under its own permission) so
+  the page is consistent, and apply small presentation/accessibility polish. Workflow controls (status,
+  approval, delete, internal notes) stay deliberate and separate — this polishes the live model, it
+  does not redesign anything.
+- **What:**
+  - **Install date → field-level autosave** (`JobDetailPage`): the Edit/Save/Cancel control (and its
+    `installDate`/`editingInstall` local state + the `useEffect([job])` that synced it) is removed.
+    For a user with the install-date permission it now renders the shared **`AutosaveControl`**
+    (`kind="date"`) — the date saves the moment it changes, as a single-field `PATCH { install_date }`
+    via the same `useUpdateJob` path, **never batched** with the descriptive details. Non-editors see
+    the read-only value ("Not scheduled" when empty). Unchanged → no PATCH; a failed save keeps the
+    value with inline Retry; a refetch never clobbers an in-progress edit — all inherited from the
+    shared `useFieldAutosave`. **Permission is unchanged and still separate**: gated on
+    `canEditJobInstallDate` (admin / scheduling, INSTALL_ROLES), distinct from descriptive edit.
+  - **Unified indicators:** because install date now uses `AutosaveControl`, it shows the **same**
+    Unsaved / Saving… / Saved ✓ / Error+Retry chip as the descriptive, structured, and hardware fields
+    — no new visual language was introduced. Its errors are now inline (not the page-level banner).
+  - **Approval auto-collapse (optional, UX only):** `JobApprovalControl` gained an optional `onSaved`
+    callback fired on a successful Set-approval; Job Detail passes `() => setEditingApproval(false)` so
+    the approval editor collapses back to the read view after a save. The mutation, permission gating
+    (`canSetJobApproval`), and "label is law" rules are **unchanged**; approval is NOT autosave.
+  - **HardwareSearchInput keyboard + ARIA polish (additive):** Escape closes the dropdown; Arrow
+    Up/Down move a highlighted suggestion (wrap-around) and Enter selects the highlighted one; combobox/
+    listbox/option ARIA roles + `aria-activedescendant` were added. All strictly additive — Enter only
+    acts when a suggestion is highlighted (a state reachable only via the Arrow keys), so free-text
+    typing, mouse selection, and the blur-commit flow are unchanged. **Import review is preserved:** the
+    Escape handler does NOT `stopPropagation`, so in the import-review modal (whose own document-level
+    Escape closes it) a single Escape still closes the modal exactly as before — it merely also collapses
+    any open suggestion list in the same press (same end state). In Job Detail (no surrounding modal)
+    Escape simply closes the dropdown. Import-review DATA behaviour is untouched.
+- **Kept deliberately unchanged:** lifecycle **status** (immediate-save dropdown), **delete**
+  (confirm), **internal notes** (its own notes panel), **approval** business rules; `AutosaveControl` /
+  `AutosaveField` / `useFieldAutosave` (reused as-is); the backend, the hardware snapshot stability, and
+  import review.
+- **Scope:** frontend only — no backend, migration, parser/import, Settings, NAS/proposal/scheduling,
+  or data-file change. No new dependencies.
+- **Files:** `pages/JobDetailPage.tsx`, `components/JobApprovalControl.tsx`,
+  `components/HardwareSearchInput.tsx`; docs (CHANGES, DEVELOPER_HANDOFF, business_rules). Permanent.
+- **Verification:** frontend typecheck + lint (`--max-warnings 0`) + build clean; an esbuild+Node
+  harness re-proved the `canAdoptServerValue` no-clobber predicate and the single-field
+  `{ install_date: value || null }` mapping (no headless React runner is installed, so the no-op /
+  retain-on-failure behaviour is inherited unchanged from the already-shipped `useFieldAutosave`);
+  static scope + grep checks (old install-date flow gone, single-field PATCH, status/approval/delete/
+  notes still present, ImportRowModal untouched). Two adversarial reviewers → GATE: PASS.
+- **Deferred:** none material — the no-global-Save-button Job Detail model is complete across
+  descriptive + structured + hardware + install-date fields. (Possible future: full screen-reader
+  announcement of the autosave status via an aria-live region; per-field activity-log batching.)
+
+---
+
 ## 2026-06-23 — Job Detail H5C: hardware fields autosave + retire the temporary edit flow (frontend only)
 
 - **Why:** remove the last hardware-specific Save button. Job Detail hardware System fields now behave

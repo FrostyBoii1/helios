@@ -8,7 +8,7 @@
 // caller can record provenance (canonical id + manual_correction). It writes only TEXT/provenance
 // into the snapshot — never a live catalogue reference.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { useHardwareSearch } from '@/hooks/useHardware'
 import type { HardwareCategory, HardwareSearchResult } from '@/types'
 
@@ -60,7 +60,10 @@ export function HardwareSearchInput({
   const [open, setOpen] = useState(false)
   // `value` drives the input; `query` is the debounced search term so we don't fire per keystroke.
   const [query, setQuery] = useState(value)
+  // Keyboard-highlighted suggestion index (-1 = none). Additive: free-text / mouse behaviour unchanged.
+  const [active, setActive] = useState(-1)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const listId = useId()
 
   useEffect(() => {
     const id = setTimeout(() => setQuery(value), 200)
@@ -69,6 +72,12 @@ export function HardwareSearchInput({
 
   const { data, isFetching } = useHardwareSearch(query, category, { enabled: open })
   const results = data?.items ?? []
+
+  // Reset the keyboard highlight whenever the result set changes (new debounced query) or the menu
+  // closes, so a stale index can never point at the wrong suggestion.
+  useEffect(() => {
+    setActive(-1)
+  }, [query, open])
 
   useEffect(() => {
     function onDocMouseDown(e: MouseEvent) {
@@ -89,6 +98,35 @@ export function HardwareSearchInput({
   }
 
   const showMenu = open && query.trim().length >= 2
+  // Clamp the highlight to the live result set (it may shrink between renders).
+  const activeClamped = active >= 0 && active < results.length ? active : -1
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    // Escape closes the dropdown (without changing the typed value).
+    if (e.key === 'Escape') {
+      if (open) {
+        e.preventDefault()
+        setOpen(false)
+      }
+      return
+    }
+    if (!showMenu || results.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActive((i) => (i + 1) % results.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActive((i) => (i <= 0 ? results.length - 1 : i - 1))
+    } else if (e.key === 'Enter' && activeClamped >= 0) {
+      // Enter only acts when a suggestion is HIGHLIGHTED (a new state reachable only via the Arrow
+      // keys), so free-text typing and existing import-review behaviour are unchanged.
+      const r = results[activeClamped]
+      if (r) {
+        e.preventDefault()
+        pick(r)
+      }
+    }
+  }
 
   return (
     <div ref={wrapRef} className="relative">
@@ -97,16 +135,26 @@ export function HardwareSearchInput({
         disabled={disabled}
         placeholder={placeholder}
         autoComplete="off"
+        role="combobox"
+        aria-expanded={showMenu}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={activeClamped >= 0 ? `${listId}-opt-${activeClamped}` : undefined}
         onChange={(e) => {
           onChange(e.target.value)
           setOpen(true)
         }}
         onFocus={() => setOpen(true)}
         onBlur={onBlur}
+        onKeyDown={onKeyDown}
         className="input mt-0.5 px-2 py-1 text-sm"
       />
       {showMenu && (
-        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-line bg-elevated shadow-lg">
+        <div
+          id={listId}
+          role="listbox"
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-line bg-elevated shadow-lg"
+        >
           {isFetching && results.length === 0 ? (
             <div className="px-2 py-1.5 text-xs text-faint">Searching…</div>
           ) : results.length === 0 ? (
@@ -114,15 +162,21 @@ export function HardwareSearchInput({
               No catalogue match — free text is saved as typed.
             </div>
           ) : (
-            results.map((r) => (
+            results.map((r, i) => (
               <button
                 key={r.id}
+                id={`${listId}-opt-${i}`}
                 type="button"
+                role="option"
+                aria-selected={i === activeClamped}
                 // When autosave-on-blur is active, keep focus on mousedown so the pick (onSelect)
                 // runs WITHOUT the input first blurring + committing the partial free text.
                 onMouseDown={onBlur ? (e) => e.preventDefault() : undefined}
+                onMouseEnter={() => setActive(i)}
                 onClick={() => pick(r)}
-                className="block w-full cursor-pointer px-2 py-1.5 text-left text-sm hover:bg-surface"
+                className={`block w-full cursor-pointer px-2 py-1.5 text-left text-sm hover:bg-surface ${
+                  i === activeClamped ? 'bg-surface' : ''
+                }`}
               >
                 <span className="text-fg">{hardwareResultLabel(r)}</span>
                 {resultMeta(r) && <span className="ml-1.5 text-xs text-faint">{resultMeta(r)}</span>}

@@ -25,7 +25,17 @@ const READ_LABEL: Record<JobApprovalState, string> = {
   approved: 'Approved',
 }
 
-export function JobApprovalControl({ job, editing }: { job: Job; editing: boolean }) {
+export function JobApprovalControl({
+  job,
+  editing,
+  onSaved,
+}: {
+  job: Job
+  editing: boolean
+  // Optional: called after a successful approval set (H5D lets the parent collapse the editor).
+  // Purely a UX hook — the mutation and business rules are unchanged whether or not it is provided.
+  onSaved?: () => void
+}) {
   const { user } = useAuth()
   const canEdit = canSetJobApproval(user?.role.name)
   const { data: labels } = useJobLabels(job.id)
@@ -83,10 +93,13 @@ export function JobApprovalControl({ job, editing }: { job: Job; editing: boolea
           <button
             type="button"
             onClick={() =>
-              setApproval.mutate({
-                state,
-                pending_date: state === 'pending' ? pendingDate || null : null,
-              })
+              setApproval.mutate(
+                {
+                  state,
+                  pending_date: state === 'pending' ? pendingDate || null : null,
+                },
+                { onSuccess: () => onSaved?.() },
+              )
             }
             disabled={!dirty || setApproval.isPending}
             className="btn-primary px-3 py-1 text-sm"

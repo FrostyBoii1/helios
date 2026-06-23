@@ -455,6 +455,29 @@ These are stubbed/absent and represent the next phases:
   inputs/init; CT/electrical + Hardware Notes read-only; **ImportRowModal byte-equivalent**. Frontend-only,
   no backend/migration. **The no-Save-button Job Detail model is now complete (descriptive + structured +
   hardware).** Deferred: H5D polish (install-date save-on-change; unify indicators; activity-log batching).
+  **(H5D — install-date autosave + polish, frontend)** Install date converted from its Edit/Save/Cancel
+  control to save-on-change autosave: `JobDetailPage` now renders the shared `AutosaveControl`
+  (`kind="date"`) when `canEditJobInstallDate` (admin/scheduling — INSTALL_ROLES, SEPARATE from
+  descriptive edit), else a read-only value; `saveInstallDate(value)` is a single-field
+  `PATCH {install_date: value||null}` via the same `useUpdateJob`, never batched. Removed the
+  `installDate`/`editingInstall` state and the `useEffect([job])` sync (each autosave control reconciles
+  its own draft). No-op/retain-on-failure/no-clobber are inherited from `useFieldAutosave`; install-date
+  errors are now the inline chip, not the page banner — so descriptive/structured/hardware/install-date
+  all share ONE indicator (no new visual language). `JobApprovalControl` gained an optional `onSaved`
+  (fired on a successful Set-approval) and Job Detail passes `()=>setEditingApproval(false)` to collapse
+  the editor after a save — UX only, approval mutation/gating/"label is law" unchanged; still NOT
+  autosave. `HardwareSearchInput` got additive keyboard + ARIA polish (Escape closes; Arrow Up/Down +
+  Enter select a highlighted suggestion; combobox/listbox/option roles + `aria-activedescendant`) —
+  Enter acts ONLY on an Arrow-highlighted item, so free-text/mouse/blur are unchanged. Import review is
+  preserved: the Escape branch deliberately does NOT `stopPropagation`, so the import-review modal's own
+  document-level Escape still closes it on a single press (the handler just also collapses an open list
+  in that press — same end state); in Job Detail Escape merely closes the dropdown. Import-review DATA
+  behaviour is untouched. Status (immediate-save dropdown), delete (confirm), internal-notes panel untouched.
+  Frontend-only, no backend/migration, no new deps. **The no-Save-button Job Detail model is complete
+  across descriptive + structured + hardware + install-date.** No headless React runner is installed, so
+  the hook-level no-op/error behaviour is covered by reuse + an esbuild harness on the pure predicate +
+  payload mapping (not a live render test). Deferred (minor): aria-live status announcement; activity-log
+  batching.
   **Stage 4C (next)** = frontend import-review display + uncertain/manual-review badges. Deferred:
   full multi-fragment bundle parsing + panel system-size derivation; a shared-alias-index optimisation
   (today `parse_hardware` rebuilds its index per enriched row). Then the remaining lane stages still
