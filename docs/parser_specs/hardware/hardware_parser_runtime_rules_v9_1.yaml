@@ -2566,6 +2566,10 @@ hardware_catalog:
   - BW-BAT-10.1 P
   - 10.1 neovolt
   - extension neovolt 10.1
+  - Neovolt BW-BAT-10.1kWh
+  - BW-BAT-10.1kWh
+  - Neovolt BW-BAT-10.1kw hr
+  - BW-BAT-10.1kw hr
   loose_aliases: []
   source_examples:
   - 1 × Neovolt BW-BAT-10.1P · 10.1kWh
@@ -2592,8 +2596,6 @@ hardware_catalog:
   - Neovolt BW-BAT-10.1/AC COUPLE 5KW HYBRID NEOVOLT
   - Neovolt BW-BAT-10.1P · 10.1kWh
   - Neovolt BW-BAT-10.1P · 10.1kWh - USE THE 5KW DC HYBRID INVERTER ONLY
-  - Neovolt BW-BAT-10.1kWh
-  - Neovolt BW-BAT-10.1kw hr
   confidence:
     exact: exact
     loose: unconfirmed_raw_text
@@ -3105,6 +3107,13 @@ hardware_catalog:
   - 13.3p
   - extension 13.3p
   - ext 13.3p
+  - exten 13.3p
+  - ext 13.3p alpha
+  - extenson 13.3p
+  - extenston 13.3p
+  - extens 13.3p battery
+  - extension battery 13.3p
+  - 13.3p alpha
   loose_aliases: []
   source_examples:
   - 1 X 13.3P ALPHA Smile 5 inv + Extension 13.3P
@@ -4075,6 +4084,128 @@ bundle_interpretations:
   confidence: manual_correction
   inverters:
   - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+# P7 — real workbook Swatten All-In-One 19.2 phrasings (the P6b bundle keys above used a word order /
+# spacing that the actual cells do not, so they never fired). Each is a literal owner-confirmable cell.
+# Standalone "All In One" cell = the combined unit -> Swatten SiH-5kW-TH inverter + Swatten SieB-H19K2-F
+# battery (the 19.2kWh is one battery = 6 x 3.2kWh modules). Deterministic whole-cell only.
+- id: p7_bundle_swatten_19_2_all_in_one
+  match: Swatten 19.2 ALL IN ONE
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: p7_bundle_swatten_19_2kw_all_in_one
+  match: Swatten 19.2kw All In One
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: p7_bundle_swatten_19_2_all_in_one_5kw
+  match: SWATTEN 19.2 ALL IN ONE 5KW
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: p7_bundle_swatten_19_2_all_in_one_3phase
+  match: Swatten 19.2 ALL IN ONE - 3 phase
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+  notes:                                  # preserve the explicit phase wording (model is single-phase SKU)
+  - Swatten source says 3 phase
+- id: p7_bundle_swatten_all_in_one_19_2kw_battery_inv
+  match: Swatten All in One 19.2kw Battery/INV
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: p7_bundle_swatten_all_in_one_19_2_5kw_3ph_hybrid
+  match: Swatten All In One 19.2 with 5kw 3 phase Hybrid Inverter
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+  notes:
+  - Swatten source says 3 phase
+- id: p7_bundle_swatten_all_in_one_19_2_5kw_hybrid
+  match: Swatten All In One 19.2 with 5kw Hybrid Inverter
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: p7_bundle_swatten_all_in_one_19_2kw_5kw_inverter
+  match: Swatten All In One 19.2kw/5kw Inverter Swatten
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: p7_bundle_swatten_all_in_one_19_2kw_battery_system
+  match: All in One 19.2kw Swatten Battery System/6kw Hybrid inverter
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: p7_bundle_swatten_all_in_one_19_2kw_batt
+  match: Swatten All in One 19.2kw batt
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: p7_bundle_swatten_19_2_5kw_3p_6x32
+  match: All In one Swatten 19.2 - 1 x 5kw 3P and 6 x 3.2 batt
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+  notes:
+  - Swatten source says 3P
+- id: p7_bundle_swatten_19_2_5kw_1p_6x32
+  match: All In one Swatten 19.2 - 1 x 5kw 1P and 6 x 3.2 batt
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+# Standalone cell that records only the battery (no "all in one" inverter wording) -> battery only.
+- id: p7_bundle_swatten_19_2wkw_battery
+  match: SWATTEN 19.2WKW BATTERY
+  confidence: manual_correction
+  batteries:
+  - model: Swatten SieB-H19K2-F
+# Quantity 2 of the all-in-one.
+- id: p7_bundle_swatten_2x_19_2_all_in_one_3phase
+  match: 2 x Swatten 19.2 ALL IN ONE - 3 phase
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+    quantity: 2
+  batteries:
+  - model: Swatten SieB-H19K2-F
+    quantity: 2
+  notes:
+  - Swatten source says 3 phase
+# SolaX inverter + Swatten battery: the cell explicitly labels the Swatten as the BATTERY, so the SolaX
+# is the (exact) inverter and the Swatten contributes the SieB-H19K2-F battery only.
+- id: p7_bundle_solax_x1smt10k_swatten_19_2_batt
+  match: SolaX Power X1-SMT-10K-G2 + SWATTEN ALL IN 19.2KW BATT
+  confidence: manual_correction
+  inverters:
+  - model: X1-SMT-10K-G2
+    confidence: exact
   batteries:
   - model: Swatten SieB-H19K2-F
 - id: bundle_mixed_solax_x1smt_alpha_m5_20kw

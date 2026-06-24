@@ -844,3 +844,126 @@ def test_p6b_solis_vast_context(seeded):
 def test_p6b_plain_ambiguous_still_raw(seeded, text):
     out = parse_hardware(seeded, inverter_text=text)
     assert _only(out["inverters"])["confidence"] == "unconfirmed_raw_text"
+
+
+# --------------------------------------------------------------------------- #
+# P7: deterministic pre-reimport polish — parenthesised model formatting, capacity-suffix Neovolt
+# aliases, extension/typo 13.3P aliases, and the real-workbook Swatten All-In-One phrasings. Every
+# addition is exact/non-fuzzy; ambiguous capacity-only and uncatalogued combos still stay raw.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("text,model", [
+    ("SolaX (X1-SMT-10K-G2)", "X1-SMT-10K-G2"),
+    ("Solax (X1-SMT-10K-G2)", "X1-SMT-10K-G2"),
+    ("SolaX (X3-MIC-5K-G2)", "X3-MIC-5K-G2"),
+    ("SolaX (X1-SMT-6K-G2)", "X1-SMT-6K-G2"),
+    ("SolaX (X3-PRO-10K-G2)", "X3-PRO-10K-G2"),
+    ("SolaX (X1-BOOST-6K-G4)", "X1-BOOST-6K-G4"),
+])
+def test_p7_parenthesised_solax_model_resolves(seeded, text, model):
+    out = parse_hardware(seeded, inverter_text=text)
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == model and inv["confidence"] == "exact"
+
+
+def test_p7_deparen_never_resolves_non_model(seeded):
+    # The paren strip is additive: a parenthesised non-alias must stay raw, never guess.
+    out = parse_hardware(seeded, inverter_text="SolaX (TBC)")
+    assert _only(out["inverters"])["confidence"] == "unconfirmed_raw_text"
+
+
+@pytest.mark.parametrize("text", [
+    "Neovolt BW-BAT-10.1kWh", "BW-BAT-10.1kWh", "Neovolt BW-BAT-10.1kw hr",
+])
+def test_p7_neovolt_capacity_suffix_resolves_battery(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["batteries"])["model_text"] == "Neovolt BW-BAT-10.1P"
+
+
+def test_p7_neovolt_dash_split_capacity_stays_raw(seeded):
+    # Deferred by design: the " - " splits the model from its capacity, so this is NOT resolved.
+    # (Raw items carry no canonical id; the key is dropped by exclude_none, hence .get().)
+    out = parse_hardware(seeded, inverter_text="Neovolt BW-BAT - 10.1kw hr")
+    items = out["inverters"] + out["batteries"]
+    assert all(not i.get("canonical_hardware_id_at_parse_time") for i in items)
+
+
+@pytest.mark.parametrize("text", [
+    "exten 13.3P", "ext 13.3P Alpha", "extenson 13.3P", "extenston 13.3P",
+    "extens 13.3P battery", "extension battery 13.3P", "13.3P Alpha",
+])
+def test_p7_extension_typo_variants_resolve_13_3p(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["batteries"])["model_text"] == "SMILE-BAT-13.3P"
+
+
+def test_p7_extension_typo_aggregates_with_base(seeded):
+    out = parse_hardware(seeded, inverter_text="1 × Alpha ESS SMILE-BAT-13.3P + extenston 13.3P")
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SMILE-BAT-13.3P" and bat["quantity"] == 2
+
+
+def test_p7_generic_extension_without_model_stays_raw(seeded):
+    # "exten battery" carries no model token (13.3P) — must NOT resolve to any battery.
+    out = parse_hardware(seeded, inverter_text="exten battery")
+    items = out["inverters"] + out["batteries"]
+    assert items and all(not i.get("canonical_hardware_id_at_parse_time") for i in items)
+
+
+@pytest.mark.parametrize("text", [
+    "Swatten 19.2 ALL IN ONE",
+    "Swatten 19.2kw All In One",
+    "SWATTEN 19.2 ALL IN ONE 5KW",
+    "Swatten 19.2 ALL IN ONE - 3 phase",
+    "Swatten All in One 19.2kw Battery/INV",
+    "Swatten All In One 19.2 with 5kw Hybrid Inverter",
+    "All In one Swatten 19.2 - 1 x 5kw 3P and 6 x 3.2 batt",
+])
+def test_p7_swatten_all_in_one_phrasings_resolve_unit(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["inverters"])["model_text"] == "Swatten SiH-5kW-TH"
+    assert _only(out["batteries"])["model_text"] == "Swatten SieB-H19K2-F"
+
+
+def test_p7_swatten_battery_only_phrasing(seeded):
+    out = parse_hardware(seeded, inverter_text="SWATTEN 19.2WKW BATTERY")
+    assert out["inverters"] == []
+    assert _only(out["batteries"])["model_text"] == "Swatten SieB-H19K2-F"
+
+
+def test_p7_swatten_quantity_two_all_in_one(seeded):
+    out = parse_hardware(seeded, inverter_text="2 x Swatten 19.2 ALL IN ONE - 3 phase")
+    inv = _only(out["inverters"])
+    bat = _only(out["batteries"])
+    assert inv["model_text"] == "Swatten SiH-5kW-TH" and inv["quantity"] == 2
+    assert bat["model_text"] == "Swatten SieB-H19K2-F" and bat["quantity"] == 2
+
+
+def test_p7_swatten_solax_combo_inverter_plus_battery(seeded):
+    out = parse_hardware(seeded, inverter_text="SolaX Power X1-SMT-10K-G2 + SWATTEN ALL IN 19.2KW BATT")
+    inv = _only(out["inverters"])
+    bat = _only(out["batteries"])
+    assert inv["model_text"] == "X1-SMT-10K-G2" and inv["confidence"] == "exact"
+    assert bat["model_text"] == "Swatten SieB-H19K2-F"
+
+
+@pytest.mark.parametrize("text,note", [
+    ("Swatten 19.2 ALL IN ONE - 3 phase", "Swatten source says 3 phase"),
+    ("Swatten All In One 19.2 with 5kw 3 phase Hybrid Inverter", "Swatten source says 3 phase"),
+    ("All In one Swatten 19.2 - 1 x 5kw 3P and 6 x 3.2 batt", "Swatten source says 3P"),
+    ("2 x Swatten 19.2 ALL IN ONE - 3 phase", "Swatten source says 3 phase"),
+])
+def test_p7_swatten_three_phase_wording_preserved_as_note(seeded, text, note):
+    # The model still resolves to the (single-phase) Swatten unit, but the cell's explicit phase
+    # wording is preserved in site_notes so the 1P/3P signal is never silently discarded.
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["inverters"])["model_text"] == "Swatten SiH-5kW-TH"
+    assert _only(out["batteries"])["model_text"] == "Swatten SieB-H19K2-F"
+    assert note in (out.get("site_notes") or {}).get("raw_misc", [])
+
+
+def test_p7_swatten_single_phase_cell_has_no_phase_note(seeded):
+    # The 1P cell already matches the single-phase model, so no phase note is added.
+    out = parse_hardware(seeded, inverter_text="All In one Swatten 19.2 - 1 x 5kw 1P and 6 x 3.2 batt")
+    assert _only(out["inverters"])["model_text"] == "Swatten SiH-5kW-TH"
+    raw_misc = (out.get("site_notes") or {}).get("raw_misc", [])
+    assert not any("phase" in n.lower() for n in raw_misc)

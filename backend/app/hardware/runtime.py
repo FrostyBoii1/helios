@@ -232,6 +232,12 @@ def _normalized_hit(core: str, idx: "_Index") -> "_Hit | None":
         candidates.append(trimmed)                    # "SBR128 BATT" -> "SBR128"
         _add_brand_strip(trimmed)                     # "Sungrow SH10RT inverter" -> "SH10RT"
 
+    if "(" in collapsed or ")" in collapsed:          # P7: parentheses are formatting noise around a model
+        deparen = " ".join(collapsed.replace("(", " ").replace(")", " ").split())
+        if deparen and deparen != collapsed:
+            candidates.append(deparen)                # "SolaX (X1-SMT-10K-G2)" -> "SolaX X1-SMT-10K-G2"
+            _add_brand_strip(deparen)                 # -> "X1-SMT-10K-G2" (hits ONLY if a real alias)
+
     for cand in candidates:
         hit = idx.exact_ci.get(_key(cand)) or idx.loose_ci.get(_key(cand))
         if hit is not None:

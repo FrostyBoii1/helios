@@ -9,6 +9,58 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-24 — Hardware Parser P7: deterministic pre-reimport coverage polish (spec + runtime)
+
+- **Why:** the pre-reimport readiness audit confirmed the parser is broadly reimport-ready but found a set of
+  KNOWN, deterministic coverage gaps — chiefly that the real-workbook Swatten "All In One 19.2" phrasings were
+  under-covered (the P6b bundle keys used a word order / spacing the actual cells do not), plus a few exact
+  alias gaps. P7 closes those gaps WITHOUT changing the parser's conservative policy: still exact-only, never
+  fuzzy; ambiguous / capacity-only text stays raw/manual_review by design.
+- **What (four additive changes):**
+  - **De-parenthesised model resolution** (`runtime.py` `_normalized_hit`): a fragment that did not match
+    directly is retried with `(`/`)` stripped (and a brand-stripped form), e.g. `SolaX (X1-SMT-10K-G2)` →
+    `X1-SMT-10K-G2`. A hit is returned ONLY when the de-parenned remainder is itself an existing catalogue
+    alias — purely additive, never guesses. Also correctly resolves Sungrow `(SH10RT)`/`(SH10RS)` and Goodwe
+    `(GW10KAU-DT)`.
+  - **Neovolt capacity-suffix aliases** on `neovolt_bw_bat_10_1p`: `Neovolt BW-BAT-10.1kWh`, `BW-BAT-10.1kWh`,
+    `Neovolt BW-BAT-10.1kw hr`, `BW-BAT-10.1kw hr` (10.1kWh is the model's own capacity → unambiguous; the two
+    colliding `source_examples` were removed per the evidence-only policy).
+  - **13.3P extension typo/abbrev aliases** on `smile_bat_13_3p`: `exten 13.3p`, `ext 13.3p alpha`,
+    `extenson 13.3p`, `extenston 13.3p`, `extens 13.3p battery`, `extension battery 13.3p`, `13.3p alpha`
+    (model-unambiguous — `13.3P` = `SMILE-BAT-13.3P`; aggregates with the base battery into a summed quantity).
+  - **15 Swatten whole-cell bundles** (`p7_bundle_swatten_*` + one SolaX combo): the real workbook phrasings
+    (`Swatten 19.2kw All In One`, `Swatten 19.2 ALL IN ONE`, `… - 3 phase`, `All in One … Battery/INV`,
+    `All In one Swatten 19.2 - 1 x 5kw 1P/3P and 6 x 3.2 batt`, …) → `Swatten SiH-5kW-TH` + `Swatten
+    SieB-H19K2-F`; `SWATTEN 19.2WKW BATTERY` → battery only; `2 x … ALL IN ONE - 3 phase` → qty 2 of each;
+    `SolaX Power X1-SMT-10K-G2 + SWATTEN ALL IN 19.2KW BATT` → `X1-SMT-10K-G2` (exact) + Swatten battery.
+    `Swatten SiH-5kW-TH` is a single-phase SKU and a distinct 3-phase Swatten model is unconfirmed, so the
+    four bundles whose source cell explicitly says **3 phase / 3P** also preserve that wording in
+    `site_notes.raw_misc` (`Swatten source says 3 phase` / `… 3P`) rather than asserting a (possibly wrong)
+    3-phase model — the phase signal is kept for human review, the model stays the owner-confirmed pair.
+- **Conservative / no regression — verified:** still never fuzzy (only exact aliases, exact whole-cell
+  bundles, and exact de-paren-then-exact-alias resolve). Plain ambiguous brand+capacity (`Solis 5kw`,
+  `Goodwe 10kw`), capacity-only (`15kw battery`), extension-without-a-model-token (`exten battery`,
+  `extension 10.1`), dash-split `Neovolt BW-BAT - 10.1kw hr`, and the `X1-BOOST-5K` (no generation) /
+  `X3-Pro-10kw` Swatten combos (uncatalogued/uncertain models) all stay raw by design. A per-cell
+  before/after parse diff over the whole COMPLETED sheet (1,686 hardware rows) shows **62 cells improved
+  (raw → resolved), 0 regressions** — no cell lost or changed an existing canonical id.
+- **Audit delta over COMPLETED (resolved-id metric):** clean **1,278 → 1,338**, raw **405 → 345**. Catalogue
+  rows unchanged at 170 (only aliases added: +11 → 311; bundle_interpretations 10 → 25).
+- **Scope:** hardware parser spec + runtime + tests + docs only. No frontend, Settings/import/Job UI, import
+  commit/reverse, NAS/proposal, scheduling, migration, seed code, or data files. No clean-wipe / reimport.
+- **Tests:** `tests/test_hardware_runtime.py` adds a P7 section (parenthesised models resolve + a non-model in
+  parens stays raw; Neovolt capacity-suffix; extension typo variants + base aggregation + generic-extension
+  stays raw; every Swatten phrasing → unit, battery-only, qty-2, and the SolaX combo); spec validator passes
+  unchanged. **710 backend tests pass**; spec-validation green; `alembic check` clean.
+- **Files:** `backend/app/hardware/runtime.py`,
+  `docs/parser_specs/hardware/hardware_parser_runtime_rules_v9_1.yaml`,
+  `backend/tests/test_hardware_runtime.py`; docs (CHANGES, DEVELOPER_HANDOFF — incl. fixing the stale
+  167→170 catalogue count). Permanent.
+- **Deferred:** the uncertain-model Swatten/extension cells noted above (left raw), and the (still
+  un-authorized) clean-wipe + reimport — P7 is the final deterministic polish before that owner decision.
+
+---
+
 ## 2026-06-24 — Hardware Parser P6b: deterministic whole-cell bundle interpretation + notes (spec + runtime)
 
 - **Why:** the heavier half of the owner-confirmed bundle/shorthand pass — workbook shorthand whose

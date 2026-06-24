@@ -249,8 +249,8 @@ These are stubbed/absent and represent the next phases:
   (`./docs/parser_specs:/app/parser_specs:ro`). **(Stage 1 built, migration `c3d4e5f6a7b8`)**
   DB-backed `hardware_catalogue` + `hardware_aliases` (soft-deletable) now exist, seeded
   idempotently from the YAML by `app.hardware.seed.seed_hardware_catalogue` (wired into
-  `python -m app.seed`): **167 catalogue rows** (95 inverter + 45 battery + 20 panel + 7 metering)
-  + **274 matchable aliases** (exact/loose/case-sensitive). `source_examples` are NOT seeded
+  `python -m app.seed`): **170 catalogue rows** (96 inverter + 47 battery + 20 panel + 7 metering)
+  + **311 matchable aliases** (exact/loose/case-sensitive). `source_examples` are NOT seeded
   (evidence only, never matchable); ignore/correction/guard/normalization rules stay versioned
   config. The catalogue is reference data with no FK to/from Jobs, so `dev_reset` is unchanged.
   **(Stage 2A built — backend admin API)** `/api/v1/hardware` (`services/hardware.py` +
@@ -426,6 +426,29 @@ These are stubbed/absent and represent the next phases:
   resolved at manual_review/inferred, review-flagged by design). 680 backend tests pass. Deferred:
   broader bundle variants beyond the confirmed exact strings (left raw), historical/decommissioned
   hardware as a distinct concept, and the (un-authorized) clean-wipe + reimport.
+  **(Hardware Parser P7 — deterministic pre-reimport coverage polish, spec + runtime)** the readiness
+  audit found the real-workbook Swatten phrasings under-covered (the P6b bundle keys used a word order the
+  cells do not) plus a few exact gaps. Four additive changes, all exact/non-fuzzy: (1) `_normalized_hit`
+  de-parenthesises a non-matching fragment (`SolaX (X1-SMT-10K-G2)` -> `X1-SMT-10K-G2`) — a candidate that
+  hits ONLY if the de-parenned text is itself a real alias (also fixed Sungrow/Goodwe parens); (2) Neovolt
+  `BW-BAT-10.1kWh`/`kw hr` capacity-suffix aliases on `neovolt_bw_bat_10_1p`; (3) seven typo/abbrev 13.3P
+  extension aliases on `smile_bat_13_3p` (`exten 13.3p`, `extenson/extenston 13.3p`, `ext 13.3p alpha`,
+  `extens 13.3p battery`, `extension battery 13.3p`, `13.3p alpha`) — model-unambiguous (13.3P = SMILE-BAT-
+  13.3P), aggregating with the base battery; (4) 15 new `p7_bundle_swatten_*` whole-cell bundles for the
+  real workbook Swatten All-In-One 19.2 phrasings (standalone -> SiH-5kW-TH + SieB-H19K2-F; `SWATTEN
+  19.2WKW BATTERY` -> battery only; `2 x … ALL IN ONE` -> qty 2; one `X1-SMT-10K-G2 + SWATTEN … BATT`
+  combo -> SolaX exact + Swatten battery). `SiH-5kW-TH` is a single-phase SKU and a distinct 3-phase
+  Swatten model is unconfirmed, so the four bundles whose source cell explicitly says `3 phase`/`3P` also
+  emit a `site_notes.raw_misc` note (`Swatten source says 3 phase`/`3P`) — the phase signal is preserved
+  for review instead of asserting a possibly-wrong 3-phase model. Still never fuzzy: ambiguous
+  brand+capacity (`Solis 5kw`),
+  capacity-only, extension-without-a-model-token (`exten battery`), dash-split `Neovolt BW-BAT - 10.1kw hr`,
+  and the `X1-BOOST-5K`/`X3-Pro-10kw` Swatten combos (uncatalogued/uncertain models) stay raw by design.
+  Catalogue rows unchanged at 170 (+11 aliases -> 311; bundles 10 -> 25). Audit delta over COMPLETED:
+  resolved-id **1,278 -> 1,338**, raw **405 -> 345** (a per-cell before/after diff = 62 cells improved,
+  **0 regressions** — no cell lost or changed an existing canonical id). 710 backend tests pass; spec
+  validator + `alembic check` clean. Deferred: the uncertain-model Swatten/extension cells above and the
+  (still un-authorized) clean-wipe + reimport.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware
