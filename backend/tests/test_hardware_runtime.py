@@ -669,3 +669,56 @@ def test_p5_with_meter_resolves_metering(seeded):
     # " with " splits (P1); the meter resolves to first-class metering, not inverter text.
     out = parse_hardware(seeded, inverter_text="Goodwe 10kw with meter")
     assert out["metering"] and out["metering"][0]["model_text"] == "Meter"
+
+
+# --------------------------------------------------------------------------- #
+# P6a: known shorthand aliases (Vast / 13.3p / extension / Neovolt) + the two Swatten component
+# entries + quantity aggregation. (The heavier whole-cell bundle interpretations + notes + the
+# Solis/mixed cases are P6b.)
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("text", ["Vast 10kw", "Solax Vast 10kw", "VAST 10K INVERTER", "SolaX Power VAST 10k"])
+def test_p6a_vast_shorthand_resolves_inverter(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["inverters"])["model_text"] == "X1-VAST-10K"
+
+
+@pytest.mark.parametrize("text", ["13.3p", "extension 13.3p", "Alpha ESS 13.3p", "ext 13.3p"])
+def test_p6a_alpha_13_3p_shorthand_resolves_battery(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["batteries"])["model_text"] == "SMILE-BAT-13.3P"
+
+
+@pytest.mark.parametrize("text", ["10.1 neovolt", "EXTENSION NEOVOLT 10.1"])
+def test_p6a_neovolt_reversed_shorthand_resolves_battery(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["batteries"])["model_text"] == "Neovolt BW-BAT-10.1P"
+
+
+def test_p6a_extension_aggregates_quantity(seeded):
+    # "2 × SMILE-BAT-13.3P + extension 13.3P" -> ONE battery of quantity 3 (aggregation_rules), with
+    # both contributing source fragments preserved.
+    out = parse_hardware(seeded, inverter_text="2 × Alpha ESS SMILE-BAT-13.3P + extension 13.3P")
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SMILE-BAT-13.3P" and bat["quantity"] == 3
+    assert "extension" in bat["source_fragment"].lower()
+
+
+def test_p6a_aggregation_keeps_different_models_separate(seeded):
+    # The canonical bundle keeps the inverter and the (qty-2) battery as separate items.
+    out = parse_hardware(seeded, inverter_text="SAJ H2-10K-S3-A + 2 × SAJ B2-20.0-HV1 - 40kw hrs")
+    assert _only(out["inverters"])["model_text"] == "SAJ H2-10K-S3-A"
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SAJ B2-20.0-HV1" and bat["quantity"] == 2
+
+
+def test_p6a_swatten_component_entries_exist(seeded):
+    for model, cat in (("Swatten SiH-5kW-TH", "inverter"), ("Swatten SieB-H19K2-F", "battery")):
+        row = seeded.scalar(select(HardwareCatalogue).where(HardwareCatalogue.canonical_model == model))
+        assert row is not None and row.category == cat and row.brand == "Swatten", model
+
+
+def test_p6a_shorthand_does_not_over_resolve_ambiguous(seeded):
+    # The new aliases must not make plain ambiguous capacity resolve.
+    for text in ("Solis 5kw", "Goodwe 10kw"):
+        out = parse_hardware(seeded, inverter_text=text)
+        assert _only(out["inverters"])["confidence"] == "unconfirmed_raw_text"

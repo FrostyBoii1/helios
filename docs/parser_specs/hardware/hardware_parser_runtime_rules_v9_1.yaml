@@ -2012,6 +2012,8 @@ hardware_catalog:
   nominal_kw: 10.0
   exact_aliases:
   - X1-VAST-10K
+  - Vast 10kw
+  - Vast 10K
   loose_aliases: []
   source_examples:
   - 2 x vast 10kw and 43.2kw batts 2 x BMS
@@ -2559,6 +2561,8 @@ hardware_catalog:
   - Neovolt BW-BAT-10.1P
   - BW-BAT-10.1
   - BW-BAT-10.1 P
+  - 10.1 neovolt
+  - extension neovolt 10.1
   loose_aliases: []
   source_examples:
   - 1 × Neovolt BW-BAT-10.1P · 10.1kWh
@@ -3095,6 +3099,9 @@ hardware_catalog:
   - Alpha-ESS Smile-BAT-13.3P
   - BATTERY - ALPHA ESS 13.3P
   - SMILE-BAT-13.3P
+  - 13.3p
+  - extension 13.3p
+  - ext 13.3p
   loose_aliases: []
   source_examples:
   - 1 X 13.3P ALPHA Smile 5 inv + Extension 13.3P
@@ -3862,6 +3869,46 @@ hardware_catalog:
   manufacturer: Alpha ESS
   exact_aliases:
   - SMILE-M-BAT-5P VI
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: swatten_sih_5kw_th_inverter
+  category: inverter
+  canonical_model: Swatten SiH-5kW-TH
+  manufacturer: Swatten
+  phases: single_phase
+  nominal_kw: 5.0
+  exact_aliases:
+  - Swatten SiH-5kW-TH
+  loose_aliases: []
+  source_examples: []
+  confidence:
+    exact: exact
+    loose: unconfirmed_raw_text
+  negative_patterns: []
+  source_examples_policy: evidence_only_not_matchable
+  fields_required_on_output:
+  - model
+  - quantity
+  - confidence
+  - parser_owned
+  - source_fragment
+- id: swatten_sieb_h19k2_battery
+  category: battery
+  canonical_model: Swatten SieB-H19K2-F
+  manufacturer: Swatten
+  exact_aliases:
+  - Swatten SieB-H19K2-F
   loose_aliases: []
   source_examples: []
   confidence:

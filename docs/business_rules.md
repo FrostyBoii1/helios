@@ -193,6 +193,15 @@ explains intent; protect important explicit decisions with tests, not docs alone
   result**, so a field can never show one model while silently carrying another's id. Low-confidence/unconfirmed items carry an
   unobtrusive "review" marker but stay editable (uncertainty is shown, not hidden). Quantity (`N ×
   MODEL`) round-trips. Locked (committed/reversed) rows are read-only.
+- **The spreadsheet is the first-pass import source of truth; NAS parsing is future SUPPORTING
+  evidence and fallback, never a mandatory dependency of every import.** The hardware parser resolves
+  the workbook cell on its own — separator splitting, brand-prefix normalization, bucket routing,
+  catalogue coverage, leading-quantity handling, and owner-confirmed shorthand/bundle interpretation —
+  and where its confidence is high enough an import does **not** require NAS file parsing. NAS parsing
+  is heavier and may not always map files to a customer/job, so it is reserved for later supporting
+  evidence (e.g. confirming an ambiguous model) and as a fallback — not a per-import requirement.
+  Genuinely ambiguous hardware (capacity-only text, uncertain models) stays raw / `manual_review` for a
+  reviewer rather than being guessed or blocked on NAS.
 
 ## Labels & approval (workflow signals)
 

@@ -9,6 +9,57 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-24 — Hardware Parser P6a: known shorthand aliases + quantity aggregation (spec + runtime)
+
+- **Why:** the first, lower-risk half of the owner-confirmed "known bundle/shorthand interpretation"
+  pass — the safe, general parts: shorthand aliases the owner identified, the two Swatten component
+  entries, and quantity aggregation. (The heavier whole-cell bundle-interpretation mechanism + note
+  extraction + the Solis/mixed-cell cases are deferred to **P6b**.)
+- **What:**
+  - **Shorthand aliases** (`docs/parser_specs/hardware/hardware_parser_runtime_rules_v9_1.yaml`):
+    `Vast 10kw` / `Vast 10K` → `X1-VAST-10K`; `13.3p` / `extension 13.3p` / `ext 13.3p` →
+    `SMILE-BAT-13.3P`; `10.1 neovolt` / `extension neovolt 10.1` → `Neovolt BW-BAT-10.1P`. Combined
+    with P2 brand-strip + P1 trailing-noun cleanup these also resolve `Solax Vast 10kw`,
+    `VAST 10K INVERTER`, `Alpha ESS 13.3p`, etc.
+  - **Two new Swatten component entries** (owner-named exact models, prerequisites for the P6b
+    Swatten-All-In-One bundle rule): `Swatten SiH-5kW-TH` (inverter, 5 kW) and `Swatten SieB-H19K2-F`
+    (battery).
+  - **Quantity aggregation** (`app/hardware/runtime.py`, implementing the spec's `aggregation_rules`):
+    items resolving to the SAME catalogue model AND the same confidence collapse into one item with the
+    summed quantity, preserving every contributing `source_fragment`. So
+    `2 × Alpha ESS SMILE-BAT-13.3P + extension 13.3P` → ONE battery `SMILE-BAT-13.3P` quantity **3**.
+    `do_not_aggregate` is respected — different models/confidence stay separate (the canonical SAJ
+    bundle keeps inverter + qty-2 battery as two items), and unmatched raw items never merge.
+- **Architecture rule documented** (`docs/business_rules.md`): the **spreadsheet is the first-pass
+  import source of truth; NAS parsing is future supporting evidence and fallback, never a mandatory
+  per-import dependency.** Where spreadsheet-parser confidence is high enough, import does not require
+  NAS; genuinely ambiguous hardware stays raw/`manual_review` rather than blocking on NAS.
+- **Conservative / no regression:** new aliases never make plain ambiguous capacity resolve
+  (`Solis 5kw`/`Goodwe 10kw` still raw); aggregation only merges truly-identical matched items; every
+  P1–P5 case unchanged. Spec validator passes (unique IDs, no alias collisions, source_examples-not-
+  aliases). Idempotent seed (`+2 entries / +9 aliases`, then `0/0`).
+- **Audit delta over COMPLETED (confidence metric):** fully-clean rows **1,172 → 1,202 (+30)**; raw
+  rows **511 → 481**. (Cumulative P1→P6a: ~645 → ~1,202.)
+- **Scope:** hardware parser spec + runtime + tests + docs only. No frontend, Settings/import/Job UI,
+  import commit/reverse, NAS/proposal, scheduling, migration, data files, or seed code.
+- **Tests:** `tests/test_hardware_runtime.py` adds a P6a section (Vast / 13.3p / Neovolt shorthand
+  resolve; `extension` aggregates to qty 3; aggregation keeps different models separate; the two
+  Swatten entries exist; shorthand does not over-resolve `Solis 5kw`). **661 backend tests pass**;
+  spec-validation green; `alembic check` clean. (A hardware admin-API test's fixture search `q=f_bat`
+  collided with the battery spec_id substring — the entry was renamed `swatten_sieb_h19k2_battery` to
+  avoid it; no test weakened.)
+- **Files:** `docs/parser_specs/hardware/hardware_parser_runtime_rules_v9_1.yaml`,
+  `backend/app/hardware/runtime.py`, `backend/tests/test_hardware_runtime.py`,
+  `docs/business_rules.md`; docs (CHANGES, DEVELOPER_HANDOFF). Permanent.
+- **Deferred to P6b:** the whole-cell **bundle-interpretation mechanism** (Swatten All-In-One → SiH +
+  SieB; Alpha M5 stack; mixed SolaX+Alpha → low-confidence; Neovolt reversed-order full cells); **note
+  extraction** (`2 x BMS`, `12 batteries of 3.6kw hrs`, `with base`, `Solis 5kw was installed`); the
+  Solis-context inverter mapping to the existing **`S5-GR1P5K`** (manual_review); and capacity→T-BAT
+  derivation (`28.8kw battery`→`T-BAT HS28.8`, `inferred_from_capacity`). Then the (un-authorized)
+  clean-wipe + reimport.
+
+---
+
 ## 2026-06-24 — Hardware Parser P5: leading bare-quantity resolution (runtime only)
 
 - **Why:** the last straightforward correctness gap from the audit — a fragment with a LEADING bare

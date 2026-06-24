@@ -451,6 +451,31 @@ def _panel_base(quantity_hint: int | None, *, source_fragment: str, rules: Parse
     }
 
 
+def _aggregate_items(items: list[dict]) -> list[dict]:
+    """Quantity aggregation (spec ``aggregation_rules``): items resolving to the SAME catalogue model
+    (same ``canonical_hardware_id_at_parse_time``) AND the same ``confidence`` collapse into ONE item
+    with the summed quantity, preserving every contributing ``source_fragment``. This is what makes
+    "2 × SMILE-BAT-13.3P + extension 13.3p" a single battery of quantity 3. UNMATCHED raw items (no
+    canonical id) and items differing in model or confidence are left separate (``do_not_aggregate``);
+    first-occurrence order is preserved (``ordering_rules: source_order``)."""
+    out: list[dict] = []
+    merged_by_key: dict[tuple, dict] = {}
+    for it in items:
+        cid = it.get("canonical_hardware_id_at_parse_time")
+        key = (cid, it.get("confidence")) if cid is not None else None
+        if key is not None and key in merged_by_key:
+            target = merged_by_key[key]
+            target["quantity"] = (target.get("quantity") or 1) + (it.get("quantity") or 1)
+            frag = it.get("source_fragment")
+            if frag and frag not in (target.get("source_fragment") or ""):
+                target["source_fragment"] = f"{target.get('source_fragment', '')} + {frag}".strip(" +")
+        else:
+            out.append(it)
+            if key is not None:
+                merged_by_key[key] = it
+    return out
+
+
 def parse_hardware(
     db: Session,
     *,
@@ -475,6 +500,9 @@ def parse_hardware(
         _parse_hardware_cell(
             inverter_text, idx, rules, source_type=source_type, source_field=source_field,
             out=out, warnings=warnings)
+        # Collapse same-model/same-confidence duplicates into one quantity-summed item.
+        for bucket in ("inverters", "batteries", "metering"):
+            out[bucket] = _aggregate_items(out[bucket])
 
     panel = None
     if panel_text and panel_text.strip():

@@ -389,9 +389,25 @@ These are stubbed/absent and represent the next phases:
   `export meter`/`smart meter 5kw export`/`with meter`, capacity-in-noun `16kw hrs battery`/`40kw hrs`)
   were already correct via P3 routing + the capacity/site-note rules — P5 just adds confirming tests.
   No catalogue/spec/seed/migration change. Audit delta (confidence metric): fully-clean **1,171 ->
-  1,172** (correctness edge, not a match-rate mover). 647 backend tests pass. Deferred: Swatten policy
-  pass, `13.3p` shorthand, reversed-order/suffix variants, broader catalogue additions, and the
-  (un-authorized) clean-wipe + reimport.
+  1,172** (correctness edge, not a match-rate mover). 647 backend tests pass.
+  **(Hardware Parser P6a — known shorthand aliases + quantity aggregation, spec + runtime)** the safe
+  first half of the owner-confirmed bundle/shorthand pass: shorthand aliases (`Vast 10kw`/`Vast 10K` ->
+  `X1-VAST-10K`; `13.3p`/`extension 13.3p`/`ext 13.3p` -> `SMILE-BAT-13.3P`; `10.1 neovolt`/`extension
+  neovolt 10.1` -> `Neovolt BW-BAT-10.1P`); two new Swatten component entries (`Swatten SiH-5kW-TH` inv,
+  `Swatten SieB-H19K2-F` bat — prerequisites for the P6b Swatten-All-In-One bundle rule); and quantity
+  **aggregation** in `parse_hardware` (new `_aggregate_items`, implementing the spec `aggregation_rules`)
+  — same canonical model + same confidence collapse into one quantity-summed item preserving all
+  source_fragments, so `2 × SMILE-BAT-13.3P + extension 13.3P` -> one battery qty 3; different
+  models/confidence and unmatched raw stay separate. Documented the architecture rule in
+  `docs/business_rules.md`: spreadsheet is first-pass import truth, NAS is future supporting
+  evidence/fallback, not a mandatory per-import dependency. Spec validator green; idempotent seed (+2
+  entries/+9 aliases). (Renamed the Swatten battery spec_id to `swatten_sieb_h19k2_battery` after its
+  original `..._f_battery` substring collided with the admin search test's `q=f_bat` fixture.) Audit
+  delta: fully-clean **1,172 -> 1,202**. 661 backend tests pass. **Deferred to P6b:** the whole-cell
+  bundle-interpretation mechanism (Swatten All-In-One; Alpha M5 stack; mixed SolaX+Alpha low-confidence;
+  Neovolt reversed full cells), note extraction (`2 x BMS`, `12 batteries of 3.6kw hrs`, `with base`,
+  `Solis 5kw was installed`), the Solis-context mapping to existing `S5-GR1P5K` (manual_review), and
+  capacity->T-BAT derivation (`inferred_from_capacity`); then the (un-authorized) clean-wipe + reimport.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware
