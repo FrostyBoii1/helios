@@ -304,6 +304,14 @@ explains intent; protect important explicit decisions with tests, not docs alone
   **create-only** — it never updates or deletes an existing live record. It is
   idempotent: already-committed rows and rows whose `legacy_reference` already
   exists on a live job are skipped.
+- **An admin reviewer may correct a row's `legacy_reference` before commit.** The
+  legacy workbook sometimes gives two genuinely-different jobs the same source
+  reference; left as-is, the duplicate-skip above would drop the second. The
+  reference is editable on a **pending or approved** row (locked once
+  committed/reversed) and is stored on the row column, not in the parsed
+  candidate. Correcting it only affects duplicate detection and the created job's
+  reference — **it never changes the case number** (which is derived from the
+  sale/install year).
 - **Case-year guard:** a row whose derived case-number year (sale_date →
   install_date → current year) is outside `2020 … current year + 1` is excluded
   (`invalid_case_year`). Such rows must have their dates corrected in review (or

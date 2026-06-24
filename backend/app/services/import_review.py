@@ -50,6 +50,16 @@ _OVERRIDE_LOCKED_STATES = frozenset({
 # drift after a row is finalized.
 _RESOLUTION_LOCKED_STATES = _OVERRIDE_LOCKED_STATES
 
+# legacy_reference is a COLUMN (commit-to-live + duplicate detection read it). It may be
+# CORRECTED while the row is still pending OR approved — UNLIKE the override/resolution
+# locks above, an approved row stays editable here so a duplicate source reference can be
+# fixed right before commit — but NOT once the row is committed/reversed (it then owns a
+# live Job whose reference must not drift; reopen path is prepare_recommit).
+_LEGACY_REF_LOCKED_STATES = frozenset({
+    ImportRowReviewStatus.COMMITTED.value,
+    ImportRowReviewStatus.REVERSED.value,
+})
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -153,11 +163,19 @@ def edit_row(db: Session, batch: ImportBatch, row: ImportRow, edits: dict, *, ac
     # verbatim). Locked once the row is approved/committed/reversed.
     override_set = "internal_notes_override" in edits
     override_value = edits.pop("internal_notes_override", None)
+    # legacy_reference is a column too (commit + duplicate detection read it). Pop it so it
+    # is NEVER written into `parsed`; applied to the column below, locked once committed/reversed.
+    legacy_set = "legacy_reference" in edits
+    legacy_value = edits.pop("legacy_reference", None)
     field_edits = {k: v for k, v in edits.items() if k in PARSED_EDIT_FIELDS}
 
     if override_set and row.review_status in _OVERRIDE_LOCKED_STATES:
         raise ValueError(
             "Internal notes can only be edited before approval — reopen the row to edit."
+        )
+    if legacy_set and row.review_status in _LEGACY_REF_LOCKED_STATES:
+        raise ValueError(
+            "Legacy reference can only be corrected before commit — this row is committed/reversed."
         )
 
     if field_edits or details_patch:
@@ -177,6 +195,9 @@ def edit_row(db: Session, batch: ImportBatch, row: ImportRow, edits: dict, *, ac
         row.review_notes = review_notes
     if override_set:
         row.internal_notes_override = override_value
+    if legacy_set:
+        # Empty/whitespace -> None (mirrors ingest, which stores None for an empty ref).
+        row.legacy_reference = (legacy_value or "").strip() or None
 
     row.reviewer_id = actor_id
     row.reviewed_at = _now()

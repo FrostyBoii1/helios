@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import ImportBatchStatus, ImportRowClass, ImportRowReviewStatus
 
@@ -140,15 +140,23 @@ class ImportRowEdit(BaseModel):
     # service applies it by key-presence (model_dump(exclude_unset=True)), so the
     # client can explicitly send null to reset to the generated default.
     internal_notes_override: str | None = None
+    # legacy_reference is a COLUMN on ImportRow (NOT part of `parsed`): commit-to-live and
+    # duplicate detection read row.legacy_reference. The review service applies it to the
+    # column and locks it once the row is committed/reversed — so an admin can correct a
+    # duplicate SOURCE reference (two distinct jobs that share one ref) before commit.
+    # max_length matches the String(64) ImportRow/Job column so an over-long ref is a clean
+    # 422 at the schema, never a DataError 500 at commit.
+    legacy_reference: str | None = Field(default=None, max_length=64)
 
 
 # Flat scalar fields merged directly into `parsed` (excludes review_notes, the
-# structured details patch, and internal_notes_override — all handled specially in
-# the review service, not merged into `parsed`).
+# structured details patch, internal_notes_override, and legacy_reference — all handled
+# specially in the review service, not merged into `parsed`).
 PARSED_EDIT_FIELDS = frozenset(ImportRowEdit.model_fields) - {
     "review_notes",
     "details",
     "internal_notes_override",
+    "legacy_reference",
 }
 
 

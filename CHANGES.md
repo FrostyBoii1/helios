@@ -9,6 +9,45 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-24 — Import review: editable staging `legacy_reference` (correct duplicate source refs pre-commit)
+
+- **Why:** the clean reimport surfaced legitimately-distinct jobs that share one source `legacy_reference`
+  in the workbook (e.g. `SC0049` covering two different customers/addresses). At commit, the
+  duplicate-reference guard creates the first and silently skips the second — losing a real job. Reviewers
+  had no in-app way to correct a reference; the alternatives were direct SQL (bypasses the review system)
+  or another wipe + workbook fix + re-ingest.
+- **What:** `legacy_reference` is now an admin-editable staging field on `ImportRow`, **column-only**:
+  - added to `ImportRowEdit` (schema, bounded `max_length=64` to match the `String(64)` column so an
+    over-long ref is a clean 422, never a DataError 500) and EXCLUDED from `PARSED_EDIT_FIELDS`, so the
+    review service handles it specially and it is **never merged into `parsed`** (parsed keeps the parser's
+    original reference as provenance; the `ImportRow.legacy_reference` column is authoritative for commit);
+  - `import_review.edit_row` pops `legacy_reference`, applies it to the column (empty/whitespace → `None`,
+    mirroring ingest), and **locks it on committed/reversed rows** via a new
+    `_LEGACY_REF_LOCKED_STATES = {committed, reversed}` — a pending OR approved row stays editable (unlike
+    `internal_notes_override`/customer-resolution, which also lock on approved) so a duplicate ref can be
+    fixed right before commit.
+- **No behavior change elsewhere:** parser untouched; case-number generation untouched (the year comes from
+  `sale_date`→`install_date`, never the reference); commit-to-live unchanged except that it naturally reads
+  the corrected `row.legacy_reference` column for duplicate detection and the created Job's reference. **No
+  migration** (the column already exists; `alembic check` clean).
+- **Tests:** `tests/test_import_review.py` (column updates; new value not written into parsed; editable
+  after approve; empty→None; rejected on committed/reversed; over-64-char ref → clean 422) +
+  `tests/test_import_commit.py` (baseline shared-ref second-row skip; after editing the 2nd row's ref BOTH
+  distinct jobs commit; collapsing two distinct refs onto one commits exactly one — no live duplicate;
+  case-number year stays from sale/install, not the edited reference). **726 backend tests pass**;
+  `alembic check` clean.
+- **Scope:** backend import-review schema + service + tests + docs only. No parser, no migration, no
+  commit-engine logic change, no live-data mutation.
+- **Frontend (separate slice, NOT done here):** the review modal currently renders `legacy_reference`
+  read-only and its `ImportRowEdit` interface omits the field, so the **API accepts it now but the UI cannot
+  send it yet** — exposing it needs a `legacy_reference` input + the field added to the frontend
+  `ImportRowEdit`. Until then, corrections go via `PATCH /api/v1/imports/{batch}/rows/{row}`.
+- **Files:** `backend/app/schemas/import_staging.py`, `backend/app/services/import_review.py`,
+  `backend/tests/test_import_review.py`, `backend/tests/test_import_commit.py`; docs (CHANGES,
+  DEVELOPER_HANDOFF, business_rules). Permanent.
+
+---
+
 ## 2026-06-24 — Hardware Parser P7: deterministic pre-reimport coverage polish (spec + runtime)
 
 - **Why:** the pre-reimport readiness audit confirmed the parser is broadly reimport-ready but found a set of

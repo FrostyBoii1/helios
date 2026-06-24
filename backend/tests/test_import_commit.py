@@ -24,6 +24,7 @@ from app.models.enums import (
 from app.models.import_staging import ImportBatch, ImportRow
 from app.models.job import Job
 from app.services import import_commit
+from app.services import import_review
 from app.services import job_labels as job_labels_service
 from app.services.import_details import render_legacy_blobs
 from tests.test_import import _synthetic_bytes
@@ -770,3 +771,121 @@ def test_commit_auto_label_idempotent(users, db_session: Session):
     )
     after = len(job_labels_service.list_job_labels(db_session, job.id))
     assert before == after == 2
+
+
+# --------------------------------------------------------------------------- #
+# legacy_reference correction (staging) flows through to commit duplicate detection
+# --------------------------------------------------------------------------- #
+def _dup_ref_batch(db: Session, ref: str, names: list[str]) -> ImportBatch:
+    """A batch of N approved JOB rows that all share the SAME legacy_reference."""
+    b = ImportBatch(
+        source_filename="syn.xlsx", sheet_name="COMPLETED",
+        status=ImportBatchStatus.REVIEWING.value,
+    )
+    db.add(b)
+    db.flush()
+    for i, name in enumerate(names):
+        db.add(
+            ImportRow(
+                batch_id=b.id, source_row_index=i + 2, row_class=ImportRowClass.JOB.value,
+                legacy_reference=ref,
+                raw={"address": f"{i} Dup St"},
+                parsed={"customer_name": name, "sale_date": "01/06/2025", "address": f"{i} Dup St"},
+                review_status=ImportRowReviewStatus.APPROVED.value,
+            )
+        )
+    db.flush()
+    return b
+
+
+def test_shared_ref_skips_second_at_commit(users, db_session: Session):
+    """Baseline: two DISTINCT jobs that share a legacy_reference -> only the first
+    commits; the second is skipped by the duplicate guard (the problem we are fixing)."""
+    admin_id = users["admin"].id
+    b = _dup_ref_batch(db_session, "DUP0001", ["Alice Alpha", "Bob Beta"])
+    res = import_commit.commit_batch(db_session, b, actor_id=admin_id)
+    assert res["committed"] == 1
+    assert any(r.get("reason") == "duplicate_legacy_reference"
+               for r in res["results"] if r["status"] == "skipped")
+
+
+def test_edit_legacy_reference_lets_both_duplicates_commit(users, db_session: Session):
+    """After correcting the SECOND row's legacy_reference (the COLUMN) before commit,
+    BOTH distinct jobs commit — commit's duplicate detection reads the corrected column."""
+    admin_id = users["admin"].id
+    b = _dup_ref_batch(db_session, "DUP0002", ["Alice Alpha", "Bob Beta"])
+    rows = db_session.scalars(
+        select(ImportRow).where(ImportRow.batch_id == b.id).order_by(ImportRow.source_row_index)
+    ).all()
+    import_review.edit_row(db_session, b, rows[1], {"legacy_reference": "DUP0002-B"}, actor_id=admin_id)
+    db_session.flush()
+    res = import_commit.commit_batch(db_session, b, actor_id=admin_id)
+    assert res["committed"] == 2 and res["skipped"] == 0
+    refs = sorted(
+        j.legacy_reference
+        for j in db_session.scalars(select(Job).where(Job.legacy_reference.in_(["DUP0002", "DUP0002-B"]))).all()
+    )
+    assert refs == ["DUP0002", "DUP0002-B"]
+    # The correction lived on the column only — never in parsed.
+    assert "legacy_reference" not in (rows[1].parsed or {})
+
+
+def test_legacy_reference_edit_does_not_change_case_number_year(users, db_session: Session):
+    """Case numbers derive from the sale/install YEAR, never the legacy_reference —
+    editing the reference (even to a 'SCS-1999-...' string) leaves the year intact."""
+    admin_id = users["admin"].id
+    b = ImportBatch(
+        source_filename="syn.xlsx", sheet_name="COMPLETED",
+        status=ImportBatchStatus.REVIEWING.value,
+    )
+    db_session.add(b)
+    db_session.flush()
+    r = ImportRow(
+        batch_id=b.id, source_row_index=2, row_class=ImportRowClass.JOB.value,
+        legacy_reference="YEARCHK", raw={"address": "1 Year St"},
+        parsed={"customer_name": "Cara Year", "sale_date": "10/10/2025", "address": "1 Year St"},
+        review_status=ImportRowReviewStatus.APPROVED.value,
+    )
+    db_session.add(r)
+    db_session.flush()
+    import_review.edit_row(db_session, b, r, {"legacy_reference": "SCS-1999-XXX"}, actor_id=admin_id)
+    db_session.flush()
+    import_commit.commit_batch(db_session, b, actor_id=admin_id)
+    row = db_session.scalars(select(ImportRow).where(ImportRow.batch_id == b.id)).one()
+    job = db_session.get(Job, row.committed_job_id)
+    assert job.case_number.startswith("SCS-2025-")   # from sale_date 2025, NOT the '1999' in the ref
+    assert job.legacy_reference == "SCS-1999-XXX"     # the corrected reference is carried onto the job
+
+
+def test_edit_two_distinct_refs_to_same_value_commits_only_one(users, db_session: Session):
+    """Inverse of the split: collapsing two DISTINCT-ref rows onto one reference must NOT
+    create a live duplicate — exactly one commits, the other skips. Pins the per-row-commit
+    invariant the duplicate guard relies on."""
+    admin_id = users["admin"].id
+    b = ImportBatch(
+        source_filename="syn.xlsx", sheet_name="COMPLETED",
+        status=ImportBatchStatus.REVIEWING.value,
+    )
+    db_session.add(b)
+    db_session.flush()
+    for i, ref in enumerate(["MERGE-A", "MERGE-B"]):
+        db_session.add(
+            ImportRow(
+                batch_id=b.id, source_row_index=i + 2, row_class=ImportRowClass.JOB.value,
+                legacy_reference=ref, raw={"address": f"{i} Merge St"},
+                parsed={"customer_name": f"Person {i}", "sale_date": "01/06/2025", "address": f"{i} Merge St"},
+                review_status=ImportRowReviewStatus.APPROVED.value,
+            )
+        )
+    db_session.flush()
+    rows = db_session.scalars(
+        select(ImportRow).where(ImportRow.batch_id == b.id).order_by(ImportRow.source_row_index)
+    ).all()
+    for r in rows:  # collapse both onto one reference
+        import_review.edit_row(db_session, b, r, {"legacy_reference": "MERGED"}, actor_id=admin_id)
+    db_session.flush()
+    res = import_commit.commit_batch(db_session, b, actor_id=admin_id)
+    assert res["committed"] == 1
+    assert any(x.get("reason") == "duplicate_legacy_reference" for x in res["results"] if x["status"] == "skipped")
+    live = db_session.scalars(select(Job).where(Job.legacy_reference == "MERGED")).all()
+    assert len(live) == 1  # no live duplicate created

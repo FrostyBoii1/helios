@@ -7,12 +7,15 @@ Customer/Job records are created by any review action.
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.customer import Customer
-from app.models.import_staging import ImportRow
+from app.models.enums import ImportBatchStatus, ImportRowClass, ImportRowReviewStatus
+from app.models.import_staging import ImportBatch, ImportRow
 from app.models.job import Job
+from app.services import import_review
 from tests.test_import import _synthetic_bytes  # reuse the synthetic workbook
 
 
@@ -291,3 +294,108 @@ def test_review_actions_make_no_live_records(client_for, users, db_session: Sess
     # All committed_* links remain null in Phase B.
     rows = db_session.scalars(select(ImportRow).where(ImportRow.batch_id == bid)).all()
     assert all(r.committed_customer_id is None and r.committed_job_id is None for r in rows)
+
+
+# --------------------------------------------------------------------------- #
+# legacy_reference editing (column-only, lockable) — staging source-ref correction
+# --------------------------------------------------------------------------- #
+def test_edit_legacy_reference_updates_column(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
+    resp = admin.patch(
+        f"/api/v1/imports/{bid}/rows/{row['id']}", json={"legacy_reference": "TESTIMP0001-B"}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["legacy_reference"] == "TESTIMP0001-B"
+    fetched = admin.get(f"/api/v1/imports/{bid}/rows/{row['id']}").json()
+    assert fetched["legacy_reference"] == "TESTIMP0001-B"
+
+
+def test_edit_legacy_reference_not_written_into_parsed(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
+    # parsed carries the parser's ORIGINAL reference (provenance); the edit must update
+    # only the COLUMN and leave parsed untouched (column is authoritative for commit).
+    parsed_ref_before = (row.get("parsed") or {}).get("legacy_reference")
+    resp = admin.patch(
+        f"/api/v1/imports/{bid}/rows/{row['id']}", json={"legacy_reference": "TESTIMP0001-B"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["legacy_reference"] == "TESTIMP0001-B"                                  # column updated
+    assert (body.get("parsed") or {}).get("legacy_reference") == parsed_ref_before      # parsed untouched
+    assert (body.get("parsed") or {}).get("legacy_reference") != "TESTIMP0001-B"        # new value not in parsed
+    fetched = admin.get(f"/api/v1/imports/{bid}/rows/{row['id']}").json()
+    assert fetched["legacy_reference"] == "TESTIMP0001-B"
+    assert (fetched.get("parsed") or {}).get("legacy_reference") == parsed_ref_before
+
+
+def test_edit_legacy_reference_allowed_after_approve(client_for, users):
+    # Unlike internal_notes_override / customer resolution, an APPROVED row's reference
+    # stays editable so a duplicate source ref can be fixed right before commit.
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
+    admin.post(f"/api/v1/imports/{bid}/rows/{row['id']}/approve")
+    resp = admin.patch(
+        f"/api/v1/imports/{bid}/rows/{row['id']}", json={"legacy_reference": "TESTIMP0001-FIXED"}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["legacy_reference"] == "TESTIMP0001-FIXED"
+
+
+def test_edit_legacy_reference_empty_clears_to_none(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
+    resp = admin.patch(
+        f"/api/v1/imports/{bid}/rows/{row['id']}", json={"legacy_reference": "   "}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["legacy_reference"] is None  # whitespace -> None (mirrors ingest)
+
+
+def _locked_row(db: Session, status: str) -> tuple[ImportBatch, ImportRow]:
+    b = ImportBatch(
+        source_filename="syn.xlsx", sheet_name="COMPLETED",
+        status=ImportBatchStatus.REVIEWING.value,
+    )
+    db.add(b)
+    db.flush()
+    r = ImportRow(
+        batch_id=b.id, source_row_index=2, row_class=ImportRowClass.JOB.value,
+        legacy_reference="LOCKED0001", raw={}, parsed={"customer_name": "X"},
+        review_status=status,
+    )
+    db.add(r)
+    db.flush()
+    return b, r
+
+
+@pytest.mark.parametrize(
+    "status",
+    [ImportRowReviewStatus.COMMITTED.value, ImportRowReviewStatus.REVERSED.value],
+)
+def test_edit_legacy_reference_rejected_when_committed_or_reversed(db_session: Session, status):
+    b, r = _locked_row(db_session, status)
+    with pytest.raises(ValueError):
+        import_review.edit_row(db_session, b, r, {"legacy_reference": "NEW-REF"}, actor_id=1)
+    assert r.legacy_reference == "LOCKED0001"  # unchanged on a locked row
+
+
+def test_edit_legacy_reference_too_long_rejected(client_for, users):
+    # The column is String(64); an over-long ref must be a clean 422 at the schema, not a 500.
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")
+    resp = admin.patch(
+        f"/api/v1/imports/{bid}/rows/{row['id']}", json={"legacy_reference": "X" * 65}
+    )
+    assert resp.status_code == 422
+    # 64 chars is accepted (the boundary).
+    ok = admin.patch(
+        f"/api/v1/imports/{bid}/rows/{row['id']}", json={"legacy_reference": "Y" * 64}
+    )
+    assert ok.status_code == 200 and ok.json()["legacy_reference"] == "Y" * 64

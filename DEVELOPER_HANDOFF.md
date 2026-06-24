@@ -702,6 +702,16 @@ own commit; see CHANGES.md):
   fields incl. address), approve/reject/skip/reopen, resolve issues,
   bulk-approve-clean; admin review UI (`/imports`, `/imports/:id`) with
   filters/search, paginated table, and a row drawer.
+  **(legacy_reference correction)** `legacy_reference` is now a whitelisted
+  `ImportRowEdit` field, handled COLUMN-only (excluded from `PARSED_EDIT_FIELDS`,
+  never merged into `parsed`): `edit_row` writes `ImportRow.legacy_reference`
+  (empty→`None`) and locks it on committed/reversed rows
+  (`_LEGACY_REF_LOCKED_STATES`); pending+approved stay editable so two distinct
+  jobs that share one source ref can be split before commit (the duplicate guard
+  reads the corrected column; case numbers are unaffected — they come from
+  sale/install year). No migration. ⚠ **Frontend not wired**: the review modal
+  shows the ref read-only and the FE `ImportRowEdit` omits the field, so use
+  `PATCH /imports/{id}/rows/{row}` until a UI input is added.
 - **C0 — commit-preview**: `GET /imports/{id}/commit-preview` (read-only)
   reports eligibility, excluded reasons, and **predicted (estimated)** case
   numbers. Added `jobs.legacy_reference` (nullable, indexed).
