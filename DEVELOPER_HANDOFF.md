@@ -408,6 +408,24 @@ These are stubbed/absent and represent the next phases:
   Neovolt reversed full cells), note extraction (`2 x BMS`, `12 batteries of 3.6kw hrs`, `with base`,
   `Solis 5kw was installed`), the Solis-context mapping to existing `S5-GR1P5K` (manual_review), and
   capacity->T-BAT derivation (`inferred_from_capacity`); then the (un-authorized) clean-wipe + reimport.
+  **(Hardware Parser P6b — deterministic whole-cell bundle interpretation + notes, spec + runtime)** new
+  `bundle_interpretations` mechanism: spec section -> `ParserRules.bundle_interpretations` (rules.py) ->
+  runtime `_emit_bundle` in `_parse_hardware_cell` (after specific_corrections, before guards). An EXACT
+  normalized whole-cell match emits fixed typed inverter/battery items (canonical model_text + resolved
+  id, per-item/rule confidence, quantity) + notes -> `site_notes.raw_misc`. NEVER fuzzy: 10 owner-
+  confirmed rules (Swatten All-In-One -> SiH+SieB; mixed SolaX+Alpha -> X1-SMT + M5 + 2× G3-BAT-10.1P at
+  manual_review; Smile-M5/SMILE-M-BAT-5PIII; five VAST/T-BAT-with-notes incl. `inferred_from_capacity`
+  for `28.8kw battery`; the Solis-context cell -> VAST + T-BAT HS21.6 + note `Solis 5kw was installed`,
+  Solis NOT emitted as current hardware per owner guidance). Plus shorthand aliases (bare
+  `T-BAT HS21.6`/`HS28.8`/`t-bat21.6`; `Smile M5`; no-space `SMILE-M-BAT-5PIII/IV/V/VI`; `15kw`/`30kw
+  Alpha Stack` -> III/VI; `Neovolt 5kw DC`/`AC` -> BW-INV-SPB5K) so the Alpha-stack + Neovolt-reversed
+  cells resolve via P1 split + P6a aggregation. Spec validator extended (`test_bundle_interpretations_are_valid`:
+  models exist, unique ids/match keys, confidence in vocab). Plain ambiguous `Solis 5kw`/`Goodwe 10kw`
+  still raw; capacity never contaminates model_text. Idempotent seed (+12 aliases). Audit delta:
+  original metric (manual_review=raw) **1,202 -> 1,222**; resolved-id metric **-> 1,278** (~56 cells
+  resolved at manual_review/inferred, review-flagged by design). 680 backend tests pass. Deferred:
+  broader bundle variants beyond the confirmed exact strings (left raw), historical/decommissioned
+  hardware as a distinct concept, and the (un-authorized) clean-wipe + reimport.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware

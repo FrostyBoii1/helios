@@ -133,6 +133,7 @@ hardware_catalog:
   nominal_kw: null
   exact_aliases:
   - Alpha ESS SMILE-M5-S-INV
+  - Smile M5
   loose_aliases: []
   source_examples:
   - 2 × Alpha ESS SMILE-M5-S-INV + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
@@ -518,6 +519,8 @@ hardware_catalog:
   nominal_kw: 5.0
   exact_aliases:
   - Neovolt BW-INV-SPB5K
+  - Neovolt 5kw DC
+  - Neovolt 5kw AC
   loose_aliases: []
   source_examples:
   - Neovolt BW-INV-SPB5K + 2 × Neovolt BW-BAT-10.1P · 10.1kWh to 1 × Alpha ESS SMILE-BAT-13.3P + extension 13.3p
@@ -3295,6 +3298,8 @@ hardware_catalog:
   manufacturer: Alpha ESS
   exact_aliases:
   - SMILE-M-BAT-5P III
+  - SMILE-M-BAT-5PIII
+  - 15kw Alpha Stack
   loose_aliases: []
   source_examples:
   - 5kw Solax inverter + Alpha ESS SMILE-M-BAT-5P III · 15kWh
@@ -3321,6 +3326,7 @@ hardware_catalog:
   manufacturer: Alpha ESS
   exact_aliases:
   - SMILE-M-BAT-5P IV
+  - SMILE-M-BAT-5PIV
   loose_aliases: []
   source_examples:
   - 1 x 10kw Solax - Alpha ESS SMILE-M-BAT-5P IV · 20kWh
@@ -3363,6 +3369,7 @@ hardware_catalog:
   manufacturer: Alpha ESS
   exact_aliases:
   - SMILE-M-BAT-5P V
+  - SMILE-M-BAT-5PV
   loose_aliases: []
   source_examples:
   - 1 x Solax 10kw 3 Phase inverter - 1 × Alpha ESS SMILE-M-BAT-5P V · 25kWh
@@ -3482,6 +3489,8 @@ hardware_catalog:
   manufacturer: SolaX
   exact_aliases:
   - SolaX T-BAT HS21.6
+  - T-BAT HS21.6
+  - t-bat21.6
   loose_aliases: []
   source_examples:
   - Solax Vast 10kw + T-BAT HS21.6 Battery
@@ -3531,6 +3540,7 @@ hardware_catalog:
   manufacturer: SolaX
   exact_aliases:
   - SolaX T-BAT HS28.8
+  - T-BAT HS28.8
   loose_aliases: []
   source_examples:
   - SolaX Power X3-ULT-25K + SolaX Power T-BAT HS28.8 · 29.4kWh
@@ -3869,6 +3879,8 @@ hardware_catalog:
   manufacturer: Alpha ESS
   exact_aliases:
   - SMILE-M-BAT-5P VI
+  - SMILE-M-BAT-5PVI
+  - 30kw Alpha Stack
   loose_aliases: []
   source_examples: []
   confidence:
@@ -4045,6 +4057,102 @@ specific_corrections:
   - X3-PRO-15K-G2
   - X3-PRO-20K-G2
   reason: Bundle contains two SolaX three-phase inverters.
+bundle_interpretations:
+# P6b — DETERMINISTIC whole-cell bundle interpretation (owner-confirmed shorthand only). An EXACT
+# normalized whole-cell match emits a fixed set of typed inverter/battery items + notes. NOT fuzzy:
+# anything not matched here falls through to ordinary per-fragment matching and stays raw/review.
+# `model` strings must be existing canonical models. `confidence` is the rule default; an item may
+# override it. `notes` go to site_notes.raw_misc.
+- id: bundle_swatten_all_in_one_19_2
+  match: Swatten All In One 19.2
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: bundle_swatten_all_in_one
+  match: Swatten All-In-One
+  confidence: manual_correction
+  inverters:
+  - model: Swatten SiH-5kW-TH
+  batteries:
+  - model: Swatten SieB-H19K2-F
+- id: bundle_mixed_solax_x1smt_alpha_m5_20kw
+  match: SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE M5 20KW BATTERY
+  confidence: manual_review
+  inverters:
+  - model: X1-SMT-10K-G2
+    confidence: exact
+  - model: Alpha ESS SMILE-M5-S-INV
+  batteries:
+  - model: SMILE-G3-BAT-10.1P
+    quantity: 2
+- id: bundle_alpha_m5_smile_m_bat_5piii_15kw
+  match: Alpha ESS Smile M5 inverter/Alpha ESS SMILE-M-BAT-5PIII - 15kw batt
+  confidence: manual_correction
+  inverters:
+  - model: Alpha ESS SMILE-M5-S-INV
+  batteries:
+  - model: SMILE-M-BAT-5P III
+- id: bundle_vast_tbat216_with_base
+  match: Vast 10kw and t-bat21.6 with base
+  confidence: manual_correction
+  inverters:
+  - model: X1-VAST-10K
+  batteries:
+  - model: SolaX T-BAT HS21.6
+  notes:
+  - Battery with base
+- id: bundle_2x_vast_432_batts_bms
+  match: 2 x vast 10kw and 43.2kw batts 2 x BMS
+  confidence: manual_review
+  inverters:
+  - model: X1-VAST-10K
+    quantity: 2
+    confidence: exact
+  batteries:
+  - model: SolaX T-BAT HS43.2
+    confidence: inferred_from_capacity
+  notes:
+  - 2 x BMS
+- id: bundle_vast_tbat432_12_batteries
+  match: VAST 10K INVERTER AND T-BAT HS43.2 BATTERY - 12 batteries of 3.6kw hrs
+  confidence: manual_correction
+  inverters:
+  - model: X1-VAST-10K
+    confidence: exact
+  batteries:
+  - model: SolaX T-BAT HS43.2
+    confidence: exact
+  notes:
+  - 12 batteries of 3.6kw hrs
+- id: bundle_vast_28_8kw_battery
+  match: Vast 10kw + 28.8kw Battery
+  confidence: inferred_from_capacity
+  inverters:
+  - model: X1-VAST-10K
+    confidence: exact
+  batteries:
+  - model: SolaX T-BAT HS28.8
+- id: bundle_solax_vast_28_8kw_battery_solax
+  match: Solax Vast 10kw and 28.8kw battery Solax
+  confidence: inferred_from_capacity
+  inverters:
+  - model: X1-VAST-10K
+    confidence: exact
+  batteries:
+  - model: SolaX T-BAT HS28.8
+- id: bundle_solis_vast_install_context
+  match: Solis 5kw and Vast 10kw and 21.6kw - install Vast and batteries only - Solis 5kw was installed
+  confidence: manual_review
+  inverters:
+  - model: X1-VAST-10K
+    confidence: exact
+  batteries:
+  - model: SolaX T-BAT HS21.6
+    confidence: inferred_from_capacity
+  notes:
+  - Solis 5kw was installed
 schema_version: hardware_parser_runtime_schema_v8
 rule_intent: Implementation-ready runtime rules. Markdown is readable spec only; this YAML is the runtime source for v1.
 source_examples_policy: source_examples are evidence and fixture material only. They must not be loaded into exact, loose,

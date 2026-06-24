@@ -722,3 +722,125 @@ def test_p6a_shorthand_does_not_over_resolve_ambiguous(seeded):
     for text in ("Solis 5kw", "Goodwe 10kw"):
         out = parse_hardware(seeded, inverter_text=text)
         assert _only(out["inverters"])["confidence"] == "unconfirmed_raw_text"
+
+
+# --------------------------------------------------------------------------- #
+# P6b: deterministic whole-cell bundle interpretation + notes + low-confidence contextual mapping.
+# Every owner-confirmed example is asserted; plain ambiguous strings still stay raw.
+# --------------------------------------------------------------------------- #
+def _models(items):
+    return [i["model_text"] for i in items]
+
+
+@pytest.mark.parametrize("text", ["Swatten All In One 19.2", "Swatten All-In-One"])
+def test_p6b_swatten_all_in_one(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    inv = _only(out["inverters"])
+    bat = _only(out["batteries"])
+    assert inv["model_text"] == "Swatten SiH-5kW-TH" and inv["canonical_hardware_id_at_parse_time"]
+    assert bat["model_text"] == "Swatten SieB-H19K2-F" and bat["canonical_hardware_id_at_parse_time"]
+
+
+def test_p6b_alpha_m5_30kw_stack(seeded):
+    out = parse_hardware(seeded, inverter_text="Alpha ESS Smile M5/30kw Alpha Stack")
+    assert _only(out["inverters"])["model_text"] == "Alpha ESS SMILE-M5-S-INV"
+    assert _only(out["batteries"])["model_text"] == "SMILE-M-BAT-5P VI"
+
+
+def test_p6b_alpha_m5_15kw_stack(seeded):
+    out = parse_hardware(seeded, inverter_text="Alpha ESS Smile M5/15kw Alpha Stack")
+    assert _only(out["inverters"])["model_text"] == "Alpha ESS SMILE-M5-S-INV"
+    assert _only(out["batteries"])["model_text"] == "SMILE-M-BAT-5P III"
+
+
+def test_p6b_alpha_m5_smile_5piii_bundle(seeded):
+    out = parse_hardware(
+        seeded, inverter_text="Alpha ESS Smile M5 inverter/Alpha ESS SMILE-M-BAT-5PIII - 15kw batt")
+    assert _only(out["inverters"])["model_text"] == "Alpha ESS SMILE-M5-S-INV"
+    assert _only(out["batteries"])["model_text"] == "SMILE-M-BAT-5P III"   # the "15kw batt" is not a 2nd item
+
+
+def test_p6b_mixed_solax_alpha_m5_20kw(seeded):
+    out = parse_hardware(seeded, inverter_text="SolaX Power X1-SMT-10K-G2 + Alpha ESS SMILE M5 20KW BATTERY")
+    assert _models(out["inverters"]) == ["X1-SMT-10K-G2", "Alpha ESS SMILE-M5-S-INV"]
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SMILE-G3-BAT-10.1P" and bat["quantity"] == 2
+    assert bat["confidence"] == "manual_review"   # lower confidence (future NAS may confirm)
+
+
+def test_p6b_neovolt_reversed_dc(seeded):
+    out = parse_hardware(seeded, inverter_text="NEOVOLT 5KW DC INV + 10.1 NEOVOLT + EXTENSION NEOVOLT 10.1")
+    assert _only(out["inverters"])["model_text"] == "Neovolt BW-INV-SPB5K"
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "Neovolt BW-BAT-10.1P" and bat["quantity"] == 2
+
+
+def test_p6b_neovolt_reversed_ac_quantities(seeded):
+    out = parse_hardware(seeded, inverter_text="2 x Neovolt 5kw AC Inverters/6 x 10.1 Neovolt Batteries")
+    inv = _only(out["inverters"])
+    bat = _only(out["batteries"])
+    assert inv["model_text"] == "Neovolt BW-INV-SPB5K" and inv["quantity"] == 2
+    assert bat["model_text"] == "Neovolt BW-BAT-10.1P" and bat["quantity"] == 6
+
+
+def test_p6b_vast_tbat216_with_base_note(seeded):
+    out = parse_hardware(seeded, inverter_text="Vast 10kw and t-bat21.6 with base")
+    assert _only(out["inverters"])["model_text"] == "X1-VAST-10K"
+    assert _only(out["batteries"])["model_text"] == "SolaX T-BAT HS21.6"
+    assert "Battery with base" in out["site_notes"]["raw_misc"]
+
+
+def test_p6b_vast_tbat216_explicit(seeded):
+    out = parse_hardware(seeded, inverter_text="Solax Vast 10kw + T-BAT HS21.6 Battery")
+    assert _only(out["inverters"])["model_text"] == "X1-VAST-10K"
+    assert _only(out["batteries"])["model_text"] == "SolaX T-BAT HS21.6"
+
+
+def test_p6b_vast_432_batts_bms_note(seeded):
+    out = parse_hardware(seeded, inverter_text="2 x vast 10kw and 43.2kw batts 2 x BMS")
+    inv = _only(out["inverters"])
+    bat = _only(out["batteries"])
+    assert inv["model_text"] == "X1-VAST-10K" and inv["quantity"] == 2
+    assert bat["model_text"] == "SolaX T-BAT HS43.2"
+    assert "2 x BMS" in out["site_notes"]["raw_misc"]
+
+
+def test_p6b_vast_tbat432_12_batteries_note(seeded):
+    out = parse_hardware(
+        seeded, inverter_text="VAST 10K INVERTER AND T-BAT HS43.2 BATTERY - 12 batteries of 3.6kw hrs")
+    assert _only(out["inverters"])["model_text"] == "X1-VAST-10K"
+    assert _only(out["batteries"])["model_text"] == "SolaX T-BAT HS43.2"
+    assert "12 batteries of 3.6kw hrs" in out["site_notes"]["raw_misc"]
+
+
+@pytest.mark.parametrize("text", ["Vast 10kw + 28.8kw Battery", "Solax Vast 10kw and 28.8kw battery Solax"])
+def test_p6b_vast_capacity_28_8_inferred(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["inverters"])["model_text"] == "X1-VAST-10K"
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SolaX T-BAT HS28.8"
+    assert bat["confidence"] == "inferred_from_capacity"
+
+
+def test_p6b_vast_tbat288_explicit_with_capacity_note(seeded):
+    out = parse_hardware(seeded, inverter_text="SolaX Power VAST 10k+ SolaX Power T-BAT HS28.8 · 29.4kWh")
+    assert _only(out["inverters"])["model_text"] == "X1-VAST-10K"
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SolaX T-BAT HS28.8"          # capacity never contaminates model_text
+    assert "29.4kWh" in out["site_notes"]["raw_misc"]
+
+
+def test_p6b_solis_vast_context(seeded):
+    out = parse_hardware(
+        seeded,
+        inverter_text="Solis 5kw and Vast 10kw and 21.6kw - install Vast and batteries only - Solis 5kw was installed")
+    assert _only(out["inverters"])["model_text"] == "X1-VAST-10K"     # only Vast, NOT Solis
+    assert _only(out["batteries"])["model_text"] == "SolaX T-BAT HS21.6"
+    assert "Solis 5kw was installed" in out["site_notes"]["raw_misc"]
+    assert all("solis" not in (i["model_text"] or "").lower() for i in out["inverters"])
+
+
+@pytest.mark.parametrize("text", ["Solis 5kw", "Goodwe 10kw"])
+def test_p6b_plain_ambiguous_still_raw(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["inverters"])["confidence"] == "unconfirmed_raw_text"

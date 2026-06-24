@@ -9,6 +9,57 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-24 — Hardware Parser P6b: deterministic whole-cell bundle interpretation + notes (spec + runtime)
+
+- **Why:** the heavier half of the owner-confirmed bundle/shorthand pass — workbook shorthand whose
+  meaning is a fixed multi-model bundle, a low-confidence contextual mapping, or a hardware note that
+  generic aliases alone cannot express. **Deterministic only** (owner-confirmed exact patterns); a cell
+  not explicitly covered falls through to ordinary matching and stays raw/review.
+- **What:**
+  - **New `bundle_interpretations` mechanism** (spec section + `rules.py` loader + runtime step
+    `_emit_bundle` in `_parse_hardware_cell`): an EXACT normalized whole-cell match emits a fixed set
+    of typed inverter/battery items (canonical `model_text` + resolved catalogue id, per-item or rule
+    confidence, quantity) + notes (→ `site_notes.raw_misc`). It runs after specific_corrections /
+    before guards (so an owner-confirmed bundle wins), and is never fuzzy. 10 rules: Swatten
+    All-In-One (→ `Swatten SiH-5kW-TH` + `Swatten SieB-H19K2-F`); mixed SolaX+Alpha
+    `X1-SMT-10K-G2 + Alpha ESS SMILE M5 20KW BATTERY` (→ `X1-SMT-10K-G2` + `SMILE-M5-S-INV` + 2×
+    `SMILE-G3-BAT-10.1P`, **manual_review**); `Smile M5 inverter/SMILE-M-BAT-5PIII - 15kw batt`; five
+    VAST/T-BAT cells with notes (`Battery with base`, `2 x BMS`, `12 batteries of 3.6kw hrs`) and
+    capacity inference (`28.8kw battery` → `T-BAT HS28.8`, **inferred_from_capacity**); and the
+    **Solis-context** cell (→ `X1-VAST-10K` + `T-BAT HS21.6` + note `Solis 5kw was installed`, with the
+    Solis emitted **as a note, not current hardware**, per owner guidance — `Solis-1P5K-4G` was mapped
+    to existing `S5-GR1P5K`, but in this install-context cell the Solis is not emitted at all).
+  - **Shorthand aliases** (resolve the cleanly-decomposing cells generally): bare `T-BAT HS21.6` /
+    `T-BAT HS28.8` / `t-bat21.6`; `Smile M5` → `Alpha ESS SMILE-M5-S-INV`; no-space
+    `SMILE-M-BAT-5PIII/IV/V/VI`; `15kw Alpha Stack` → `SMILE-M-BAT-5P III`, `30kw Alpha Stack` →
+    `SMILE-M-BAT-5P VI`; `Neovolt 5kw DC` / `Neovolt 5kw AC` → `Neovolt BW-INV-SPB5K`. Combined with
+    P1 split + P6a aggregation, the two Alpha-stack and two Neovolt-reversed cells resolve fully (e.g.
+    `2 x Neovolt 5kw AC Inverters/6 x 10.1 Neovolt Batteries` → 2× inverter + 6× battery).
+- **Conservative / no regression:** never fuzzy — only the listed exact whole-cell patterns and exact
+  aliases resolve; plain ambiguous `Solis 5kw` / `Goodwe 10kw` still stay raw; capacity never
+  contaminates `model_text` (`· 29.4kWh` → `raw_misc`); contextual/inferred interpretations are flagged
+  `manual_review` / `inferred_from_capacity`. Spec validator extended to verify every bundle model
+  exists + unique ids/match keys + confidence vocab. Idempotent seed (+12 aliases, then `0/0`).
+- **Audit delta over COMPLETED:** original metric (manual_review counted as raw, same basis as P6a's
+  1,202/481) → clean **1,222 / raw 461**; per-component resolved metric → clean **1,278** (the ~56-row
+  gap is cells P6b correctly interprets at `manual_review`/`inferred_from_capacity` — resolved but
+  deliberately review-flagged). Cumulative P1→P6b: ~645 → ~1,222 (strict) / ~1,278 (resolved).
+- **Scope:** hardware parser spec + runtime + tests + docs only. No frontend, Settings/import/Job UI,
+  import commit/reverse, NAS/proposal, scheduling, migration, seed code, or data files.
+- **Tests:** `tests/test_hardware_runtime.py` adds a P6b section asserting EVERY owner example (correct
+  buckets, quantities, confidence/manual_review, notes preserved, capacity not in model_text, Solis not
+  emitted as hardware) + plain-ambiguous-stays-raw; `tests/test_hardware_parser_spec_validation.py`
+  validates the bundle section. **680 backend tests pass**; spec-validation green; `alembic check` clean.
+- **Files:** `docs/parser_specs/hardware/hardware_parser_runtime_rules_v9_1.yaml`,
+  `backend/app/hardware/rules.py`, `backend/app/hardware/runtime.py`,
+  `backend/tests/test_hardware_runtime.py`, `backend/tests/test_hardware_parser_spec_validation.py`;
+  docs (CHANGES, DEVELOPER_HANDOFF). Permanent.
+- **Deferred:** broader bundle variants beyond the owner-confirmed exact strings (left raw by design);
+  emitting historical/decommissioned hardware as a distinct concept; and the (un-authorized) clean-wipe
+  + reimport.
+
+---
+
 ## 2026-06-24 — Hardware Parser P6a: known shorthand aliases + quantity aggregation (spec + runtime)
 
 - **Why:** the first, lower-risk half of the owner-confirmed "known bundle/shorthand interpretation"

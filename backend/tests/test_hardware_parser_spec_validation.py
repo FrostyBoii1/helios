@@ -275,3 +275,36 @@ def test_parser_rule_version_drift_is_pinned_and_reported():
         "Expected the documented v8-vs-v9.1 hardware parser_rule_version drift; if this "
         "changed, reconcile the version across spec/runtime/fixtures intentionally."
     )
+
+
+# --------------------------------------------------------------------------- #
+# P6b bundle_interpretations: emitted models must exist; ids/match keys unique; confidence in vocab
+# --------------------------------------------------------------------------- #
+def test_bundle_interpretations_are_valid():
+    runtime = _load("hardware_parser_runtime_rules_v9_1.yaml")
+    bundles = runtime.get("bundle_interpretations") or []
+    if not bundles:
+        return
+    canon = {
+        _norm(e["canonical_model"])
+        for e in (runtime["hardware_catalog"] + runtime["metering_catalog"])
+        if e.get("canonical_model")
+    }
+    vocab = set(runtime["confidence_levels"])
+    missing, bad_conf = [], []
+    for b in bundles:
+        for cat in ("inverters", "batteries"):
+            for item in b.get(cat) or []:
+                if _norm(item["model"]) not in canon:
+                    missing.append(f"{b['id']}: {item['model']!r}")
+                if item.get("confidence") and item["confidence"] not in vocab:
+                    bad_conf.append(f"{b['id']}: {item['confidence']!r}")
+        if b.get("confidence") and b["confidence"] not in vocab:
+            bad_conf.append(f"{b['id']}: {b['confidence']!r}")
+    assert not missing, f"bundle_interpretations reference missing canonical models: {missing}"
+    assert not bad_conf, f"bundle_interpretations use confidence not in vocab: {bad_conf}"
+
+    ids = [b["id"] for b in bundles]
+    assert len(ids) == len(set(ids)), f"duplicate bundle_interpretation ids: {ids}"
+    matches = [_norm(b["match"]) for b in bundles]
+    assert len(matches) == len(set(matches)), "duplicate bundle_interpretation match keys"

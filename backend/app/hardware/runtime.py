@@ -262,6 +262,24 @@ def _item(entry: _Entry | None, model_text: str | None, *, quantity: int, confid
     }
 
 
+def _emit_bundle(bundle: dict, idx: "_Index", rules: ParserRules, *, cleaned: str,
+                 source_type: str, source_field: str, out: dict) -> None:
+    """Emit a deterministic P6b whole-cell bundle interpretation: each declared inverter / battery
+    becomes an item (canonical ``model_text`` + the resolved catalogue id), and each note goes to
+    ``site_notes.raw_misc``. The whole cleaned cell is the ``source_fragment``; quantity defaults to 1;
+    confidence is the per-item value when given, else the rule's."""
+    rule_conf = bundle.get("confidence", "manual_correction")
+    for cat in ("inverters", "batteries"):
+        for spec in bundle.get(cat) or []:
+            model = spec["model"]
+            out[cat].append(_item(
+                idx.by_model_ci.get(_key(model)), model, quantity=spec.get("quantity", 1),
+                confidence=spec.get("confidence") or rule_conf, source_fragment=cleaned,
+                source_type=source_type, source_field=source_field, rules=rules))
+    for note in bundle.get("notes") or []:
+        out["site_notes"].setdefault("raw_misc", []).append(note)
+
+
 def _parse_hardware_cell(
     text: str, idx: _Index, rules: ParserRules, *, source_type: str, source_field: str,
     out: dict, warnings: list[str],
@@ -284,6 +302,14 @@ def _parse_hardware_cell(
                 entry, model, quantity=1, confidence="manual_correction",
                 source_fragment=cleaned, source_type=source_type, source_field=source_field,
                 rules=rules))
+        return
+    # 2b. P6b deterministic whole-cell bundle interpretation (owner-confirmed shorthand / bundles):
+    # an EXACT normalized whole-cell match emits a fixed set of typed inverter/battery items + notes
+    # (overrides guard phrases, like a specific correction). Anything not matched falls through.
+    bundle = rules.bundle_interpretations.get(whole_key)
+    if bundle is not None:
+        _emit_bundle(bundle, idx, rules, cleaned=cleaned, source_type=source_type,
+                     source_field=source_field, out=out)
         return
     # 3. Guard phrases (no correction matched) — preserve, do NOT infer a model.
     if any(g in whole_key for g in rules.guard_phrases):

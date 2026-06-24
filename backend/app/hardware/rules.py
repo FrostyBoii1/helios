@@ -40,6 +40,9 @@ class ParserRules:
     # Whole-string manual corrections (override guard phrases): normalized match -> list of
     # canonical model strings to emit (confidence ``manual_correction``).
     specific_corrections: dict[str, list[str]]
+    # P6b deterministic whole-cell bundle interpretations: normalized match -> typed output
+    # ``{inverters: [{model, quantity?, confidence?}], batteries: [...], notes: [...], confidence}``.
+    bundle_interpretations: dict[str, dict[str, Any]]
     # Guard phrases that suppress model inference unless a specific correction applies.
     guard_phrases: tuple[str, ...]
     # Site-note keyword buckets -> the snapshot site_notes field they populate.
@@ -73,6 +76,15 @@ def load_rules() -> ParserRules:
         _norm(c["match"]): list(c.get("output") or []) for c in hw.get("specific_corrections") or []
     }
     guards = tuple(_norm(p) for p in (hw.get("global_guard_phrases") or {}).get("phrases") or [])
+    bundles = {
+        _norm(b["match"]): {
+            "inverters": list(b.get("inverters") or []),
+            "batteries": list(b.get("batteries") or []),
+            "notes": list(b.get("notes") or []),
+            "confidence": b.get("confidence", "manual_correction"),
+        }
+        for b in hw.get("bundle_interpretations") or []
+    }
 
     frags = hw.get("internal_note_fragments") or {}
     # wifi_comms in the spec maps to the snapshot's `comms` bucket.
@@ -97,6 +109,7 @@ def load_rules() -> ParserRules:
         ascii_equivalents=dict(enc),
         ignore_rules=ignore,
         specific_corrections=corrections,
+        bundle_interpretations=bundles,
         guard_phrases=guards,
         site_note_keywords=site_keywords,
         panel_brand_only=brand_only,
