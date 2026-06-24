@@ -967,3 +967,30 @@ def test_p7_swatten_single_phase_cell_has_no_phase_note(seeded):
     assert _only(out["inverters"])["model_text"] == "Swatten SiH-5kW-TH"
     raw_misc = (out.get("site_notes") or {}).get("raw_misc", [])
     assert not any("phase" in n.lower() for n in raw_misc)
+
+
+# --------------------------------------------------------------------------- #
+# P8b: ONE safe catalogue alias from the post-import raw-hardware audit.
+#   "ESS SMILE-BAT-13.3P" -> SMILE-BAT-13.3P   (bare-"ESS" brand-prefix gap of an already-aliased,
+#   single, unambiguous battery entry).
+# The audit's other candidate "Alpha ESS M5 5kw inverter" was found UNSAFE and NOT added: "M5" is
+# ambiguous between TWO catalogue inverter entries (Alpha ESS SMILE-M5 inverter vs SMILE-M5-S-INV),
+# the text is a curated source_example, and an existing invariant keeps it raw — so it must stay raw.
+# --------------------------------------------------------------------------- #
+def test_p8b_ess_smile_bat_13_3p_resolves(seeded):
+    out = parse_hardware(seeded, inverter_text="ESS SMILE-BAT-13.3P")
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SMILE-BAT-13.3P"
+    assert bat["canonical_hardware_id_at_parse_time"] > 0
+
+
+@pytest.mark.parametrize("text", [
+    "smile 5", "13.3p alpha smile 5 inv", "Alpha ESS M5 5kw inverter",
+    "Solis 5kw", "Sungrow 5kw", "Goodwe 10kw",
+])
+def test_p8b_ambiguous_shorthand_still_raw(seeded, text):
+    # The new alias must NOT make the deferred-ambiguous cases resolve — including the M5 text,
+    # which stays raw by design (ambiguous between two Alpha M5 inverter entries).
+    out = parse_hardware(seeded, inverter_text=text)
+    items = out["inverters"] + out["batteries"]
+    assert items and all(not i.get("canonical_hardware_id_at_parse_time") for i in items)

@@ -9,6 +9,32 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-24 — Hardware Parser P8b: one safe catalogue alias (post-import raw cleanup)
+
+- **Why:** the post-import raw-hardware audit flagged a few deterministic alias gaps; only the genuinely
+  unambiguous one is safe to add now.
+- **What:** added a single exact alias — **`ESS SMILE-BAT-13.3P` → `SMILE-BAT-13.3P`** — a bare-`ESS`
+  brand-prefix variant of the already-aliased, **single, unambiguous** Alpha 13.3P battery (e.g. the cell
+  `ESS SMILE-BAT-13.3P + Inverter smile`). No new catalogue entries; no runtime/code change.
+- **Investigated and REJECTED as unsafe (left raw):** the audit's other candidate
+  `alpha ess m5 5kw inverter → SMILE-M5-S-INV` was **NOT added** — "M5" is ambiguous between **two** catalogue
+  inverter entries (`Alpha ESS SMILE-M5 inverter` vs `Alpha ESS SMILE-M5-S-INV`), the exact text is a curated
+  `source_example` of the former, and an existing invariant (`test_brand_strip_never_resolves_source_example`)
+  deliberately keeps it raw. Mapping it to one entry would be a guess → deferred to an owner decision
+  (disambiguate the two M5 entries first).
+- **Conservative / no regression:** never fuzzy; ambiguous brand+capacity (`Solis 5kw`…), `smile 5`,
+  `13.3p alpha smile 5 inv`, and the M5 text all stay raw (asserted). No alias collision / no
+  source_example-as-alias (spec validator green). **No migration; affects FUTURE parsing only — not
+  retro-applied to the 1,710 live snapshots.**
+- **Tests:** `tests/test_hardware_runtime.py` P8b section (13.3P alias resolves; the ambiguous + M5 cases
+  stay raw). **733 backend tests pass**; spec-validation + `alembic check` clean.
+- **Scope:** hardware parser spec YAML + tests + docs only. No runtime/parser-logic change, no catalogue
+  entries, no import/commit/live behavior, no frontend, no migration.
+- **Files:** `docs/parser_specs/hardware/hardware_parser_runtime_rules_v9_1.yaml`,
+  `backend/tests/test_hardware_runtime.py`; docs (CHANGES, DEVELOPER_HANDOFF). Permanent.
+
+---
+
 ## 2026-06-24 — Import review: editable staging `legacy_reference` (correct duplicate source refs pre-commit)
 
 - **Why:** the clean reimport surfaced legitimately-distinct jobs that share one source `legacy_reference`

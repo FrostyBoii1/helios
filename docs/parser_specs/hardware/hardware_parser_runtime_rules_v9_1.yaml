@@ -3114,6 +3114,7 @@ hardware_catalog:
   - extens 13.3p battery
   - extension battery 13.3p
   - 13.3p alpha
+  - ESS SMILE-BAT-13.3P
   loose_aliases: []
   source_examples:
   - 1 X 13.3P ALPHA Smile 5 inv + Extension 13.3P

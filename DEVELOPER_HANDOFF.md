@@ -449,6 +449,13 @@ These are stubbed/absent and represent the next phases:
   **0 regressions** — no cell lost or changed an existing canonical id). 710 backend tests pass; spec
   validator + `alembic check` clean. Deferred: the uncertain-model Swatten/extension cells above and the
   (still un-authorized) clean-wipe + reimport.
+  **(Hardware Parser P8b — one safe post-import alias)** after the legacy workbook went live, a read-only
+  raw-hardware audit found alias gaps; only the unambiguous one was added: `ESS SMILE-BAT-13.3P` →
+  `SMILE-BAT-13.3P` (bare-`ESS` brand-prefix gap, single unambiguous battery). The other candidate
+  `alpha ess m5 5kw inverter` was **rejected** — "M5" is ambiguous between TWO inverter entries
+  (`Alpha ESS SMILE-M5 inverter` vs `SMILE-M5-S-INV`) and is a curated source_example kept raw by an existing
+  invariant; deferred to an owner decision. Spec YAML + tests only; no runtime/catalogue/migration change;
+  affects FUTURE parsing only (NOT retro-applied to live snapshots).
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware
