@@ -9,6 +9,52 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-24 — Hardware Parser P5: leading bare-quantity resolution (runtime only)
+
+- **Why:** the last straightforward correctness gap from the audit — a fragment with a LEADING bare
+  quantity (no `×`/`x`/`*` separator) and a trailing hardware noun, e.g. `1 SBR128 battery` /
+  `2 SBR128 batteries`, stayed a raw `1 SBR128 battery` item instead of resolving to the catalogued
+  battery `SBR128` with the right quantity. (The audit's other P5 items — metering vocab `export
+  meter`/`smart meter 5kw export`/`with meter` and capacity-in-noun `16kw hrs battery`/`15kw battery`/
+  `40kw hrs` — were already handled correctly by P3's bucket routing + the capacity/site-note rules;
+  this slice adds regression tests confirming them and makes no further change there.)
+- **What (`app/hardware/runtime.py` only):** the bare-quantity retry in `_parse_hardware_cell` now (a)
+  honours a leading quantity of **any** value including `1` (previously only `N >= 2`), and (b)
+  resolves the remainder via **P2 normalization** (`_normalized_hit`: brand-prefix + trailing
+  hardware-noun) in addition to a direct alias lookup. The quantity is taken **only when the remainder
+  resolves to a real catalogue alias** — so a leading number that is actually part of unmatched text
+  (`2 Frobnicator 9000`) or a unit (`40kw hrs`) is never mis-split. Gated on `bcore != frag` (a leading
+  number was actually present).
+- **Conservative / no regression:** never guesses a model; `source_fragment` and quantity preserved;
+  `2 Frobnicator 9000` still stays raw `2 Frobnicator 9000` (qty 1); `40kw hrs` still → `raw_misc`;
+  `Solis 5kw`/`Goodwe 10kw` still raw; every P1–P4 case unchanged (`Sungrow 10kW SH10RT/SBR128 BATT`,
+  the canonical SAJ string, `Solax Power X1-SMT-10K-G2`, T-BAT/Neovolt/SMILE-M-BAT-5P VI). No
+  catalogue/spec/seed change, no migration.
+- **Behaviour, before → after (live):** `1 SBR128 battery` → battery `SBR128` ×1 (was raw
+  `1 SBR128 battery`); `2 SBR128 batteries` → battery `SBR128` ×2; `1 SBR096 battery` → battery
+  `SBR096` ×1. Metering/capacity unchanged from P3 (`1 export meter`/`export meter`/`smart meter 5kw
+  export` → raw metering; `16kw hrs battery`/`15kw battery` → raw batteries; `40kw hrs` → `raw_misc`;
+  `with meter` → matched `Meter`).
+- **Audit delta over COMPLETED (confidence metric):** fully-clean rows **1,171 → 1,172**; raw rows
+  **512 → 511** (small — the leading-bare-quantity pattern is uncommon, and the fragments it fixes
+  often sit in rows with other unresolved parts; the gain is correctness, not match-rate).
+- **Scope:** backend parser runtime + tests only. No frontend, Settings/import/Job UI, import
+  commit/reverse, NAS/proposal, scheduling, migration, data files, catalogue seed, or vendored
+  `parser_specs` YAML.
+- **Tests:** `tests/test_hardware_runtime.py` adds a P5 section (leading-qty 1/2 → battery; leading
+  number not split when the remainder doesn't resolve; `16kw hrs battery` → raw battery not inverter;
+  `40kw hrs` → `raw_misc`; `with meter` → metering). One P3 test was retargeted from `1 SBR096
+  battery` (which now correctly RESOLVES) to a genuinely-unmatched `Frobnicator battery` so it still
+  proves the unmatched→batteries routing. **647 backend tests pass**; spec-validation green; `alembic
+  check` clean.
+- **Files:** `backend/app/hardware/runtime.py`, `backend/tests/test_hardware_runtime.py`; docs
+  (CHANGES, DEVELOPER_HANDOFF). Permanent.
+- **Deferred (next slices):** Swatten All-In-One policy pass; the `13.3p`/`extension 13.3p` Alpha
+  shorthand; reversed-order/suffix variants (`10.1 neovolt`, `vast 10kw`, `smile m5`); broader
+  catalogue additions; and the (un-authorized) clean-wipe + reimport.
+
+---
+
 ## 2026-06-24 — Hardware Parser P4: evidence-based catalogue adds for still-raw known hardware (spec only)
 
 - **Why:** after P1–P3, several still-raw COMPLETED fragments are genuinely-known hardware the

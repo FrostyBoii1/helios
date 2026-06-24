@@ -379,9 +379,19 @@ These are stubbed/absent and represent the next phases:
   1,171**, raw **534 -> 512** (cumulative P1->P4: ~645 -> ~1,171). 641 backend tests pass.
   Deferred to later slices: **Swatten All-In-One** (needs reversing the v9.1 source_example demotion),
   the `13.3p`/`extension 13.3p` Alpha shorthand, reversed-order/suffix variants, capacity-only battery
-  descriptions (correctly raw), leading-`1`+model (`1 SBR128 battery`), metering vocab expansion,
-  in-fragment capacity-in-noun extraction (`16kw hrs battery`), and the (un-authorized) clean-wipe +
-  reimport.
+  descriptions (correctly raw), and the (un-authorized) clean-wipe + reimport.
+  **(Hardware Parser P5 — leading bare-quantity resolution, runtime)** the bare-quantity retry in
+  `_parse_hardware_cell` now honours a LEADING bare quantity of any value (incl. `1`) and resolves the
+  remainder via P2 `_normalized_hit` (brand + trailing hardware-noun) as well as a direct lookup —
+  taken ONLY when the remainder resolves to a real alias (`bcore != frag` guard). So `1 SBR128 battery`
+  -> battery `SBR128` ×1, `2 SBR128 batteries` -> `SBR128` ×2, while `2 Frobnicator 9000` / `40kw hrs`
+  are never mis-split (remainder doesn't resolve). The audit's other P5 items (metering vocab
+  `export meter`/`smart meter 5kw export`/`with meter`, capacity-in-noun `16kw hrs battery`/`40kw hrs`)
+  were already correct via P3 routing + the capacity/site-note rules — P5 just adds confirming tests.
+  No catalogue/spec/seed/migration change. Audit delta (confidence metric): fully-clean **1,171 ->
+  1,172** (correctness edge, not a match-rate mover). 647 backend tests pass. Deferred: Swatten policy
+  pass, `13.3p` shorthand, reversed-order/suffix variants, broader catalogue additions, and the
+  (un-authorized) clean-wipe + reimport.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware

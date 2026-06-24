@@ -495,10 +495,13 @@ def test_brand_strip_never_resolves_source_example(seeded):
 # never shows battery/meter evidence as an inverter. Raw only — no catalogue id is ever invented.
 # --------------------------------------------------------------------------- #
 def test_unmatched_battery_word_routes_to_batteries(seeded):
-    out = parse_hardware(seeded, inverter_text="1 SBR096 battery")
+    # A genuinely-unknown battery (no catalogue match) routes to the batteries bucket as raw evidence,
+    # never the inverter bucket. (A catalogued model like "1 SBR096 battery" instead RESOLVES via P5
+    # leading-quantity + trailing-noun cleanup — covered by the P5 tests.)
+    out = parse_hardware(seeded, inverter_text="Frobnicator battery")
     assert out["inverters"] == []
     bat = _only(out["batteries"])
-    assert bat["model_text"] == "1 SBR096 battery"
+    assert bat["model_text"] == "Frobnicator battery"
     assert bat["confidence"] == "unconfirmed_raw_text"
     assert bat.get("canonical_hardware_id_at_parse_time") is None   # never invented
 
@@ -617,3 +620,52 @@ def test_p4_catalogue_adds_do_not_resolve_ambiguous_capacity(seeded):
         inv = _only(out["inverters"])
         assert inv["confidence"] == "unconfirmed_raw_text"
         assert inv.get("canonical_hardware_id_at_parse_time") is None
+
+
+# --------------------------------------------------------------------------- #
+# P5: leading bare-quantity resolution + metering/capacity correctness. (Metering vocab and
+# capacity-in-noun routing were already handled by P3; these confirm them and add the new
+# leading-quantity behaviour.)
+# --------------------------------------------------------------------------- #
+def test_p5_leading_quantity_one_resolves_battery(seeded):
+    # "1 SBR128 battery": leading bare "1" honoured (remainder resolves via P2 trailing-noun cleanup).
+    out = parse_hardware(seeded, inverter_text="1 SBR128 battery")
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SBR128" and bat["quantity"] == 1
+    assert bat["canonical_hardware_id_at_parse_time"]
+    assert out["inverters"] == []
+
+
+def test_p5_leading_quantity_two_resolves_battery(seeded):
+    out = parse_hardware(seeded, inverter_text="2 SBR128 batteries")
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "SBR128" and bat["quantity"] == 2
+
+
+def test_p5_leading_quantity_not_split_when_remainder_unresolved(seeded):
+    # A leading number is NOT treated as a quantity when the remainder does not resolve.
+    out = parse_hardware(seeded, inverter_text="2 Frobnicator 9000")
+    inv = _only(out["inverters"])
+    assert inv["model_text"] == "2 Frobnicator 9000" and inv["quantity"] == 1
+
+
+def test_p5_capacity_noun_battery_not_inverter(seeded):
+    # "16kw hrs battery": battery wording, no model -> raw BATTERY evidence (not inverter model_text).
+    out = parse_hardware(seeded, inverter_text="16kw hrs battery")
+    assert out["inverters"] == []
+    bat = _only(out["batteries"])
+    assert bat["model_text"] == "16kw hrs battery"
+    assert bat.get("canonical_hardware_id_at_parse_time") is None
+
+
+def test_p5_pure_capacity_routes_to_raw_misc(seeded):
+    # "40kw hrs": capacity-only, no battery/metering noun -> hardware note, never an item model_text.
+    out = parse_hardware(seeded, inverter_text="40kw hrs")
+    assert out["inverters"] == [] and out["batteries"] == [] and out["metering"] == []
+    assert out["site_notes"]["raw_misc"] == ["40kw hrs"]
+
+
+def test_p5_with_meter_resolves_metering(seeded):
+    # " with " splits (P1); the meter resolves to first-class metering, not inverter text.
+    out = parse_hardware(seeded, inverter_text="Goodwe 10kw with meter")
+    assert out["metering"] and out["metering"][0]["model_text"] == "Meter"

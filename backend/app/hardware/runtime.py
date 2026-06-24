@@ -310,12 +310,17 @@ def _parse_hardware_cell(
         ckey = _key(core)
         hit = idx.exact_ci.get(fkey) or idx.exact_ci.get(ckey) or idx.loose_ci.get(fkey) or idx.loose_ci.get(ckey)
         if hit is None:
-            # Bare "N MODEL" quantity — honoured ONLY when the stripped model resolves (safe:
-            # unit / capacity text like "40kw hrs" never resolves, so it cannot be mis-split).
+            # Leading bare "N MODEL" quantity (no x/×/* separator), e.g. "1 SBR128 battery" or
+            # "2 SBR128 batteries". The quantity is honoured ONLY when the remainder resolves —
+            # directly OR via P2 normalization (brand-prefix / trailing hardware-noun) — so a leading
+            # number that is actually part of unmatched text ("2 Frobnicator 9000", "40kw hrs") is
+            # never mis-split. P5: N == 1 is now included (the remainder must still resolve), so
+            # "1 SBR128 battery" -> battery SBR128 qty 1 instead of a raw "1 SBR128 battery" item.
             bqty, bcore = _extract_bare_quantity(frag)
-            if bqty != 1:
+            if bcore != frag:
                 bkey = _key(bcore)
-                bhit = idx.exact_ci.get(bkey) or idx.loose_ci.get(bkey)
+                bhit = (idx.exact_ci.get(bkey) or idx.loose_ci.get(bkey)
+                        or _normalized_hit(bcore, idx))
                 if bhit is not None:
                     qty, core, ckey, hit = bqty, bcore, bkey, bhit
         if hit is None:
