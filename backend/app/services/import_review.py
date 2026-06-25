@@ -683,9 +683,12 @@ def summary(db: Session, batch: ImportBatch) -> dict:
         ).all()
         return {str(k): v for k, v in rows}
 
+    # Active counts only: resolved issues are audit/history and are excluded from the
+    # severity breakdown the review UI shows (matching the severity filter and the
+    # per-row badges). This covers warnings as well as errors (severity-agnostic).
     issue_rows = db.execute(
         select(ImportIssue.severity, func.count())
-        .where(ImportIssue.batch_id == batch.id)
+        .where(ImportIssue.batch_id == batch.id, ImportIssue.resolved.is_(False))
         .group_by(ImportIssue.severity)
     ).all()
     unresolved_error_rows = db.scalar(

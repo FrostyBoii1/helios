@@ -164,7 +164,10 @@ def list_import_rows(
     batch_id: int,
     row_class: ImportRowClass | None = Query(default=None),
     review_status: ImportRowReviewStatus | None = Query(default=None),
-    severity: str | None = Query(default=None, description="Only rows with an issue of this severity"),
+    severity: str | None = Query(
+        default=None,
+        description="Only rows with an UNRESOLVED issue of this severity (resolved issues are audit-only)",
+    ),
     unresolved_only: bool = Query(default=False, description="Only rows with an unresolved error-severity issue"),
     q: str | None = Query(default=None, description="Search legacy reference or parsed customer name"),
     limit: int = Query(default=50, ge=1, le=200),
@@ -179,10 +182,15 @@ def list_import_rows(
     if review_status is not None:
         filters.append(ImportRow.review_status == review_status.value)
     if severity is not None:
+        # Resolved issues are audit/history only: the active error/warning queue
+        # must match only rows that still carry an UNRESOLVED issue of this severity
+        # (consistent with the per-row IssueBadges, which already exclude resolved).
         filters.append(
             ImportRow.id.in_(
                 select(ImportIssue.row_id).where(
-                    ImportIssue.batch_id == batch_id, ImportIssue.severity == severity
+                    ImportIssue.batch_id == batch_id,
+                    ImportIssue.severity == severity,
+                    ImportIssue.resolved.is_(False),
                 )
             )
         )

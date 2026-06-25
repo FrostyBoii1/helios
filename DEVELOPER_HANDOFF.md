@@ -468,6 +468,17 @@ These are stubbed/absent and represent the next phases:
   `Job.details.hardware` snapshots referenced id 1172 (verified pre-delete); no live Jobs/Customers/ImportRows
   changed. Spec YAML + tests + reference-data soft-delete only; no runtime/parser-logic change, no migration
   (existing `deleted_at`); FUTURE parsing only. Durable rule recorded in `docs/business_rules.md`.
+  **(Import review R1 — resolved issues out of active filters/counts, backend)** resolving an
+  `ImportIssue` now removes it from the **active** review surfaces, not just the per-row badges. Two
+  query fixes: (1) `list_import_rows` severity filter (`api/v1/endpoints/imports.py`) adds
+  `ImportIssue.resolved.is_(False)` to the subselect — `severity=error`/`warning`/`info` match only rows
+  with an UNRESOLVED issue of that severity (severity-agnostic → warnings behave like errors); (2)
+  `import_review.summary` `issues_by_severity` group-by adds the same predicate (unresolved-only counts).
+  Schema field type unchanged (`ImportBatchSummary.issues_by_severity`; comment documents the narrowed
+  semantics). Resolved issues stay on the row (`ImportRowRead.issues`) for audit/history; the error-only
+  approval gate (`unresolved_error_rows`/`eligible_clean_count`) is untouched. **No migration** (existing
+  `ImportIssue.resolved`); **no frontend change** (severity forwarded verbatim; `issues_by_severity` not
+  rendered). Tests in `tests/test_import_review.py`.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware

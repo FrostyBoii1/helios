@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.customer import Customer
 from app.models.enums import ImportBatchStatus, ImportRowClass, ImportRowReviewStatus
-from app.models.import_staging import ImportBatch, ImportRow
+from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.models.job import Job
 from app.services import import_review
 from tests.test_import import _synthetic_bytes  # reuse the synthetic workbook
@@ -264,6 +264,91 @@ def test_issue_read_exposes_resolution_audit(client_for, users):
     assert resolved["resolution_note"] == "checked"
     assert resolved["resolved_by_id"] is not None
     assert resolved["resolved_at"] is not None
+
+
+# --------------------------------------------------------------------------- #
+# R1: resolved issues are audit/history only — active severity filters + counts
+# must include UNRESOLVED issues only (warnings behave like errors).
+# --------------------------------------------------------------------------- #
+def _attach_issue(db_session, batch_id, row_id, *, kind, severity):
+    """Attach a synthetic issue to an existing staged row (rollback-isolated)."""
+    orm_row = db_session.get(ImportRow, row_id)
+    issue = ImportIssue(batch_id=batch_id, kind=kind, severity=severity, message=f"synthetic {kind}")
+    orm_row.issues.append(issue)
+    db_session.flush()
+    return issue
+
+
+def _refs_for_severity(client, batch_id, severity):
+    items = client.get(
+        f"/api/v1/imports/{batch_id}/rows", params={"severity": severity, "limit": 200}
+    ).json()["items"]
+    return [r["legacy_reference"] for r in items]
+
+
+def test_severity_filter_excludes_resolved_error(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    # TESTIMP0003 is the only row carrying an (unresolved) ambiguous_name error.
+    assert _refs_for_severity(admin, bid, "error") == ["TESTIMP0003"]
+    row = _by_ref(_rows(admin, bid), "TESTIMP0003")
+    err = next(i for i in row["issues"] if i["kind"] == "ambiguous_name")
+    admin.patch(f"/api/v1/imports/{bid}/issues/{err['id']}", json={"resolution_note": "ok"})
+    # Once resolved it drops out of the active error queue.
+    assert _refs_for_severity(admin, bid, "error") == []
+
+
+def test_severity_filter_excludes_resolved_warning(client_for, users, db_session):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0001")  # a clean job row
+    issue_id = _attach_issue(db_session, bid, row["id"], kind="nmi_unmatched", severity="warning").id
+    assert "TESTIMP0001" in _refs_for_severity(admin, bid, "warning")
+    admin.patch(f"/api/v1/imports/{bid}/issues/{issue_id}", json={"resolution_note": "ok"})
+    assert "TESTIMP0001" not in _refs_for_severity(admin, bid, "warning")
+
+
+def test_severity_filter_keeps_row_with_other_unresolved_same_severity(client_for, users, db_session):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0002")
+    first_id = _attach_issue(db_session, bid, row["id"], kind="nmi_unmatched", severity="warning").id
+    _attach_issue(db_session, bid, row["id"], kind="distributor_mismatch", severity="warning")
+    # Resolve ONLY the first warning; the row still carries an unresolved warning.
+    admin.patch(f"/api/v1/imports/{bid}/issues/{first_id}", json={"resolution_note": "ok"})
+    assert "TESTIMP0002" in _refs_for_severity(admin, bid, "warning")
+
+
+def test_summary_issue_counts_exclude_resolved(client_for, users, db_session):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    # Add a synthetic warning so both error AND warning parity can be asserted.
+    row1 = _by_ref(_rows(admin, bid), "TESTIMP0001")
+    warn_id = _attach_issue(db_session, bid, row1["id"], kind="nmi_unmatched", severity="warning").id
+    before = admin.get(f"/api/v1/imports/{bid}/summary").json()["issues_by_severity"]
+    assert before.get("error", 0) >= 1 and before.get("warning", 0) >= 1
+    # Resolve one error and one warning.
+    row3 = _by_ref(_rows(admin, bid), "TESTIMP0003")
+    err = next(i for i in row3["issues"] if i["kind"] == "ambiguous_name")
+    admin.patch(f"/api/v1/imports/{bid}/issues/{err['id']}", json={"resolution_note": "ok"})
+    admin.patch(f"/api/v1/imports/{bid}/issues/{warn_id}", json={"resolution_note": "ok"})
+    after = admin.get(f"/api/v1/imports/{bid}/summary").json()["issues_by_severity"]
+    assert after.get("error", 0) == before.get("error", 0) - 1
+    assert after.get("warning", 0) == before.get("warning", 0) - 1
+
+
+def test_resolved_issue_filtered_out_but_preserved_on_row(client_for, users):
+    admin = client_for(users["admin"])
+    bid = _ingest(admin)
+    row = _by_ref(_rows(admin, bid), "TESTIMP0003")
+    err = next(i for i in row["issues"] if i["kind"] == "ambiguous_name")
+    admin.patch(f"/api/v1/imports/{bid}/issues/{err['id']}", json={"resolution_note": "audit"})
+    # Filtered out of the active error queue...
+    assert "TESTIMP0003" not in _refs_for_severity(admin, bid, "error")
+    # ...but still present on the row for audit/history when fetched directly.
+    fetched = admin.get(f"/api/v1/imports/{bid}/rows/{row['id']}").json()
+    kept = next(i for i in fetched["issues"] if i["id"] == err["id"])
+    assert kept["resolved"] is True and kept["resolution_note"] == "audit"
 
 
 # --------------------------------------------------------------------------- #

@@ -9,6 +9,36 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-25 — Import review R1: resolved issues excluded from active error/warning filters & counts
+
+- **Why:** resolving an error/warning still left the row in the `severity=error`/`severity=warning` queue and
+  still inflated the per-severity summary count, even though the per-row badges (`IssueBadges`) already excluded
+  resolved issues — a server/UI inconsistency. **Owner rule:** resolved issues are audit/history only; active
+  error/warning queues and counts must include UNRESOLVED issues only.
+- **What (backend only, 2 query fixes):**
+  1. Row severity filter `GET /imports/{batch}/rows?severity=…` ([imports.py](backend/app/api/v1/endpoints/imports.py),
+     `list_import_rows`): the issue subselect now requires `ImportIssue.resolved.is_(False)`. Severity-agnostic, so
+     **warnings behave like errors** automatically (and `info`).
+  2. Summary `issues_by_severity` ([import_review.py](backend/app/services/import_review.py), `summary`): the
+     per-severity group-by now counts unresolved issues only. Schema field type unchanged
+     ([import_staging.py](backend/app/schemas/import_staging.py) — comment added documenting the narrowed semantics).
+- **Expected behaviour:** a row whose ONLY error is resolved disappears from `severity=error`; same for warnings;
+  a row keeping a second UNRESOLVED same-severity issue stays visible; summary per-severity counts drop on resolve.
+- **Preserved:** resolved issues remain on the row (`ImportRowRead.issues`) for audit/history when a row is fetched
+  directly — only the active *filter* and *counts* exclude them. `unresolved_error_rows`, `eligible_clean_count`,
+  and the approval gate (errors block approval; warnings intentionally do not) are **unchanged**.
+- **Scope / no regression:** no migration (uses the existing `ImportIssue.resolved` column); **no frontend change**
+  (the severity param is forwarded verbatim and `issues_by_severity` is not rendered); no parser/import-commit/
+  ingest/reparse/hardware/live-data change. Full backend suite + alembic + `git diff --check` clean.
+- **Tests:** `tests/test_import_review.py` — resolve-error drops row from `severity=error`; resolve-warning drops
+  from `severity=warning`; second unresolved same-severity issue keeps the row; summary counts drop for error AND
+  warning; resolved issue is filtered out of the active queue yet preserved on the row.
+- **Files:** `backend/app/api/v1/endpoints/imports.py`, `backend/app/services/import_review.py`,
+  `backend/app/schemas/import_staging.py`, `backend/tests/test_import_review.py`; docs (CHANGES,
+  DEVELOPER_HANDOFF, business_rules). Permanent.
+
+---
+
 ## 2026-06-25 — Hardware Parser P8c: Alpha M5 duplicate-canonical consolidation
 
 - **Why:** the catalogue carried **two entries for the same inverter** — `Alpha ESS SMILE-M5 inverter`

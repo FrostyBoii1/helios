@@ -281,6 +281,9 @@ class ImportBatchSummary(BaseModel):
     batch_id: int
     by_review_status: dict[str, int]
     by_row_class: dict[str, int]
+    # Active (UNRESOLVED) issue counts by severity. Resolved issues are audit/history
+    # only and are excluded here, consistent with the severity filter and the per-row
+    # IssueBadges. (Type unchanged; only the semantics narrowed to unresolved-only.)
     issues_by_severity: dict[str, int]
     unresolved_error_rows: int
     # Pending job/ambiguous rows with no unresolved error issue — i.e. how many

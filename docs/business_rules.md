@@ -327,6 +327,16 @@ explains intent; protect important explicit decisions with tests, not docs alone
   (`invalid_case_year`). Such rows must have their dates corrected in review (or
   be excluded) before they can commit — this prevents nonsensical numbers like
   `SCS-202-00001`.
+- **Resolved import issues are audit/history only — never part of an active queue
+  or count (Import review R1).** Each `ImportIssue` carries a `resolved` flag.
+  Resolving an error or warning removes that issue from the **active** surfaces:
+  the row-list `severity=` filter (`GET /imports/{batch}/rows`) and the
+  `issues_by_severity` summary counts both consider **unresolved** issues only,
+  matching the per-row `IssueBadges`. The rule is severity-agnostic — **warnings
+  behave like errors** for filtering/counting. The resolved issue itself stays on
+  the row (returned by a direct row fetch) for audit/history. (This is distinct
+  from the **approval gate**, which is intentionally error-only: an unresolved
+  *error* blocks approval; an unresolved *warning* does not.)
 - **Reverse** is per-row and **soft-delete only**, allowed **only while the
   imported Customer/Job is pristine** (unedited since import, no tasks/documents/
   non-import activity, status unchanged, customer owns only that one job). It
