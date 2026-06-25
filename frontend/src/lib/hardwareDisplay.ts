@@ -9,7 +9,7 @@
 // details.hardware (see applyHardwareSystemEdits).
 
 import type { HardwareCategory } from '@/types'
-import type { JobHardwareItem, JobHardwarePanel, JobHardwareSnapshot } from '@/types/imports'
+import type { JobHardwareItem, JobHardwarePanel, JobHardwareSnapshot, ParsedDetails } from '@/types/imports'
 
 const LOW_CONFIDENCE = new Set(['unconfirmed_raw_text', 'manual_review'])
 
@@ -103,6 +103,45 @@ export function deriveSystemHardware(
     out.push({ key: 'hw_site', label: 'CT / electrical', value: site.join(' · '), editable: false })
   }
   return out
+}
+
+export interface HardwareContext {
+  /** Humanised electrical phase (from details.system.phase); '' when unknown. */
+  phase: string
+  /** Panel display (display_name | model | brand + wattage); '' when none. */
+  panels: string
+  /** Inverter model(s) in the "N × MODEL" convention; '' when none. */
+  inverter: string
+  /** Battery model(s) in the "N × MODEL" convention; null when there is NO battery. */
+  battery: string | null
+}
+
+const PHASE_LABELS: Record<string, string> = {
+  single: 'Single-phase',
+  two: 'Two-phase',
+  three: 'Three-phase',
+}
+
+/**
+ * The tight hardware-context block shown in the grouping-candidate preview: phase + panels +
+ * inverter + battery ONLY (deliberately NOT metering / CT / site notes / roof / storey — that would
+ * re-introduce a broad details dump). Phase comes from details.system.phase (NOT the hardware
+ * snapshot); panels/inverter/battery reuse the same panelDisplay / "N × MODEL" conventions as the
+ * System fields. Pure + read-only; `battery` is null when absent so the caller can hide that line.
+ */
+export function deriveHardwareContext(details: ParsedDetails | null | undefined): HardwareContext {
+  const hw = details?.hardware ?? null
+  const rawPhase = (details?.system as { phase?: unknown } | undefined)?.phase
+  const phase =
+    typeof rawPhase === 'string' && rawPhase.trim()
+      ? (PHASE_LABELS[rawPhase.trim().toLowerCase()] ?? rawPhase.trim())
+      : ''
+  return {
+    phase,
+    panels: panelDisplay(hw?.panel),
+    inverter: joinModels(hw?.inverters),
+    battery: joinModels(hw?.batteries) || null,
+  }
 }
 
 /** Supplemental "Hardware notes" only: confidence flags, ambiguous options, warnings, misc — NEVER

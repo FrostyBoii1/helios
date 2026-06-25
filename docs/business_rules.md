@@ -337,6 +337,15 @@ explains intent; protect important explicit decisions with tests, not docs alone
   the row (returned by a direct row fetch) for audit/history. (This is distinct
   from the **approval gate**, which is intentionally error-only: an unresolved
   *error* blocks approval; an unresolved *warning* does not.)
+- **The grouping-candidate preview shows a tight hardware-context block, not a broad
+  dump (Import review R3).** When a reviewer previews another staged row to decide
+  "same customer?", the read-only preview surfaces only **phase, panels, inverter,
+  and battery** (battery only when present). Phase is read from
+  `details.system.phase`; panels/inverter/battery from `details.hardware` using the
+  standard panel/`N × MODEL` display conventions. **Metering, CT/electrical notes,
+  raw notes, roof type, and storey are deliberately NOT shown** in this context
+  block. It is derived client-side from the already-fetched row (no backend change)
+  and is strictly read-only.
 - **Reverse** is per-row and **soft-delete only**, allowed **only while the
   imported Customer/Job is pristine** (unedited since import, no tasks/documents/
   non-import activity, status unchanged, customer owns only that one job). It

@@ -9,6 +9,37 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-25 — Import review R3: hardware context in the grouping-candidate preview
+
+- **Why:** the grouping-candidate preview (`CandidateRowPreviewModal` — the read-only "is this the same
+  customer?" modal) showed only identity/status fields and **no hardware**, so a reviewer couldn't compare
+  candidate jobs by system. **Owner rule:** show only *useful* system hardware context — phase, panels,
+  inverter, battery — never a broad details dump (no metering/CT/notes/roof/storey).
+- **What (frontend only):**
+  - New pure helper `deriveHardwareContext(details)` ([hardwareDisplay.ts](frontend/src/lib/hardwareDisplay.ts))
+    returns `{ phase, panels, inverter, battery }`, reusing the existing `panelDisplay` /
+    `joinModels` ("N × MODEL") conventions. **Phase comes from `details.system.phase`** (humanised
+    single/two/three → "Single/Two/Three-phase", raw fallback otherwise) — NOT the hardware snapshot.
+    `battery` is `null` when there is no battery.
+  - `CandidateRowPreviewModal` ([CandidateRowPreviewModal.tsx](frontend/src/components/imports/CandidateRowPreviewModal.tsx))
+    renders Phase / Panels / Inverter (always, `—` when empty) and Battery (only when present), placed after
+    Approval and before Group. The data was **already on the wire** (the modal already reads `parsed.details`),
+    so **no backend/API change**.
+- **Deliberately excluded:** metering, CT/electrical site notes, raw notes, roof type, storey — to avoid
+  re-introducing a broad dump. `deriveSystemHardware` (which includes metering/CT) was **not** reused here.
+- **Scope / no regression:** no backend, no migration, no live-data path. Resolved-issue filtering (R1) and
+  blank-row handling (R2) untouched. The modal stays strictly read-only.
+- **Tests / checks:** the repo has **no frontend test runner** (no vitest/jest, no `test` script), so no
+  committed unit test was added (adding a test framework is out of R3 scope). The pure helper's logic was
+  proven via a runner-agnostic Node check of all four cases (populated → 4 fields; battery hidden when absent;
+  null/missing → clean empties, no crash; only phase/panels/inverter/battery — no metering/CT/notes leak), plus
+  frontend **typecheck + lint + build** all green. Follow-up: add vitest in a separate slice to commit the
+  helper/component tests.
+- **Files:** `frontend/src/lib/hardwareDisplay.ts`, `frontend/src/components/imports/CandidateRowPreviewModal.tsx`;
+  docs (CHANGES, DEVELOPER_HANDOFF, business_rules). Permanent.
+
+---
+
 ## 2026-06-25 — Import review R1: resolved issues excluded from active error/warning filters & counts
 
 - **Why:** resolving an error/warning still left the row in the `severity=error`/`severity=warning` queue and

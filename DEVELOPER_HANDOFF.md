@@ -479,6 +479,16 @@ These are stubbed/absent and represent the next phases:
   approval gate (`unresolved_error_rows`/`eligible_clean_count`) is untouched. **No migration** (existing
   `ImportIssue.resolved`); **no frontend change** (severity forwarded verbatim; `issues_by_severity` not
   rendered). Tests in `tests/test_import_review.py`.
+  **(Import review R3 — grouping-candidate hardware context, frontend)** the read-only grouping-candidate
+  preview (`components/imports/CandidateRowPreviewModal.tsx`) now shows a tight hardware block — **phase /
+  panels / inverter / battery** (battery only when present) — so reviewers can compare candidate jobs by
+  system when deciding "same customer?". New pure helper `deriveHardwareContext(details)` in
+  `lib/hardwareDisplay.ts` returns `{phase, panels, inverter, battery}`, reusing the existing `panelDisplay`
+  / `joinModels` ("N × MODEL") conventions; **phase from `details.system.phase`** (humanised), NOT the
+  hardware snapshot. Deliberately EXCLUDES metering/CT/notes/roof/storey (no broad dump) — `deriveSystemHardware`
+  was not reused here. **Frontend-only, no backend/API/migration**: the data was already on the wire (the modal
+  already read `parsed.details`). No committed unit test (repo has no FE test runner — vitest follow-up noted);
+  verified via a runner-agnostic Node logic check of all 4 cases + typecheck/lint/build.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware

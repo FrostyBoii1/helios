@@ -12,6 +12,7 @@ import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
 import { siteLine } from '@/lib/addressDisplay'
+import { deriveHardwareContext } from '@/lib/hardwareDisplay'
 import { useImportRow } from '@/hooks/useImports'
 
 interface CandidateRowPreviewModalProps {
@@ -50,6 +51,9 @@ export function CandidateRowPreviewModal({
   const emails = (parsed?.emails ?? []).filter(Boolean)
   const phones = (parsed?.phones ?? []).filter(Boolean)
   const importedContext = row?.internal_notes_override || row?.context_text || ''
+  // Tight system-hardware context for same-customer comparison: phase / panels / inverter / battery
+  // only (no metering / CT / notes / roof / storey — deliberately NOT a broad details dump).
+  const hardware = deriveHardwareContext(parsed?.details ?? null)
 
   return (
     // z-40 so the preview floats above the import row modal (z-30).
@@ -134,6 +138,18 @@ export function CandidateRowPreviewModal({
                 <>
                   <dt className="text-faint">Approval</dt>
                   <dd className="text-fg">{parsed.approval_state}</dd>
+                </>
+              )}
+              <dt className="text-faint">Phase</dt>
+              <dd className="text-fg">{hardware.phase || '—'}</dd>
+              <dt className="text-faint">Panels</dt>
+              <dd className="break-words text-fg">{hardware.panels || '—'}</dd>
+              <dt className="text-faint">Inverter</dt>
+              <dd className="break-words text-fg">{hardware.inverter || '—'}</dd>
+              {hardware.battery && (
+                <>
+                  <dt className="text-faint">Battery</dt>
+                  <dd className="break-words text-fg">{hardware.battery}</dd>
                 </>
               )}
               <dt className="text-faint">Group</dt>
