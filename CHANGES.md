@@ -9,6 +9,44 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-25 — Hardware Parser P8c: Alpha M5 duplicate-canonical consolidation
+
+- **Why:** the catalogue carried **two entries for the same inverter** — `Alpha ESS SMILE-M5 inverter`
+  (`alpha_ess_smile_m5_inverter`, db id 1172) and `Alpha ESS SMILE-M5-S-INV` (`alpha_ess_smile_m5_s_inv`,
+  db id 1173). The duplicate is what blocked the P8b `alpha ess m5 5kw inverter` alias (the ambiguity that
+  was deferred to an owner decision). **Owner decision:** they are the **same hardware** for parser purposes;
+  the single survivor is **`alpha_ess_smile_m5_s_inv` / `Alpha ESS SMILE-M5-S-INV`**.
+- **What:** removed the duplicate `alpha_ess_smile_m5_inverter` entry from the spec; **merged** its aliases
+  and `source_examples` onto the survivor and added the M5 inverter shorthand as **exact** aliases of the
+  survivor — `Alpha ESS M5 5kw inverter`, `Alpha ESS SMILE-M5 inverter`, `UPGRADE TO M5 30KW` (joining the
+  existing `Smile M5` / `Alpha ESS SMILE-M5-S-INV`). All M5 inverter shorthand now resolves to the one survivor.
+- **Reference-data DB cleanup (non-production dev/test DB only):** because the seed is **insert/update-only and
+  never removes** an entry that disappears from the spec, the already-persisted duplicate **catalogue row 1172
+  was soft-deleted** (`deleted_at` set) along with its two aliases (`Alpha ESS SMILE-M5 inverter`,
+  `UPGRADE TO M5 30KW`). Nothing hard-deleted. This prevents a stale row from owning the moved alias and making
+  `_Index` resolution non-deterministic.
+- **Snapshot rule preserved (no live mutation):** **zero** live `Job.details.hardware` snapshots referenced the
+  duplicate id 1172 (verified before the soft-delete); the survivor's 27 referencing snapshots are untouched.
+  No live Jobs / Customers / ImportRows / committed links changed. Catalogue cleanup does **not** mutate snapshots.
+- **Conservative / no regression:** genuinely-ambiguous brand+capacity (`Solis 5kw`, `Sungrow 5kw`…), `smile 5`,
+  and `13.3p alpha smile 5 inv` still stay raw (asserted). One active catalogue row owns the M5 inverter
+  canonical (no alias collision). Spec validator + seed idempotency + `alembic check` clean; **no migration**
+  (uses the existing `deleted_at` columns). Affects FUTURE parsing only — not retro-applied to live snapshots.
+- **Tests:** `tests/test_hardware_runtime.py` new P8c section (5 M5 shorthand strings → survivor; exactly one
+  active M5 inverter entry). Three former "M5 stays raw" tests updated where this owner decision supersedes
+  them (`test_source_examples_never_match` rewritten to the durable whole-string-not-an-alias invariant;
+  `test_brand_strip_never_resolves_source_example` and import's `test_source_examples_not_matched_through_import`
+  re-pointed to still-raw brand+capacity examples); the P8b ambiguous-shorthand guard dropped the now-resolving
+  M5 case.
+- **Scope:** hardware parser spec YAML + tests + docs, plus a reference-data soft-delete of one catalogue row +
+  its aliases. No runtime/parser-logic change, no new catalogue entries, no import/commit/live behavior, no
+  frontend, no migration.
+- **Files:** `docs/parser_specs/hardware/hardware_parser_runtime_rules_v9_1.yaml`,
+  `backend/tests/test_hardware_runtime.py`, `backend/tests/test_import_hardware.py`; docs (CHANGES,
+  DEVELOPER_HANDOFF, business_rules). Permanent.
+
+---
+
 ## 2026-06-24 — Hardware Parser P8b: one safe catalogue alias (post-import raw cleanup)
 
 - **Why:** the post-import raw-hardware audit flagged a few deterministic alias gaps; only the genuinely

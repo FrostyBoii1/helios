@@ -456,6 +456,18 @@ These are stubbed/absent and represent the next phases:
   (`Alpha ESS SMILE-M5 inverter` vs `SMILE-M5-S-INV`) and is a curated source_example kept raw by an existing
   invariant; deferred to an owner decision. Spec YAML + tests only; no runtime/catalogue/migration change;
   affects FUTURE parsing only (NOT retro-applied to live snapshots).
+  **(Hardware Parser P8c — Alpha M5 duplicate-canonical consolidation)** the owner resolved the P8b M5
+  ambiguity: `Alpha ESS SMILE-M5 inverter` and `Alpha ESS SMILE-M5-S-INV` are the **same hardware**, single
+  survivor `alpha_ess_smile_m5_s_inv` / `Alpha ESS SMILE-M5-S-INV`. The duplicate `alpha_ess_smile_m5_inverter`
+  entry was removed from the spec; its aliases/source_examples merged onto the survivor; M5 inverter shorthand
+  (`Alpha ESS M5 5kw inverter`, `Alpha ESS SMILE-M5 inverter`, `UPGRADE TO M5 30KW`) added as exact aliases of
+  the survivor — all M5 inverter shorthand now resolves to the one survivor. Because the **seed is
+  insert/update-only and never removes** an entry that leaves the spec, the already-persisted duplicate
+  **catalogue row 1172 + its aliases were soft-deleted** (`deleted_at`, reference data only — nothing
+  hard-deleted) so a stale row can't own the moved alias and break `_Index` determinism. **Zero** live
+  `Job.details.hardware` snapshots referenced id 1172 (verified pre-delete); no live Jobs/Customers/ImportRows
+  changed. Spec YAML + tests + reference-data soft-delete only; no runtime/parser-logic change, no migration
+  (existing `deleted_at`); FUTURE parsing only. Durable rule recorded in `docs/business_rules.md`.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware

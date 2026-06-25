@@ -75,17 +75,17 @@ def test_case_sensitive_jinko_resolves_distinct_panels(seeded):
 
 
 def test_source_examples_never_match(seeded):
-    # A full source_example string is evidence only — it is not a matchable alias and must NOT
-    # resolve to the canonical model. (P1 now SPLITS it on the embedded ' and ' into raw fragments;
-    # the invariant is that no fragment resolves, NOT that the whole string stays a single item.)
-    example = "ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY"
-    out = parse_hardware(seeded, inverter_text=example)
-    items = out["inverters"] + out["batteries"] + out["metering"]
-    assert items, "expected the source_example preserved as raw text"
-    assert all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
-    assert all(it["confidence"] == "unconfirmed_raw_text" for it in items)
-    all_text = " ".join((it.get("model_text") or "") for it in items)
-    assert "SMILE-M5" not in all_text  # never resolved to the Alpha ESS SMILE-M5 canonical model
+    # A source_example string is EVIDENCE ONLY — it is never loaded as a matchable (whole-string)
+    # alias. (A FRAGMENT of an example MAY resolve once that fragment's own alias exists — normal
+    # parsing — so the durable invariant is that no whole source_example string is itself an alias.
+    # This supersedes the old "ALPHA ESS M5 5KW INVERTER..." example, which P8c made resolvable.)
+    from app.hardware.runtime import _Index, _key
+    rules = yaml.safe_load((spec_dir() / "hardware_parser_runtime_rules_v9_1.yaml").read_text(encoding="utf-8"))
+    examples = [ex for e in rules["hardware_catalog"] for ex in (e.get("source_examples") or [])]
+    assert examples, "expected catalogue source_examples"
+    idx = _Index(seeded)
+    offenders = [ex for ex in examples if _key(ex) in idx.exact_ci or _key(ex) in idx.loose_ci]
+    assert not offenders, f"source_example loaded as a whole-string alias (forbidden): {offenders[:5]}"
 
 
 # --------------------------------------------------------------------------- #
@@ -482,12 +482,13 @@ def test_capacity_only_stays_raw(seeded, text):
 
 
 def test_brand_strip_never_resolves_source_example(seeded):
-    """Brand normalization must not let a source_example resolve: 'Alpha ESS SMILE-M5 5KW INVERTER'
-    (a curated example fragment) strips to nothing a catalogue alias matches — it stays raw."""
-    out = parse_hardware(seeded, inverter_text="Alpha ESS M5 5KW INVERTER")
+    """Brand normalization must not GUESS a model from brand + bare capacity: 'Alpha ESS 13kw
+    inverter' strips to '13kw' (no catalogue alias) — it stays raw. (Previously used an Alpha-M5
+    string; P8c made that an explicit alias, so it now resolves to the survivor by design.)"""
+    out = parse_hardware(seeded, inverter_text="Alpha ESS 13kw inverter")
     items = out["inverters"] + out["batteries"] + out["metering"]
-    assert all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
-    assert "SMILE-M5" not in " ".join((it.get("model_text") or "") for it in items)
+    assert items and all(it.get("canonical_hardware_id_at_parse_time") is None for it in items)
+    assert all(it["confidence"] == "unconfirmed_raw_text" for it in items)
 
 
 # --------------------------------------------------------------------------- #
@@ -973,9 +974,9 @@ def test_p7_swatten_single_phase_cell_has_no_phase_note(seeded):
 # P8b: ONE safe catalogue alias from the post-import raw-hardware audit.
 #   "ESS SMILE-BAT-13.3P" -> SMILE-BAT-13.3P   (bare-"ESS" brand-prefix gap of an already-aliased,
 #   single, unambiguous battery entry).
-# The audit's other candidate "Alpha ESS M5 5kw inverter" was found UNSAFE and NOT added: "M5" is
-# ambiguous between TWO catalogue inverter entries (Alpha ESS SMILE-M5 inverter vs SMILE-M5-S-INV),
-# the text is a curated source_example, and an existing invariant keeps it raw — so it must stay raw.
+# The audit's other candidate "Alpha ESS M5 5kw inverter" was deferred here as UNSAFE while two M5
+# inverter entries coexisted. P8c later RESOLVED that ambiguity by consolidating the duplicate onto
+# the single survivor SMILE-M5-S-INV, so M5 inverter shorthand now resolves (see the P8c section).
 # --------------------------------------------------------------------------- #
 def test_p8b_ess_smile_bat_13_3p_resolves(seeded):
     out = parse_hardware(seeded, inverter_text="ESS SMILE-BAT-13.3P")
@@ -985,12 +986,42 @@ def test_p8b_ess_smile_bat_13_3p_resolves(seeded):
 
 
 @pytest.mark.parametrize("text", [
-    "smile 5", "13.3p alpha smile 5 inv", "Alpha ESS M5 5kw inverter",
+    "smile 5", "13.3p alpha smile 5 inv",
     "Solis 5kw", "Sungrow 5kw", "Goodwe 10kw",
 ])
 def test_p8b_ambiguous_shorthand_still_raw(seeded, text):
-    # The new alias must NOT make the deferred-ambiguous cases resolve — including the M5 text,
-    # which stays raw by design (ambiguous between two Alpha M5 inverter entries).
+    # The 13.3P alias must NOT make genuinely-ambiguous shorthand resolve. (The former M5 entry here
+    # was removed in P8c — M5 inverter shorthand now resolves to the survivor, covered separately.)
     out = parse_hardware(seeded, inverter_text=text)
     items = out["inverters"] + out["batteries"]
     assert items and all(not i.get("canonical_hardware_id_at_parse_time") for i in items)
+
+
+# --------------------------------------------------------------------------- #
+# P8c: Alpha M5 duplicate-canonical consolidation. The two former entries
+#   "Alpha ESS SMILE-M5 inverter" and "Alpha ESS SMILE-M5-S-INV" are the SAME hardware; the
+#   single survivor is alpha_ess_smile_m5_s_inv / "Alpha ESS SMILE-M5-S-INV". All M5 inverter
+#   shorthand now resolves to that one survivor (the duplicate entry was removed from the spec and
+#   its persisted catalogue row soft-deleted — the seed is insert/update-only and never removes it).
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("text", [
+    "ALPHA ESS M5 5KW INVERTER",
+    "Alpha ESS M5 5kw inverter",
+    "Alpha ESS SMILE-M5 inverter",
+    "Smile M5",
+    "UPGRADE TO M5 30KW",
+])
+def test_p8c_m5_inverter_resolves_to_survivor(seeded, text):
+    out = parse_hardware(seeded, inverter_text=text)
+    assert _only(out["inverters"])["model_text"] == "Alpha ESS SMILE-M5-S-INV"
+
+
+def test_p8c_single_active_m5_inverter_entry(seeded):
+    # Exactly one ACTIVE catalogue row carries the SMILE-M5 inverter canonical — the survivor.
+    # (The duplicate "Alpha ESS SMILE-M5 inverter" must not reappear: it is removed from the spec,
+    # and any persisted row is soft-deleted, so it can never collide with the survivor's alias.)
+    rows = seeded.scalars(
+        select(HardwareCatalogue).where(HardwareCatalogue.canonical_model.like("Alpha ESS SMILE-M5%"))
+    ).all()
+    active = sorted(r.canonical_model for r in rows if r.deleted_at is None)
+    assert active == ["Alpha ESS SMILE-M5-S-INV"]

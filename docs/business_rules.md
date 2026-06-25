@@ -202,6 +202,16 @@ explains intent; protect important explicit decisions with tests, not docs alone
   evidence (e.g. confirming an ambiguous model) and as a fallback — not a per-import requirement.
   Genuinely ambiguous hardware (capacity-only text, uncertain models) stays raw / `manual_review` for a
   reviewer rather than being guessed or blocked on NAS.
+- **`Alpha ESS SMILE-M5 inverter` and `Alpha ESS SMILE-M5-S-INV` are the SAME canonical inverter for
+  parser purposes** (Hardware Parser P8c, owner decision). They were two catalogue entries for one piece
+  of hardware; the single survivor is **`alpha_ess_smile_m5_s_inv` / `Alpha ESS SMILE-M5-S-INV`**, and all
+  M5 inverter shorthand (`Smile M5`, `Alpha ESS M5 5kw inverter`, `Alpha ESS SMILE-M5 inverter`,
+  `UPGRADE TO M5 30KW`) resolves to it. **Operational note for existing seeded databases:** the seed is
+  **insert/update-only and never removes** an entry that has left the spec, so consolidating a duplicate
+  also requires **soft-deleting the duplicate catalogue row + its aliases** (reference data; `deleted_at`,
+  never a hard delete) in each already-seeded DB. Otherwise the stale row keeps owning the moved alias and
+  makes catalogue resolution non-deterministic. This is catalogue/reference-data maintenance only — it does
+  **not** mutate any existing `Job.details.hardware` snapshot (the snapshot rule above still holds).
 
 ## Labels & approval (workflow signals)
 

@@ -95,36 +95,10 @@ hardware_catalog:
   - confidence
   - parser_owned
   - source_fragment
-- id: alpha_ess_smile_m5_inverter
-  category: inverter
-  canonical_model: Alpha ESS SMILE-M5 inverter
-  manufacturer: Alpha ESS
-  phases: three_phase
-  nominal_kw: null
-  exact_aliases:
-  - Alpha ESS SMILE-M5 inverter
-  - UPGRADE TO M5 30KW
-  loose_aliases: []
-  source_examples:
-  - 1 × Alpha ESS SMILE-M5 -INVERTER + 6 x SMILE M-BAT 5P BATTERIES - 30KW TOTAL
-  - 2 × Alpha ESS SMILE-BAT-13.9/M5 -5KW INVERTER
-  - 2 × Alpha ESS SMILE-BAT-13.9/M5 5KW INVERTER
-  - ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY and 5kw inverter - use 3 tracker one there - let andrew have the X1-Boost
-  - Alpha ESS M5 5kw inverter/Alpha ESS M5 13.9kw hr battery
-  - Alpha ESS SMILE-M-BAT-13.9P/M5 INVERTER
-  - Alpha ESS Smile M5 inverter/Alpha ESS SMILE-M-BAT-5PIII - 15kw batt
-  - ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY
-  confidence:
-    exact: exact
-    loose: unconfirmed_raw_text
-  negative_patterns: []
-  source_examples_policy: evidence_only_not_matchable
-  fields_required_on_output:
-  - model
-  - quantity
-  - confidence
-  - parser_owned
-  - source_fragment
+# P8c — duplicate entry alpha_ess_smile_m5_inverter (Alpha ESS SMILE-M5 inverter) removed: it is the
+# SAME hardware as alpha_ess_smile_m5_s_inv (SMILE-M5-S-INV, below), now the single canonical M5 inverter.
+# Its aliases + source_examples were merged onto the survivor. Existing seeded DBs need the duplicate
+# catalogue row soft-deleted (the seed is insert/update-only and never removes entries absent from YAML).
 - id: alpha_ess_smile_m5_s_inv
   category: inverter
   canonical_model: Alpha ESS SMILE-M5-S-INV
@@ -134,8 +108,19 @@ hardware_catalog:
   exact_aliases:
   - Alpha ESS SMILE-M5-S-INV
   - Smile M5
+  - Alpha ESS M5 5kw inverter
+  - Alpha ESS SMILE-M5 inverter
+  - UPGRADE TO M5 30KW
   loose_aliases: []
   source_examples:
+  # P8c — merged from the consolidated duplicate entry alpha_ess_smile_m5_inverter (same hardware).
+  - 1 × Alpha ESS SMILE-M5 -INVERTER + 6 x SMILE M-BAT 5P BATTERIES - 30KW TOTAL
+  - 2 × Alpha ESS SMILE-BAT-13.9/M5 -5KW INVERTER
+  - 2 × Alpha ESS SMILE-BAT-13.9/M5 5KW INVERTER
+  - ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY and 5kw inverter - use 3 tracker one there - let andrew have the X1-Boost
+  - Alpha ESS M5 5kw inverter/Alpha ESS M5 13.9kw hr battery
+  - Alpha ESS SMILE-M-BAT-13.9P/M5 INVERTER
+  - ALPHA ESS M5 5KW INVERTER AND 15KW BATTERY
   - 2 × Alpha ESS SMILE-M5-S-INV + 2 × Alpha ESS SMILE-BAT-13.3P · 13.3kWh
   - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-BAT-13.3P · 13.3kWh
   - Alpha ESS SMILE-M5-S-INV + Alpha ESS SMILE-G3-BAT-10.1P · 10.1kWh - M5
