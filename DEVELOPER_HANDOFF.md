@@ -489,6 +489,18 @@ These are stubbed/absent and represent the next phases:
   was not reused here. **Frontend-only, no backend/API/migration**: the data was already on the wire (the modal
   already read `parsed.details`). No committed unit test (repo has no FE test runner — vitest follow-up noted);
   verified via a runner-agnostic Node logic check of all 4 cases + typecheck/lint/build.
+  **(Import review R2 — blank/near-blank short-circuit, backend parser)** `parse_rows`
+  (`services/import_parser.py`) now detects BLANK rows **before** name/hardware parsing, based on the **mapped**
+  import fields (`not any(raw.get(key) for key in cm)`) rather than the raw 40-column `nonempty` count. So a
+  spacer row that carried a stray value in a far/unmapped column — which used to escape the `nonempty == 0`
+  test, fall through to `ambiguous`, and raise a phantom `ambiguous_name` error — is now BLANK with
+  `parsed={}` + `issues=[]` and short-circuits (no name/hardware parse, no issue emission). Blank rows are
+  still persisted (`row_class=BLANK`, `source_row_index`, `raw` incl. `_unmapped`) for traceability; at the
+  DB layer `parsed` is `None` (`{} or None`). A row with ANY meaningful mapped field is NOT blank (sparse real
+  rows never swallowed); dividers (ref-bearing) unaffected; the NMI-"Same" carry is not reset by a blank row;
+  commit preview still excludes blanks as `blank_or_divider`. Near-blank rows shift from `ambiguous_rows` to
+  `blank_rows` at ingest (counts computed at ingest; historical batches unchanged unless re-ingested). **No
+  migration, no frontend, no live/commit change.** Tests in `tests/test_import.py` + `tests/test_import_nmi_same.py`.
   **(Stage 4B built — import integration, backend)** the
   runtime is now wired into the completed-sheet import via `services/import_hardware.py`
   (`enrich_row_hardware` + `validate_committed_hardware`): **ingest** (`import_ingest`) parses hardware

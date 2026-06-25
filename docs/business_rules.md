@@ -346,6 +346,17 @@ explains intent; protect important explicit decisions with tests, not docs alone
   raw notes, roof type, and storey are deliberately NOT shown** in this context
   block. It is derived client-side from the already-fetched row (no backend change)
   and is strictly read-only.
+- **Blank import rows are persisted only for traceability and are not parsed or
+  reviewed as jobs (Import review R2).** A spreadsheet row whose **mapped import
+  fields are all empty** is classified `BLANK` — even if it carries stray values in
+  **unmapped** columns or header-less noise cells (that noise is preserved in
+  `raw["_unmapped"]` but never makes the row a job). A blank row is kept with its
+  `source_row_index` + raw cells for traceability, but has **empty parsed data and
+  no issues** (no name/hardware parse, no `ambiguous_name`, no review burden) and is
+  excluded from commit as `blank_or_divider`. A row with **any** meaningful mapped
+  field (name, NMI, address, dates, hardware, …) is **not** blank — sparse real rows
+  are never swallowed. Blank rows do not reset the NMI-"Same" carry (only a divider
+  does). There is no need for a "blank rows" filter.
 - **Reverse** is per-row and **soft-delete only**, allowed **only while the
   imported Customer/Job is pristine** (unedited since import, no tasks/documents/
   non-import activity, status unchanged, customer owns only that one job). It

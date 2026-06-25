@@ -177,6 +177,19 @@ def test_blank_row_does_not_reset_carry():
     assert _by_ref(rows, "SC9002").parsed["nmi_raw"] == REAL_NMI
 
 
+def test_near_blank_row_does_not_reset_carry():
+    # A near-blank spacer (all mapped fields empty, only a stray header-less noise cell) is BLANK and
+    # must NOT reset the NMI-"Same" carry any more than a truly-blank spacer does.
+    rows = _parse([
+        _job("SC9001", "Alex Roe", "10 Foo Street", REAL_NMI),
+        [""] * len(HEADERS) + ["stray noise"],  # near-blank spacing
+        _job("SC9002", "Alex Roe", "10 Foo Street", "Same"),
+    ])
+    src = _by_ref(rows, "SC9002")
+    assert src.parsed["nmi_raw"] == REAL_NMI
+    assert src.parsed["nmi_same_carried"] is True
+
+
 def test_divider_resets_carry():
     rows = _parse([
         _job("SC9001", "Alex Roe", "10 Foo Street", REAL_NMI),

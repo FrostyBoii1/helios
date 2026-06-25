@@ -9,6 +9,42 @@ Each entry records: **what** changed, **why**, **files affected**, whether it is
 
 ---
 
+## 2026-06-25 — Import review R2: blank / near-blank rows short-circuit (no spurious job parse)
+
+- **Why:** a "blank" spacer row that carried a stray value in any far/unmapped workbook column escaped
+  the old `nonempty == 0` blank test (which counted ALL 40 columns), fell through to `ambiguous`, got
+  name + hardware parsed, and raised a spurious `ambiguous_name` **error** — a phantom review burden.
+  **Owner rule:** blank rows are not jobs; we do not parse them and do not need a filter for them.
+- **What (backend parser only):** in `parse_rows` ([import_parser.py](backend/app/services/import_parser.py))
+  the blank check now runs **before** customer-name / hardware parsing and is based on the **mapped import
+  fields**, not the raw 40-column count: a row is BLANK when **every mapped field is empty**
+  (`not any(raw.get(key) for key in cm)`). Such a row yields `ParsedRow(row_class="blank", parsed={}, issues=[])`
+  and short-circuits — no name parse, no hardware enrichment, no issue emission. The old `_classify`
+  `nonempty == 0 → blank` is kept as a defensive fallback.
+- **Blank definition:** ALL mapped canonical fields empty. Stray values in **unmapped** columns (captured in
+  `raw["_unmapped"]` for traceability) and header-less noise cells are ignored for blankness. A row with **any**
+  meaningful mapped field (name, NMI, address, dates, hardware, …) is NOT blank — sparse real rows are never
+  swallowed; dividers (which carry a ref) are unaffected.
+- **Preserved:** blank rows are still **persisted** as `row_class=BLANK` with their `source_row_index` and `raw`
+  cells (traceability); at the DB/API layer their `parsed` is `None` (ingest stores `{} or None`) with **zero**
+  issues. The NMI-"Same" carry is untouched by a blank/near-blank row (only a divider resets it). Commit preview
+  still excludes blanks as `blank_or_divider`. Divider behaviour unchanged.
+- **Count shift (no breakage):** a row that used to mis-classify as `ambiguous` (near-blank) now counts under
+  `batch.blank_rows` instead of `batch.ambiguous_rows`, and emits no issue (`issue_count` drops). `total_rows`
+  and the eligible/excluded partition sums are unchanged. Counts are computed at ingest, so already-ingested
+  batches keep their historical numbers unless re-ingested.
+- **Scope / no regression:** no migration, no frontend, no live-data/commit path change. Full backend suite +
+  alembic + `git diff --check` clean.
+- **Tests:** `tests/test_import.py` (truly-blank → `parsed {}` / `issues []`; near-blank with a far stray cell →
+  blank, no `ambiguous_name`; near-blank with an unmapped column → blank, value preserved in `_unmapped`;
+  sparse name-only / NMI-only rows are NOT blank; ingest stores the near-blank as BLANK with `parsed None`,
+  0 issues, excluded as `blank_or_divider`) and `tests/test_import_nmi_same.py` (near-blank spacer does not
+  reset the NMI-"Same" carry).
+- **Files:** `backend/app/services/import_parser.py`, `backend/tests/test_import.py`,
+  `backend/tests/test_import_nmi_same.py`; docs (CHANGES, DEVELOPER_HANDOFF, business_rules). Permanent.
+
+---
+
 ## 2026-06-25 — Import review R3: hardware context in the grouping-candidate preview
 
 - **Why:** the grouping-candidate preview (`CandidateRowPreviewModal` — the read-only "is this the same

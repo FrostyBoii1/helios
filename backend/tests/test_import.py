@@ -15,9 +15,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.customer import Customer
+from app.models.enums import ImportRowClass
 from app.models.import_staging import ImportBatch, ImportIssue, ImportRow
 from app.models.job import Job
-from app.services import import_ingest, import_parser
+from app.services import import_commit_preview, import_ingest, import_parser
 
 HEADERS = [
     "", "Sales Consultant", "Customer Name", "ADDRESS", "Phone", "Notes",
@@ -87,6 +88,117 @@ def test_parser_classifies_and_parses():
     assert clean.parsed["distributor_inferred"] == "NSW Essential"  # NMI 4204
     assert clean.parsed["msb_state"] == "yes"
     assert clean.issues == []
+
+
+# --------------------------------------------------------------------------- #
+# R2: blank / near-blank short-circuit. A row whose mapped fields are ALL empty
+# is BLANK (parsed {}, no issues) even when stray/unmapped noise cells exist;
+# sparse rows with meaningful mapped data are never swallowed as blank.
+# --------------------------------------------------------------------------- #
+EMPTY_ROW = [""] * len(HEADERS)
+
+
+def _parse_data_rows(data_rows: list[list]):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "COMPLETED"
+    ws.append(HEADERS)
+    for row in data_rows:
+        ws.append(row)
+    buf = BytesIO()
+    wb.save(buf)
+    return list(import_parser.parse_rows(_ws_from_bytes(buf.getvalue())))
+
+
+def test_truly_blank_row_parses_empty():
+    rows = _parse_data_rows([EMPTY_ROW])
+    assert len(rows) == 1
+    b = rows[0]
+    assert b.row_class == "blank"
+    assert b.parsed == {}
+    assert b.issues == []
+
+
+def test_near_blank_row_with_stray_noise_is_blank():
+    # Every mapped field empty; a stray value in a HEADER-LESS far column is pure noise that used to
+    # inflate the cell count -> 'ambiguous' + a spurious ambiguous_name error. Now it stays blank.
+    rows = _parse_data_rows([EMPTY_ROW + ["stray noise cell"]])
+    assert len(rows) == 1
+    b = rows[0]
+    assert b.row_class == "blank"
+    assert b.parsed == {}
+    assert b.issues == []
+    assert all(i["kind"] != "ambiguous_name" for i in b.issues)
+
+
+def test_near_blank_row_with_unmapped_column_is_blank():
+    # A value in an extra UNMAPPED (but headered) column is captured in raw["_unmapped"] for
+    # traceability but must NOT promote the row to a job.
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "COMPLETED"
+    ws.append(HEADERS + ["Mystery Extra Column"])
+    ws.append(EMPTY_ROW + ["leftover value"])
+    buf = BytesIO()
+    wb.save(buf)
+    rows = list(import_parser.parse_rows(_ws_from_bytes(buf.getvalue())))
+    assert len(rows) == 1
+    assert rows[0].row_class == "blank"
+    assert rows[0].parsed == {}
+    assert rows[0].issues == []
+    assert rows[0].raw.get("_unmapped") == {"Mystery Extra Column": "leftover value"}
+
+
+def test_sparse_real_row_with_only_name_not_blank():
+    only_name = list(EMPTY_ROW)
+    only_name[2] = "Jordan Real"  # Customer Name (mapped) -> meaningful data
+    rows = _parse_data_rows([only_name])
+    assert len(rows) == 1
+    assert rows[0].row_class != "blank"
+    assert rows[0].parsed.get("customer_name") == "Jordan Real"
+
+
+def test_sparse_real_row_with_only_nmi_not_blank():
+    only_nmi = list(EMPTY_ROW)
+    only_nmi[10] = "42041234567"  # NMI (mapped) -> meaningful data
+    rows = _parse_data_rows([only_nmi])
+    assert len(rows) == 1
+    assert rows[0].row_class != "blank"
+
+
+def test_ingest_near_blank_row_stored_as_blank(db_session: Session, users):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "COMPLETED"
+    ws.append(HEADERS)
+    job = list(EMPTY_ROW)
+    job[0], job[2], job[3], job[10] = "SC1234", "Real Person", "1 Real St", "42041234567"
+    ws.append(job)                          # a real job
+    ws.append(EMPTY_ROW + ["stray noise"])  # near-blank: stray value in a far column
+    buf = BytesIO()
+    wb.save(buf)
+    batch = import_ingest.ingest_bytes(
+        db_session,
+        file_bytes=buf.getvalue(),
+        source_filename="nearblank.xlsx",
+        created_by_id=users["admin"].id,
+    )
+    db_session.flush()
+    assert batch.job_rows == 1
+    assert batch.blank_rows == 1
+    assert batch.ambiguous_rows == 0  # the near-blank row is NOT classified as an ambiguous job
+    rows = db_session.scalars(
+        select(ImportRow).where(ImportRow.batch_id == batch.id).order_by(ImportRow.source_row_index)
+    ).all()
+    blank = next(r for r in rows if r.row_class == ImportRowClass.BLANK.value)
+    assert blank.parsed is None  # parse-level {} is stored as None (no parsed junk to review)
+    assert blank.raw is not None  # raw cells preserved for traceability
+    n_issues = db_session.scalar(
+        select(func.count()).select_from(ImportIssue).where(ImportIssue.row_id == blank.id)
+    )
+    assert n_issues == 0
+    # Commit preview excludes blanks as blank_or_divider.
+    assert import_commit_preview.classify_row(blank) == "blank_or_divider"
 
 
 def test_parser_flags_issues():

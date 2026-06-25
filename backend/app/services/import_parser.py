@@ -714,6 +714,8 @@ def build_colmap(ws, header_row: int) -> dict[str, int]:
 # Row classification + parsing
 # --------------------------------------------------------------------------- #
 def _classify(ref: str, nonempty: int, name_info: dict) -> str:
+    # Primary blank/near-blank detection lives in parse_rows (all mapped fields empty); this is a
+    # defensive fallback for a row with no populated cells at all.
     if nonempty == 0:
         return "blank"
     if ref and not REF_RE.match(ref):
@@ -767,8 +769,18 @@ def parse_rows(ws) -> Iterator[ParsedRow]:
         extra = {h: v for h, v in extra.items() if v}
         if extra:
             raw["_unmapped"] = extra
-        nonempty = sum(1 for c in range(1, min(ws.max_column, 40) + 1) if norm_cell(ws.cell(r, c).value))
         ref = raw.get("ref", "")
+        # Blank / near-blank: EVERY meaningful MAPPED import field is empty. A stray value in an
+        # UNMAPPED workbook column (captured in raw["_unmapped"]) or a header-less noise cell does
+        # NOT make a row a job. Short-circuit BEFORE name/hardware parsing: persist it as BLANK for
+        # traceability + source-row numbering, but with empty parsed and NO issues / no review burden
+        # (so a near-blank row can never raise a spurious ambiguous_name). A blank row leaves the
+        # NMI-"Same" carry untouched (only a divider resets it). Sparse real rows keep at least one
+        # non-empty mapped field, so they are never swallowed here.
+        if not any(raw.get(key) for key in cm):
+            yield ParsedRow(r, "blank", ref, raw, {}, None, [])
+            continue
+        nonempty = sum(1 for c in range(1, min(ws.max_column, 40) + 1) if norm_cell(ws.cell(r, c).value))
         name_info = parse_customer_name(get(r, "customer_name"))
         klass = _classify(ref, nonempty, name_info)
 
